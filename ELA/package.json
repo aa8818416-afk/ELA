@@ -17,7 +17,11 @@
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.8",
     "lucide-react": "^0.523.0",
+<<<<<<< HEAD
     "next": "16.2.9",
+=======
+    "next": "15.3.8",
+>>>>>>> be80b3b88932889a66aad94b5ce4c61cf9db350b
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
