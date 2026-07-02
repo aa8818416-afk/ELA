@@ -1,0 +1,72 @@
+{
+  "timestamp": "2026-07-01T22:57:22.696Z",
+  "overall": "PARTIAL",
+  "audit": {
+    "status": "FAIL",
+    "vulnCount": {
+      "critical": 1,
+      "high": 0,
+      "moderate": 1,
+      "low": 0,
+      "info": 0
+    }
+  },
+  "rls": {
+    "status": "PASS",
+    "summary": "  ✅ \u001b[32mPASS\u001b[0m handle_new_user() trigger — SQL uses SET search_path = public, pg_temp — injection-safe ✓\n  ✅ \u001b[32mPASS\u001b[0m update_updated_at trigger — Uses SECURITY DEFINER with fixed search_path ✓\n\n\u001b[1m═══════════════════════════════════════════════════════\u001b[0m\n\u001b[1m   📊 SECURITY AUDIT SUMMARY\u001b[0m\n\u001b[1m═══════════════════════════════════════════════════════\u001b[0m\n\n  \u001b[32m✅ Passed: 9\u001b[0m\n  \u001b[31m❌ Failed: 0\u001b[0m\n  \u001b[33m⚠️  Warned: 1\u001b[0m\n\n\u001b[32m  🛡️  All RLS policies are functioning correctly.\u001b[0m\n"
+  },
+  "load": {
+    "status": "PASS",
+    "loadResults": {
+      "timestamp": "2026-07-01T22:54:34.279Z",
+      "results": [
+        {
+          "name": "/login (20 VUs)",
+          "avgLatency": 1715.65,
+          "p95": 2737,
+          "p99": 2749,
+          "rps": 11,
+          "errors": 0,
+          "non2xx": 0,
+          "pass": true
+        },
+        {
+          "name": "/farmer redirect (50 VUs)",
+          "avgLatency": 170.19,
+          "p95": 293,
+          "p99": 312,
+          "rps": 293,
+          "errors": 0,
+          "non2xx": 4400,
+          "pass": true
+        },
+        {
+          "name": "/api/crop-doctor auth rejection (100 VUs)",
+          "avgLatency": 1331.88,
+          "p95": 4274,
+          "p99": 4315,
+          "rps": 73,
+          "errors": 0,
+          "non2xx": 1097,
+          "pass": true
+        },
+        {
+          "name": "/api/cron/reset-keys (50 VUs)",
+          "avgLatency": 1651.42,
+          "p95": 7386,
+          "p99": 7389,
+          "rps": 30,
+          "errors": 0,
+          "non2xx": 300,
+          "pass": true
+        }
+      ]
+    }
+  },
+  "e2e": {
+    "status": "FAIL",
+    "passed": 6,
+    "failed": 20,
+    "skipped": 0
+  }
+}

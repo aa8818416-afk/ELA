@@ -1,0 +1,264 @@
+"use client";
+
+import { useState, useRef } from "react";
+import { Camera, Loader2, Share2, Phone, AlertCircle } from "lucide-react";
+
+type DiagnosisResult = {
+  disease_name_ar: string;
+  disease_name_en: string;
+  description_ar: string;
+  confidence_percentage: number;
+  recommended_product_id: string | null;
+};
+
+type ProductResult = {
+  id: string;
+  name_ar: string;
+  price_to_farmer: number;
+};
+
+type DistributorContact = {
+  name: string;
+  phone: string | null;
+  village: string | null;
+};
+
+export default function FarmerCropScanner() {
+  const [image, setImage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [diagnosis, setDiagnosis] = useState<DiagnosisResult | null>(null);
+  const [recommendedProduct, setRecommendedProduct] =
+    useState<ProductResult | null>(null);
+  const [distributorContact, setDistributorContact] =
+    useState<DistributorContact | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setDiagnosis(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => setImage(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleAnalyze = async () => {
+    if (!image) return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/crop-doctor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: image }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setError(data.error || "فشل التشخيص");
+      } else {
+        setDiagnosis(data.diagnosis);
+        setRecommendedProduct(data.recommendedProduct || null);
+        setDistributorContact(data.distributorContact || null);
+      }
+    } catch {
+      setError("تعذر الاتصال بالخادم، تأكد من الإنترنت وحاول مرة أخرى");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleWhatsAppContact = () => {
+    if (!distributorContact?.phone) return;
+    const diseaseName = diagnosis?.disease_name_ar || "مرض النبات";
+    const productName = recommendedProduct?.name_ar || "الدواء الموصى به";
+    const price = recommendedProduct?.price_to_farmer || "؟";
+    const distName = distributorContact.name;
+
+    const message = `أهلاً يا بشمهندس ${distName} (السفير) 🌾\n\nالذكاء الاصطناعي شخّص زرعي بـ *${diseaseName}* ورشحلي دواء *${productName}* بسعر *${price} جنيهاً*\n\nعاوز أحجز معاك شحنة كاش لو سمحت 🙏`;
+
+    const phone = distributorContact.phone.replace(/\D/g, "");
+    const intlPhone = phone.startsWith("0") ? `2${phone}` : phone;
+    window.open(
+      `https://wa.me/${intlPhone}?text=${encodeURIComponent(message)}`,
+      "_blank"
+    );
+  };
+
+  const resetScanner = () => {
+    setImage(null);
+    setDiagnosis(null);
+    setError(null);
+    setRecommendedProduct(null);
+    setDistributorContact(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // ─── SCREEN 1: Image capture ──────────────────────────────────────────
+  if (!image) {
+    return (
+      <div
+        className="border-2 border-dashed border-slate-700 hover:border-emerald-500/50 rounded-3xl p-10 text-center cursor-pointer transition-colors active:scale-[0.98]"
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <div className="w-20 h-20 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
+          <Camera className="w-10 h-10 text-emerald-400" />
+        </div>
+        <h3 className="text-white font-bold text-xl mb-2">صوّر ورقة المحصول</h3>
+        <p className="text-slate-400 text-sm leading-relaxed">
+          اضغط هنا لالتقاط صورة من الكاميرا أو اختيار صورة من الجهاز
+        </p>
+        <div className="mt-6 bg-emerald-600 text-white font-bold py-3 px-6 rounded-2xl inline-block">
+          افتح الكاميرا
+        </div>
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          ref={fileInputRef}
+          onChange={handleImageSelect}
+          className="hidden"
+        />
+      </div>
+    );
+  }
+
+  // ─── SCREEN 2: Image preview + Analyze button ─────────────────────────
+  if (!diagnosis) {
+    return (
+      <div className="space-y-5">
+        <div className="relative rounded-3xl overflow-hidden border border-slate-800 aspect-video">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={image}
+            alt="صورة المحصول"
+            className="w-full h-full object-cover"
+          />
+          <button
+            onClick={resetScanner}
+            className="absolute top-3 right-3 bg-slate-950/80 p-2 rounded-full text-slate-400 hover:text-white"
+          >
+            <AlertCircle className="w-5 h-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-2xl p-4">
+            {error}
+          </div>
+        )}
+
+        <button
+          onClick={handleAnalyze}
+          disabled={isLoading}
+          className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold rounded-2xl py-4 flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span>جاري التشخيص بالذكاء الاصطناعي...</span>
+            </>
+          ) : (
+            "🔬 بدء التشخيص"
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  // ─── SCREEN 3: Diagnosis Results ──────────────────────────────────────
+  return (
+    <div className="space-y-5">
+      {/* Disease Result Card */}
+      <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <p className="text-slate-400 text-xs mb-1">التشخيص:</p>
+            <h3 className="text-white font-bold text-2xl">
+              {diagnosis.disease_name_ar}
+            </h3>
+            <p className="text-slate-500 text-sm mt-1">
+              {diagnosis.disease_name_en}
+            </p>
+          </div>
+          <div className="bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full whitespace-nowrap">
+            <span className="text-emerald-400 font-bold text-sm">
+              {diagnosis.confidence_percentage}%
+            </span>
+          </div>
+        </div>
+        <p className="text-slate-300 text-sm leading-relaxed border-t border-slate-800 pt-4">
+          {diagnosis.description_ar}
+        </p>
+      </div>
+
+      {/* Recommended Product */}
+      {recommendedProduct && (
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-3xl p-5">
+          <p className="text-amber-500/70 text-xs font-medium mb-2">
+            💊 العلاج المقترح
+          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-white font-bold text-lg">
+                {recommendedProduct.name_ar}
+              </p>
+              <p className="text-amber-400 font-bold text-xl">
+                {recommendedProduct.price_to_farmer} ج.م
+              </p>
+            </div>
+            <span className="text-4xl">🧪</span>
+          </div>
+        </div>
+      )}
+
+      {/* Distributor Contact CTA */}
+      {distributorContact && (
+        <div className="bg-[#25D366]/5 border border-[#25D366]/30 rounded-3xl p-5">
+          <p className="text-slate-400 text-xs mb-3">احجز الدواء من سفير قريتك</p>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xl">
+              👨‍🌾
+            </div>
+            <div>
+              <p className="text-white font-bold">
+                {distributorContact.name}
+              </p>
+              {distributorContact.village && (
+                <p className="text-slate-400 text-xs">
+                  📍 {distributorContact.village}
+                </p>
+              )}
+              {distributorContact.phone && (
+                <p className="text-slate-400 text-xs flex items-center gap-1">
+                  <Phone className="w-3 h-3" />
+                  {distributorContact.phone}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <button
+            onClick={handleWhatsAppContact}
+            disabled={!distributorContact.phone}
+            className="w-full bg-[#25D366] hover:bg-[#20ba5a] disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-[#25D366]/20"
+          >
+            <Share2 className="w-5 h-5" />
+            احجز الدواء كاش مع {distributorContact.name} عبر واتساب
+          </button>
+        </div>
+      )}
+
+      {/* Scan Again */}
+      <button
+        onClick={resetScanner}
+        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-3 rounded-2xl transition-colors"
+      >
+        فحص محصول آخر
+      </button>
+    </div>
+  );
+}
