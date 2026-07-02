@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { saveProduct } from "@/app/actions/admin-products";
 import type { Database } from "@/types/database.types";
-import { Package, Plus, Edit2, X, CheckCircle2, TrendingUp } from "lucide-react";
+import { Package, Plus, Edit2, X, CheckCircle2, TrendingUp, Loader2, Image as ImageIcon } from "lucide-react";
 
 type Product = Database["public"]["Tables"]["products"]["Row"];
 
@@ -14,6 +14,9 @@ export default function ProductsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
   const [formData, setFormData] = useState({
     name_ar: "",
     active_ingredient: "",
@@ -21,6 +24,7 @@ export default function ProductsPage() {
     price_to_farmer: 0,
     agent_commission: 0,
     stock_status: true,
+    image_url: "",
   });
 
   const supabase = createClient();
@@ -47,7 +51,9 @@ export default function ProductsPage() {
       price_to_farmer: 0,
       agent_commission: 0,
       stock_status: true,
+      image_url: "",
     });
+    setImageFile(null);
     setIsModalOpen(true);
   }
 
@@ -60,13 +66,48 @@ export default function ProductsPage() {
       price_to_farmer: product.price_to_farmer,
       agent_commission: product.agent_commission,
       stock_status: product.stock_status,
+      image_url: product.image_url || "",
     });
+    setImageFile(null);
     setIsModalOpen(true);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const res = await saveProduct(formData, editingId || undefined);
+    setUploadingImage(true);
+    let finalImageUrl = formData.image_url;
+
+    // Handle image upload if a new file is selected
+    if (imageFile) {
+      const fileExt = imageFile.name.split('.').pop();
+      const fileName = `${Math.random()}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, imageFile);
+
+      if (uploadError) {
+        alert("فشل رفع الصورة: " + uploadError.message);
+        setUploadingImage(false);
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath);
+      
+      finalImageUrl = publicUrl;
+    }
+
+    const payload = {
+      ...formData,
+      image_url: finalImageUrl || null
+    };
+
+    const res = await saveProduct(payload, editingId || undefined);
+    setUploadingImage(false);
+    
     if (res.error) {
       alert(res.error);
     } else {
@@ -124,7 +165,16 @@ export default function ProductsPage() {
                   const netProfit = p.price_to_farmer - p.wholesale_cost - p.agent_commission;
                   return (
                     <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 font-bold text-slate-800">{p.name_ar}</td>
+                      <td className="px-6 py-4 font-bold text-slate-800 flex items-center gap-3">
+                        {p.image_url ? (
+                          <img src={p.image_url} alt={p.name_ar} className="w-10 h-10 object-cover rounded-lg border border-slate-200" />
+                        ) : (
+                          <div className="w-10 h-10 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400">
+                            <ImageIcon className="w-5 h-5" />
+                          </div>
+                        )}
+                        {p.name_ar}
+                      </td>
                       <td className="px-6 py-4 text-slate-500 text-sm">{p.active_ingredient || "—"}</td>
                       <td className="px-6 py-4 text-slate-600">{p.wholesale_cost} ج.م</td>
                       <td className="px-6 py-4 font-semibold text-blue-600">{p.price_to_farmer} ج.م</td>
@@ -242,6 +292,31 @@ export default function ProductsPage() {
                     <span className="font-medium text-slate-700">متوفر في المخزن</span>
                   </label>
                 </div>
+
+                <div className="md:col-span-2 mt-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">صورة المنتج</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setImageFile(e.target.files[0]);
+                      }
+                    }}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-slate-50"
+                  />
+                  {formData.image_url && !imageFile && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <img src={formData.image_url} alt="Current Preview" className="w-12 h-12 rounded object-cover border border-slate-200" />
+                      <span className="text-sm text-slate-500">الصورة الحالية المرفوعة</span>
+                    </div>
+                  )}
+                  {imageFile && (
+                    <div className="mt-2 text-sm text-green-600 font-medium">
+                      تم اختيار صورة جديدة: {imageFile.name}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Profit Preview */}
@@ -256,15 +331,24 @@ export default function ProductsPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors"
+                  disabled={uploadingImage}
+                  className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                  disabled={uploadingImage}
+                  className="px-5 py-2.5 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors shadow-sm flex items-center gap-2 disabled:bg-green-800"
                 >
-                  حفظ البيانات
+                  {uploadingImage ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      جاري الحفظ والرفع...
+                    </>
+                  ) : (
+                    "حفظ البيانات"
+                  )}
                 </button>
               </div>
             </form>

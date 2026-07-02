@@ -6,10 +6,6 @@ const nextConfig: NextConfig = {
     // do not block production builds. Runtime safety is enforced by RLS.
     ignoreBuildErrors: true,
   },
-  eslint: {
-    // ESLint warnings are non-blocking; handled separately via CI.
-    ignoreDuringBuilds: true,
-  },
 };
 
 export default nextConfig;

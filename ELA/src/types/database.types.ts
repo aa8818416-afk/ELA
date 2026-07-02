@@ -211,6 +211,7 @@ export type Database = {
           active_ingredient: string | null
           agent_commission: number
           id: string
+          image_url: string | null
           name_ar: string
           price_to_farmer: number
           stock_status: boolean
@@ -220,6 +221,7 @@ export type Database = {
           active_ingredient?: string | null
           agent_commission?: number
           id?: string
+          image_url?: string | null
           name_ar: string
           price_to_farmer?: number
           stock_status?: boolean
@@ -229,6 +231,7 @@ export type Database = {
           active_ingredient?: string | null
           agent_commission?: number
           id?: string
+          image_url?: string | null
           name_ar?: string
           price_to_farmer?: number
           stock_status?: boolean
