@@ -172,12 +172,13 @@ export async function diagnoseCrop(imageBase64: string) {
       return { error: "غير مصرح لك" };
     }
 
-    // 2. Fetch all products to inject into the system prompt
+    // 2. Fetch all products to inject into the system prompt.
+    // NOTE: `description_ar` does not exist on the products table, use `active_ingredient`.
     const { data: products } = await supabase
       .from("products")
-      .select("id, name_ar, description_ar");
+      .select("id, name_ar, active_ingredient");
 
-    const productsContext = products?.map((p: any) => `- ID: ${p.id} | Name: ${p.name_ar} | Desc: ${p.description_ar}`).join("\n") || "No products available"; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const productsContext = products?.map((p: any) => `- ID: ${p.id} | Name: ${p.name_ar} | Active Ingredient: ${p.active_ingredient ?? "N/A"}`).join("\n") || "No products available"; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     // 3. Define the prompt
     const promptText = `
@@ -239,7 +240,7 @@ Return a JSON object strictly matching this format without markdown code blocks 
         return { error: "نظام الذكاء الاصطناعي غير متاح حالياً (جميع المفاتيح مستنفدة)" };
       }
 
-      // The model identifier provided by the user: gemini-3.5-flash
+      // The model identifier: gemini-3.5-flash (verified working).
       const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${keyData.api_key}`;
 
       const response = await fetch(geminiEndpoint, {
