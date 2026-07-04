@@ -2,6 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Camera, Loader2, Share2, Phone, AlertCircle, Mic, Square, Volume2, X } from "lucide-react";
+import {
+  useSpeechRecognition,
+  speakArabic,
+  isTtsSupported,
+  stopSpeaking,
+} from "@/utils/speech";
 
 type DiagnosisResult = {
   disease_name_ar: string;
@@ -24,18 +30,6 @@ type DistributorContact = {
   village: string | null;
 };
 
-// Minimal Web Speech API typings (not in standard TS lib)
-type SpeechRecognitionLike = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start: () => void;
-  stop: () => void;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-};
-
 export default function FarmerCropScanner() {
   const [image, setImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,74 +42,36 @@ export default function FarmerCropScanner() {
 
   // Farmer notes (voice or typing)
   const [farmerNotes, setFarmerNotes] = useState("");
-  const [isListening, setIsListening] = useState(false);
-  const [speechSupported, setSpeechSupported] = useState(false);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-
-  // TTS support flag
   const [ttsSupported, setTtsSupported] = useState(false);
+
+  const {
+    isListening,
+    supported: speechSupported,
+    error: speechError,
+    startListening,
+    stopListening,
+  } = useSpeechRecognition();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Feature-detect Speech Recognition (Chrome/Edge)
-    const SR =
-      (typeof window !== "undefined" &&
-        ((window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition ||
-          (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition)) ||
-      null;
-    if (SR) {
-      setSpeechSupported(true);
-      const rec = new SR();
-      rec.lang = "ar-EG";
-      rec.continuous = false;
-      rec.interimResults = false;
-      rec.onresult = (e) => {
-        const transcript = e.results[0][0].transcript;
-        setFarmerNotes((prev) => (prev ? prev + " " + transcript : transcript));
-      };
-      rec.onerror = () => setIsListening(false);
-      rec.onend = () => setIsListening(false);
-      recognitionRef.current = rec;
-    }
-    // Feature-detect Speech Synthesis (TTS)
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      setTtsSupported(true);
-    }
+    setTtsSupported(isTtsSupported());
   }, []);
 
-  const toggleListening = () => {
-    if (!recognitionRef.current) return;
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    } else {
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch {
-        setIsListening(false);
-      }
-    }
-  };
-
   const speakDiagnosis = () => {
-    if (!diagnosis || !ttsSupported) return;
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
+    if (!diagnosis) return;
     const parts = [
       `التشخيص: ${diagnosis.disease_name_ar}`,
       diagnosis.description_ar,
     ];
     if (recommendedProduct) {
-      parts.push(`العلاج المقترح: ${recommendedProduct.name_ar}، بسعر ${recommendedProduct.price_to_farmer} جنيه.`);
+      parts.push(
+        `العلاج المقترح: ${recommendedProduct.name_ar}، بسعر ${recommendedProduct.price_to_farmer} جنيه.`
+      );
     } else if (diagnosis.availability_note) {
       parts.push(diagnosis.availability_note);
     }
-    const utterance = new SpeechSynthesisUtterance(parts.join(" "));
-    utterance.lang = "ar-EG";
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
+    speakArabic(parts.join(" "));
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -227,10 +183,7 @@ export default function FarmerCropScanner() {
     setRecommendedProduct(null);
     setDistributorContact(null);
     setFarmerNotes("");
-    // Stop any ongoing speech
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
+    stopSpeaking();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -312,6 +265,16 @@ export default function FarmerCropScanner() {
               </button>
             )}
           </div>
+          {speechError && (
+            <p className="text-red-400 text-xs mb-2 bg-red-500/10 border border-red-500/20 rounded-lg p-2">
+              {speechError}
+            </p>
+          )}
+          {isListening && (
+            <p className="text-emerald-400 text-xs mb-2 animate-pulse flex items-center gap-1">
+              <Mic className="w-3 h-3" /> جاري الاستماع... تحدث الآن
+            </p>
+          )}
           <textarea
             value={farmerNotes}
             onChange={(e) => setFarmerNotes(e.target.value)}

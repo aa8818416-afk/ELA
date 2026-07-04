@@ -2,6 +2,7 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import CampaignCard from "@/components/farmer/CampaignCard";
 import { Sparkles } from "lucide-react";
+import Link from "next/link";
 
 // Group-buying targets per product (in a real app, store in DB)
 const GROUP_BUY_TARGET = 20;
@@ -71,7 +72,7 @@ export default async function FarmerHomePage() {
     .eq("id", user.id)
     .single();
 
-  const firstName = profile?.full_name?.split(" ")[0] || "يا فلاح";
+  const firstName = (profile as any)?.full_name?.split(" ")[0] || "يا فلاح";
 
   return (
     <div className="space-y-6">
@@ -88,6 +89,17 @@ export default async function FarmerHomePage() {
         )}
       </div>
 
+      {/* Chat Access Card */}
+      <Link
+        href="/farmer/chat"
+        className="block bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-3xl p-6 text-white shadow-lg active:scale-[0.98] transition-transform"
+      >
+        <h3 className="font-bold text-lg mb-1">اسأل المرشد الزراعي 🤖</h3>
+        <p className="text-emerald-50 text-sm opacity-90">
+          هل عندك سؤال بخصوص محصولك؟ اضغط هنا للدردشة مع المرشد الذكي.
+        </p>
+      </Link>
+
       {/* Active Campaigns Header */}
       <div className="flex items-center gap-2">
         <Sparkles className="w-5 h-5 text-amber-400" />
@@ -101,11 +113,11 @@ export default async function FarmerHomePage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {products.map((product: Record<string, unknown>) => (
+          {products.map((product: any) => (
             <CampaignCard
-              key={product.id}
+              key={product.id as string}
               product={product}
-              currentVolume={productVolumes[product.id] || 0}
+              currentVolume={(productVolumes[product.id as string] as number) || 0}
               targetVolume={GROUP_BUY_TARGET}
               discountPercent={DISCOUNT_PERCENT}
               distributorName={distributorName}
