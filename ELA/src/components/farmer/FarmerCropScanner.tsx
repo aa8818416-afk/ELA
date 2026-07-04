@@ -44,16 +44,57 @@ export default function FarmerCropScanner() {
     reader.readAsDataURL(file);
   };
 
+  /**
+   * Compress an image to reduce base64 size before sending to the server.
+   * Draws onto a smaller canvas and exports as JPEG at reduced quality.
+   */
+  function compressImage(dataUrl: string, maxWidth = 1024, quality = 0.7): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(maxWidth / img.width, maxWidth / img.height, 1);
+        const w = Math.round(img.width * ratio);
+        const h = Math.round(img.height * ratio);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject("Canvas not supported"); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = () => reject("Failed to load image");
+      img.src = dataUrl;
+    });
+  }
+
   const handleAnalyze = async () => {
     if (!image) return;
     setIsLoading(true);
     setError(null);
 
+    // Compress the image before sending to avoid large payloads / timeouts
+    let compressedImage: string;
+    try {
+      compressedImage = await compressImage(image);
+      const originalKb = Math.round((image.length * 3) / 4 / 1024);
+      const compressedKb = Math.round((compressedImage.length * 3) / 4 / 1024);
+      console.log(`[scanner] Image compressed: ${originalKb}KB → ${compressedKb}KB`);
+    } catch {
+      compressedImage = image; // fallback to original if compression fails
+    }
+
+    // Client-side timeout — must be longer than server timeout (90s) + overhead.
+    const controller = new AbortController();
+    const timeoutMs = 120_000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
       const res = await fetch("/api/crop-doctor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: image }),
+        body: JSON.stringify({ imageBase64: compressedImage }),
+        signal: controller.signal,
       });
 
       const data = await res.json();
@@ -64,9 +105,16 @@ export default function FarmerCropScanner() {
         setRecommendedProduct(data.recommendedProduct || null);
         setDistributorContact(data.distributorContact || null);
       }
-    } catch {
-      setError("تعذر الاتصال بالخادم، تأكد من الإنترنت وحاول مرة أخرى");
+    } catch (err) {
+      const aborted =
+        err instanceof DOMException && err.name === "AbortError";
+      setError(
+        aborted
+          ? "الخادم لا يستجيب، تأكد من الإنترنت وحاول مرة أخرى"
+          : "تعذر الاتصال بالخادم، تأكد من الإنترنت وحاول مرة أخرى"
+      );
     } finally {
+      clearTimeout(timeout);
       setIsLoading(false);
     }
   };
