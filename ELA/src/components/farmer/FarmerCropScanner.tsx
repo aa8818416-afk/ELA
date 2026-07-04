@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Camera, Loader2, Share2, Phone, AlertCircle } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Camera, Loader2, Share2, Phone, AlertCircle, Mic, Square, Volume2, X } from "lucide-react";
 
 type DiagnosisResult = {
   disease_name_ar: string;
@@ -9,6 +9,7 @@ type DiagnosisResult = {
   description_ar: string;
   confidence_percentage: number;
   recommended_product_id: string | null;
+  availability_note?: string | null;
 };
 
 type ProductResult = {
@@ -23,6 +24,18 @@ type DistributorContact = {
   village: string | null;
 };
 
+// Minimal Web Speech API typings (not in standard TS lib)
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start: () => void;
+  stop: () => void;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+};
+
 export default function FarmerCropScanner() {
   const [image, setImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,7 +45,78 @@ export default function FarmerCropScanner() {
     useState<ProductResult | null>(null);
   const [distributorContact, setDistributorContact] =
     useState<DistributorContact | null>(null);
+
+  // Farmer notes (voice or typing)
+  const [farmerNotes, setFarmerNotes] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+
+  // TTS support flag
+  const [ttsSupported, setTtsSupported] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Feature-detect Speech Recognition (Chrome/Edge)
+    const SR =
+      (typeof window !== "undefined" &&
+        ((window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition ||
+          (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition)) ||
+      null;
+    if (SR) {
+      setSpeechSupported(true);
+      const rec = new SR();
+      rec.lang = "ar-EG";
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        setFarmerNotes((prev) => (prev ? prev + " " + transcript : transcript));
+      };
+      rec.onerror = () => setIsListening(false);
+      rec.onend = () => setIsListening(false);
+      recognitionRef.current = rec;
+    }
+    // Feature-detect Speech Synthesis (TTS)
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      setTtsSupported(true);
+    }
+  }, []);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) return;
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch {
+        setIsListening(false);
+      }
+    }
+  };
+
+  const speakDiagnosis = () => {
+    if (!diagnosis || !ttsSupported) return;
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+    const parts = [
+      `التشخيص: ${diagnosis.disease_name_ar}`,
+      diagnosis.description_ar,
+    ];
+    if (recommendedProduct) {
+      parts.push(`العلاج المقترح: ${recommendedProduct.name_ar}، بسعر ${recommendedProduct.price_to_farmer} جنيه.`);
+    } else if (diagnosis.availability_note) {
+      parts.push(diagnosis.availability_note);
+    }
+    const utterance = new SpeechSynthesisUtterance(parts.join(" "));
+    utterance.lang = "ar-EG";
+    utterance.rate = 0.95;
+    window.speechSynthesis.speak(utterance);
+  };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -93,7 +177,7 @@ export default function FarmerCropScanner() {
       const res = await fetch("/api/crop-doctor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: compressedImage }),
+        body: JSON.stringify({ imageBase64: compressedImage, farmerNotes: farmerNotes.trim() || undefined }),
         signal: controller.signal,
       });
 
@@ -110,7 +194,7 @@ export default function FarmerCropScanner() {
         err instanceof DOMException && err.name === "AbortError";
       setError(
         aborted
-          ? "الخادم لا يستجيب، تأكد من الإنترنت وحاول مرة أخرى"
+          ? "الخادم لا يستجيب، تأكد من اتصال الإنترنت وحاول مرة أخرى"
           : "تعذر الاتصال بالخادم، تأكد من الإنترنت وحاول مرة أخرى"
       );
     } finally {
@@ -142,6 +226,11 @@ export default function FarmerCropScanner() {
     setError(null);
     setRecommendedProduct(null);
     setDistributorContact(null);
+    setFarmerNotes("");
+    // Stop any ongoing speech
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -174,31 +263,73 @@ export default function FarmerCropScanner() {
     );
   }
 
-  // ─── SCREEN 2: Image preview + Analyze button ─────────────────────────
-  if (!diagnosis) {
-    return (
-      <div className="space-y-5">
-        <div className="relative rounded-3xl overflow-hidden border border-slate-800 aspect-video">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={image}
-            alt="صورة المحصول"
-            className="w-full h-full object-cover"
-          />
-          <button
-            onClick={resetScanner}
-            className="absolute top-3 right-3 bg-slate-950/80 p-2 rounded-full text-slate-400 hover:text-white"
-          >
-            <AlertCircle className="w-5 h-5" />
-          </button>
-        </div>
+  // ─── SCREEN 2 & 3: Image preview (+ diagnosis below, instead of replacing) ──
+  return (
+    <div className="space-y-5">
+      {/* Image preview — always shown while image exists */}
+      <div className="relative rounded-3xl overflow-hidden border border-slate-800 aspect-video">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={image}
+          alt="صورة المحصول"
+          className="w-full h-full object-cover"
+        />
+        <button
+          onClick={resetScanner}
+          className="absolute top-3 right-3 bg-slate-950/80 p-2 rounded-full text-slate-400 hover:text-white"
+          aria-label="إزالة الصورة"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
 
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-2xl p-4">
-            {error}
+      {/* Farmer notes (voice + typing) — only before diagnosis */}
+      {!diagnosis && (
+        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-slate-300 text-sm font-medium">
+              ملاحظات إضافية (اختياري)
+            </label>
+            {speechSupported && (
+              <button
+                type="button"
+                onClick={toggleListening}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                  isListening
+                    ? "bg-red-500 text-white animate-pulse"
+                    : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                }`}
+              >
+                {isListening ? (
+                  <>
+                    <Square className="w-3 h-3" /> إيقاف
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-3.5 h-3.5" /> تحدث
+                  </>
+                )}
+              </button>
+            )}
           </div>
-        )}
+          <textarea
+            value={farmerNotes}
+            onChange={(e) => setFarmerNotes(e.target.value)}
+            placeholder={speechSupported ? "اكتب أو تحدث بمعلومات عن المحصول (نوع النبات، العمر، الأعراض)..." : "اكتب معلومات عن المحصول (نوع النبات، العمر، الأعراض)..."}
+            rows={2}
+            className="w-full bg-slate-950/50 text-white text-sm rounded-xl p-3 border border-slate-800 focus:border-emerald-500 outline-none resize-none placeholder:text-slate-600"
+          />
+        </div>
+      )}
 
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-2xl p-4">
+          {error}
+        </div>
+      )}
+
+      {/* Analyze button — hidden once we have a diagnosis */}
+      {!diagnosis && (
         <button
           onClick={handleAnalyze}
           disabled={isLoading}
@@ -213,100 +344,121 @@ export default function FarmerCropScanner() {
             "🔬 بدء التشخيص"
           )}
         </button>
-      </div>
-    );
-  }
+      )}
 
-  // ─── SCREEN 3: Diagnosis Results ──────────────────────────────────────
-  return (
-    <div className="space-y-5">
-      {/* Disease Result Card */}
-      <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-5">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div>
-            <p className="text-slate-400 text-xs mb-1">التشخيص:</p>
-            <h3 className="text-white font-bold text-2xl">
-              {diagnosis.disease_name_ar}
-            </h3>
-            <p className="text-slate-500 text-sm mt-1">
-              {diagnosis.disease_name_en}
+      {/* Diagnosis results — shown BELOW the image */}
+      {diagnosis && (
+        <>
+          {/* Listen button (TTS) */}
+          {ttsSupported && (
+            <button
+              onClick={speakDiagnosis}
+              className="w-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold rounded-2xl py-3 flex items-center justify-center gap-2 hover:bg-blue-500/20 transition-colors"
+            >
+              <Volume2 className="w-5 h-5" />
+              استمع للتشخيص
+            </button>
+          )}
+
+          {/* Disease Result Card */}
+          <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-5">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <p className="text-slate-400 text-xs mb-1">التشخيص:</p>
+                <h3 className="text-white font-bold text-2xl">
+                  {diagnosis.disease_name_ar}
+                </h3>
+                <p className="text-slate-500 text-sm mt-1">
+                  {diagnosis.disease_name_en}
+                </p>
+              </div>
+              <div className="bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full whitespace-nowrap">
+                <span className="text-emerald-400 font-bold text-sm">
+                  {diagnosis.confidence_percentage}%
+                </span>
+              </div>
+            </div>
+            <p className="text-slate-300 text-sm leading-relaxed border-t border-slate-800 pt-4">
+              {diagnosis.description_ar}
             </p>
           </div>
-          <div className="bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full whitespace-nowrap">
-            <span className="text-emerald-400 font-bold text-sm">
-              {diagnosis.confidence_percentage}%
-            </span>
-          </div>
-        </div>
-        <p className="text-slate-300 text-sm leading-relaxed border-t border-slate-800 pt-4">
-          {diagnosis.description_ar}
-        </p>
-      </div>
 
-      {/* Recommended Product */}
-      {recommendedProduct && (
-        <div className="bg-amber-500/5 border border-amber-500/20 rounded-3xl p-5">
-          <p className="text-amber-500/70 text-xs font-medium mb-2">
-            💊 العلاج المقترح
-          </p>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-white font-bold text-lg">
-                {recommendedProduct.name_ar}
+          {/* Recommended Product (in stock) */}
+          {recommendedProduct ? (
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-3xl p-5">
+              <p className="text-amber-500/70 text-xs font-medium mb-2">
+                💊 العلاج المقترح
               </p>
-              <p className="text-amber-400 font-bold text-xl">
-                {recommendedProduct.price_to_farmer} ج.م
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-bold text-lg">
+                    {recommendedProduct.name_ar}
+                  </p>
+                  <p className="text-amber-400 font-bold text-xl">
+                    {recommendedProduct.price_to_farmer} ج.م
+                  </p>
+                </div>
+                <span className="text-4xl">🧪</span>
+              </div>
             </div>
-            <span className="text-4xl">🧪</span>
-          </div>
-        </div>
-      )}
-
-      {/* Distributor Contact CTA */}
-      {distributorContact && (
-        <div className="bg-[#25D366]/5 border border-[#25D366]/30 rounded-3xl p-5">
-          <p className="text-slate-400 text-xs mb-3">احجز الدواء من سفير قريتك</p>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xl">
-              👨‍🌾
-            </div>
-            <div>
-              <p className="text-white font-bold">
-                {distributorContact.name}
-              </p>
-              {distributorContact.village && (
-                <p className="text-slate-400 text-xs">
-                  📍 {distributorContact.village}
+          ) : (
+            /* Availability note when no product */
+            diagnosis.availability_note && (
+              <div className="bg-orange-500/5 border border-orange-500/20 rounded-3xl p-5 text-center">
+                <span className="text-3xl block mb-2">📦</span>
+                <p className="text-orange-300 text-sm font-medium">
+                  {diagnosis.availability_note}
                 </p>
-              )}
-              {distributorContact.phone && (
-                <p className="text-slate-400 text-xs flex items-center gap-1">
-                  <Phone className="w-3 h-3" />
-                  {distributorContact.phone}
-                </p>
-              )}
-            </div>
-          </div>
+              </div>
+            )
+          )}
 
+          {/* Distributor Contact CTA */}
+          {distributorContact && (
+            <div className="bg-[#25D366]/5 border border-[#25D366]/30 rounded-3xl p-5">
+              <p className="text-slate-400 text-xs mb-3">احجز الدواء من سفير قريتك</p>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xl">
+                  👨‍🌾
+                </div>
+                <div>
+                  <p className="text-white font-bold">
+                    {distributorContact.name}
+                  </p>
+                  {distributorContact.village && (
+                    <p className="text-slate-400 text-xs">
+                      📍 {distributorContact.village}
+                    </p>
+                  )}
+                  {distributorContact.phone && (
+                    <p className="text-slate-400 text-xs flex items-center gap-1">
+                      <Phone className="w-3 h-3" />
+                      {distributorContact.phone}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={handleWhatsAppContact}
+                disabled={!distributorContact.phone}
+                className="w-full bg-[#25D366] hover:bg-[#20ba5a] disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-[#25D366]/20"
+              >
+                <Share2 className="w-5 h-5" />
+                احجز الدواء كاش مع {distributorContact.name} عبر واتساب
+              </button>
+            </div>
+          )}
+
+          {/* Scan Again */}
           <button
-            onClick={handleWhatsAppContact}
-            disabled={!distributorContact.phone}
-            className="w-full bg-[#25D366] hover:bg-[#20ba5a] disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-[#25D366]/20"
+            onClick={resetScanner}
+            className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-3 rounded-2xl transition-colors"
           >
-            <Share2 className="w-5 h-5" />
-            احجز الدواء كاش مع {distributorContact.name} عبر واتساب
+            فحص محصول آخر
           </button>
-        </div>
+        </>
       )}
-
-      {/* Scan Again */}
-      <button
-        onClick={resetScanner}
-        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-3 rounded-2xl transition-colors"
-      >
-        فحص محصول آخر
-      </button>
     </div>
   );
 }

@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { imageBase64 } = body as { imageBase64: string };
+    const { imageBase64, farmerNotes } = body as { imageBase64: string; farmerNotes?: string };
 
     if (!imageBase64) {
       return NextResponse.json(
@@ -49,32 +49,39 @@ export async function POST(request: Request) {
     );
 
     // 2. Fetch all products to inject into the system prompt.
-    // NOTE: `description_ar` does not exist on the products table, use `active_ingredient`.
+    // Include stock_status + price so the model recommends only available products.
     const { data: products } = await supabase
       .from("products")
-      .select("id, name_ar, active_ingredient");
+      .select("id, name_ar, active_ingredient, price_to_farmer, stock_status");
 
     const productsContext =
       products
         ?.map(
           (p: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
-            `- ID: ${p.id} | Name: ${p.name_ar} | Active Ingredient: ${p.active_ingredient ?? "N/A"}`
+            `- ID: ${p.id} | Name: ${p.name_ar} | Active Ingredient: ${p.active_ingredient ?? "N/A"} | Price: ${p.price_to_farmer} EGP | In Stock: ${p.stock_status ? "YES" : "NO"}`
         )
         .join("\n") || "No products available";
 
     // 3. Define the system prompt
     const promptText = `
-You are an expert agronomist. Analyze this plant leaf image. Identify the disease name in Arabic. 
-Here is our product database:
+You are an expert agronomist. Analyze this plant leaf image and identify the disease.
+${farmerNotes ? `The farmer added these notes about the crop: "${farmerNotes}". Take them into account.\n` : ""}
+Here is our product database (only recommend products where In Stock = YES):
 ${productsContext}
 
-Return a JSON object strictly matching this format without markdown code blocks (just the raw JSON string):
+STRICT RULES:
+1. You MUST recommend a product ONLY if it exists in the database above AND In Stock = YES.
+2. If a matching product exists and is in stock: set "recommended_product_id" to its exact UUID.
+3. If NO matching product exists OR it is out of stock: set "recommended_product_id" to null, and set "availability_note" to "سيوفر المنتج في أقرب وقت، تواصل مع السفير".
+
+Return a JSON object strictly matching this format (no markdown, just raw JSON):
 {
   "disease_name_ar": "اسم المرض بالعربية",
   "disease_name_en": "Disease name in English",
-  "recommended_product_id": "The exact UUID of our product that treats this disease (if found, otherwise null)",
+  "recommended_product_id": "exact UUID from the list, or null",
   "confidence_percentage": 95,
-  "description_ar": "وصف مبسط للمرض وكيفية علاجه"
+  "description_ar": "وصف مبسط للمرض وكيفية علاجه",
+  "availability_note": "رسالة عن توفر المنتج، أو null إذا كان متوفراً"
 }
     `;
 
