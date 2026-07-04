@@ -1,10 +1,9 @@
-import type { Metadata } from "next";
-import Link from "next/link";
+"use client";
 
-export const metadata: Metadata = {
-  title: "تطبيق المزارع | منصة ELA",
-  description: "اشتري مبيداتك بسعر أقل مع جيرانك - منصة ELA",
-};
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
+import { signOut } from "@/app/actions/auth";
 
 const navItems = [
   { href: "/farmer", icon: "🏠", label: "الرئيسية" },
@@ -17,6 +16,12 @@ export default function FarmerLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const pathname = usePathname();
+
+  const handleLogout = async () => {
+    await signOut();
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
       {/* Top Header */}
@@ -28,9 +33,19 @@ export default function FarmerLayout({
             </div>
             <span className="text-white font-bold text-lg">إيلا</span>
           </div>
-          <span className="text-emerald-400 text-xs font-medium bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-full">
-            مزارع
-          </span>
+
+          <div className="flex items-center gap-3">
+            <span className="text-emerald-400 text-xs font-medium bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-full">
+              مزارع
+            </span>
+            <button
+              onClick={handleLogout}
+              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-red-400 rounded-lg transition-all active:scale-95"
+              title="تسجيل الخروج"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -41,17 +56,21 @@ export default function FarmerLayout({
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 safe-area-pb">
-        <div className="max-w-lg mx-auto flex items-stretch">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-slate-400 hover:text-emerald-400 transition-colors active:scale-95"
-            >
-              <span className="text-xl">{item.icon}</span>
-              <span className="text-xs font-medium">{item.label}</span>
-            </Link>
-          ))}
+        <div className="max-w-lg mx-auto flex justify-around">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors active:scale-95 ${isActive ? "text-emerald-400" : "text-slate-400 hover:text-slate-200"
+                  }`}
+              >
+                <span className="text-xl">{item.icon}</span>
+                <span className="text-xs font-medium">{item.label}</span>
+              </Link>
+            );
+          })}
         </div>
       </nav>
     </div>

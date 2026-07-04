@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Package, Truck, Users, KeySquare, Network, Menu, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Package, Truck, Users, KeySquare, Network, Menu, X, LogOut } from "lucide-react";
+import { signOut } from "@/app/actions/auth";
 
 const navItems = [
   { href: "/admin", label: "المنتجات والتسعير", icon: Package },
@@ -20,6 +21,10 @@ export default function AdminLayout({
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+
+  const handleLogout = async () => {
+    await signOut();
+  };
 
   return (
     <div className="min-h-screen bg-slate-50" dir="rtl">
@@ -73,17 +78,23 @@ export default function AdminLayout({
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    active
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-300 hover:text-white hover:bg-slate-800"
-                  }`}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${active
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-300 hover:text-white hover:bg-slate-800"
+                    }`}
                 >
                   <Icon className="w-5 h-5" />
                   <span className="font-medium">{item.label}</span>
                 </Link>
               );
             })}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-slate-300 hover:text-white hover:bg-red-900 mt-auto"
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="font-medium">تسجيل الخروج</span>
+            </button>
           </nav>
         </aside>
 

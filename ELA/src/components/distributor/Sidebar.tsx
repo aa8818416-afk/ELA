@@ -10,8 +10,7 @@ import {
   CheckSquare,
   LogOut,
 } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
-import { useRouter } from "next/navigation";
+import { signOut } from "@/app/actions/auth";
 
 const navItems = [
   { name: "الرئيسية", href: "/distributor", icon: LayoutDashboard },
@@ -23,12 +22,9 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
 
   const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.refresh();
+    await signOut();
   };
 
   return (
@@ -52,11 +48,10 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                isActive
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive
                   ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                   : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-              }`}
+                }`}
             >
               <item.icon className={`w-5 h-5 ${isActive ? "text-amber-400" : ""}`} />
               <span className="font-medium">{item.name}</span>
