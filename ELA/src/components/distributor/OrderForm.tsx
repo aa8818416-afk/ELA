@@ -78,7 +78,7 @@ export default function OrderForm({
           <select
             name="farmerId"
             required
-            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 appearance-none"
+            className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 appearance-none"
           >
             <option value="">-- اختر الفلاح --</option>
             {farmers.map((f) => (
@@ -98,7 +98,7 @@ export default function OrderForm({
             required
             value={selectedProductId}
             onChange={(e) => setSelectedProductId(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 appearance-none"
+            className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 appearance-none"
           >
             <option value="">-- اختر المنتج --</option>
             {products.map((p) => (
@@ -121,7 +121,7 @@ export default function OrderForm({
               required
               value={quantity}
               onChange={(e) => setQuantity(Number(e.target.value))}
-              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-right"
+              className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-right"
               dir="ltr"
             />
           </div>

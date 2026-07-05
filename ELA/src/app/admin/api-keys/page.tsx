@@ -91,7 +91,7 @@ export default function ApiKeysPage() {
                         onBlur={async () => {
                           await (supabase as any).from("api_keys").update({ model_name: k.model_name }).eq("id", k.id);
                         }}
-                        className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm"
+                        className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm text-slate-800 font-medium"
                       />
                     </td>
                     <td className="px-6 py-4 text-slate-500 font-mono text-sm" dir="ltr">

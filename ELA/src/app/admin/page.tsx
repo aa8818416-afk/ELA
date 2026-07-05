@@ -96,7 +96,7 @@ export default function ProductsPage() {
       const { data: { publicUrl } } = supabase.storage
         .from('product-images')
         .getPublicUrl(filePath);
-      
+
       finalImageUrl = publicUrl;
     }
 
@@ -107,7 +107,7 @@ export default function ProductsPage() {
 
     const res = await saveProduct(payload, editingId || undefined);
     setUploadingImage(false);
-    
+
     if (res.error) {
       alert(res.error);
     } else {
@@ -225,7 +225,7 @@ export default function ProductsPage() {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div className="md:col-span-2">
@@ -235,7 +235,7 @@ export default function ProductsPage() {
                     required
                     value={formData.name_ar}
                     onChange={(e) => setFormData({ ...formData, name_ar: e.target.value })}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white text-slate-800"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -244,10 +244,10 @@ export default function ProductsPage() {
                     type="text"
                     value={formData.active_ingredient}
                     onChange={(e) => setFormData({ ...formData, active_ingredient: e.target.value })}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white text-slate-800"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">التكلفة (جملة)</label>
                   <input
@@ -256,7 +256,7 @@ export default function ProductsPage() {
                     min="0"
                     value={formData.wholesale_cost || ""}
                     onChange={(e) => setFormData({ ...formData, wholesale_cost: Number(e.target.value) })}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white text-slate-800"
                   />
                 </div>
                 <div>
@@ -267,7 +267,7 @@ export default function ProductsPage() {
                     min="0"
                     value={formData.price_to_farmer || ""}
                     onChange={(e) => setFormData({ ...formData, price_to_farmer: Number(e.target.value) })}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white text-slate-800"
                   />
                 </div>
                 <div>
@@ -278,7 +278,7 @@ export default function ProductsPage() {
                     min="0"
                     value={formData.agent_commission || ""}
                     onChange={(e) => setFormData({ ...formData, agent_commission: Number(e.target.value) })}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white text-slate-800"
                   />
                 </div>
                 <div className="flex items-center pt-6">

@@ -113,7 +113,7 @@ export default function TripsPage() {
               <Navigation className="w-5 h-5 text-indigo-500" />
               تكوين رحلة جديدة
             </h3>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">اسم السائق</label>
@@ -122,7 +122,7 @@ export default function TripsPage() {
                   required
                   value={driverName}
                   onChange={(e) => setDriverName(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-slate-800"
                   placeholder="مثال: محمود محمد"
                 />
               </div>
@@ -133,18 +133,18 @@ export default function TripsPage() {
                   required
                   value={driverPhone}
                   onChange={(e) => setDriverPhone(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-right"
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-right bg-white text-slate-800"
                   placeholder="010XXXXXXXX"
                   dir="ltr"
                 />
               </div>
-              
+
               <div className="pt-4 border-t border-slate-100">
                 <div className="flex justify-between text-sm mb-4">
                   <span className="text-slate-500">الطلبات المحددة:</span>
                   <span className="font-bold text-indigo-600">{selectedOrderIds.size} طلب</span>
                 </div>
-                
+
                 <button
                   type="submit"
                   disabled={dispatching || selectedOrderIds.size === 0}
@@ -197,8 +197,8 @@ export default function TripsPage() {
                     orders.map((order) => {
                       const isSelected = selectedOrderIds.has(order.id);
                       return (
-                        <tr 
-                          key={order.id} 
+                        <tr
+                          key={order.id}
                           onClick={() => toggleOrderSelection(order.id)}
                           className={`cursor-pointer transition-colors ${isSelected ? "bg-indigo-50" : "hover:bg-slate-50"}`}
                         >
