@@ -23,7 +23,9 @@ export default function AdminLayout({
   const pathname = usePathname();
 
   const handleLogout = async () => {
-    await signOut();
+    if (confirm("هل أنت متأكد من أنك تريد الخروج من هذا الحساب؟")) {
+      await signOut();
+    }
   };
 
   return (
