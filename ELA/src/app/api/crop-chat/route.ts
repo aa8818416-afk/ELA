@@ -129,7 +129,7 @@ ${productsContext}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const { data: keyData, error: keyError } = await (supabaseAdmin as any)
                 .from("api_keys")
-                .select("id, api_key, daily_usage")
+                .select("id, api_key, daily_usage, model_name")
                 .eq("status", "active")
                 .eq("project_name", "gemini")
                 .lt("daily_usage", 1450)
@@ -148,7 +148,8 @@ ${productsContext}
                 );
             }
 
-            const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${keyData.api_key}`;
+            const modelName = keyData.model_name || "gemini-3.5-flash";
+            const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_key}`;
 
             console.log(`[crop-chat] Attempt ${attemptCount + 1}: Using key ${keyData.id} (usage: ${keyData.daily_usage})`);
 

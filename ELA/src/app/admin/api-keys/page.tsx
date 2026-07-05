@@ -53,6 +53,7 @@ export default function ApiKeysPage() {
             <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 text-sm">
               <tr>
                 <th className="px-6 py-4 font-medium">المشروع</th>
+                <th className="px-6 py-4 font-medium">النموذج</th>
                 <th className="px-6 py-4 font-medium">المفتاح (API Key)</th>
                 <th className="px-6 py-4 font-medium">الاستخدام اليومي</th>
                 <th className="px-6 py-4 font-medium">الحالة</th>
@@ -78,6 +79,21 @@ export default function ApiKeysPage() {
                     <td className="px-6 py-4">
                       <span className="font-semibold text-slate-800">{k.project_name}</span>
                     </td>
+                    <td className="px-6 py-4 text-slate-600 text-sm">
+                      <input
+                        type="text"
+                        value={k.model_name || ""}
+                        onChange={(e) => {
+                          const newKeys = [...keys];
+                          newKeys.find(key => key.id === k.id)!.model_name = e.target.value;
+                          setKeys(newKeys);
+                        }}
+                        onBlur={async () => {
+                          await (supabase as any).from("api_keys").update({ model_name: k.model_name }).eq("id", k.id);
+                        }}
+                        className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm"
+                      />
+                    </td>
                     <td className="px-6 py-4 text-slate-500 font-mono text-sm" dir="ltr">
                       {maskKey(k.api_key)}
                     </td>
@@ -88,20 +104,18 @@ export default function ApiKeysPage() {
                       </div>
                       <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
                         <div
-                          className={`h-1.5 rounded-full ${
-                            k.daily_usage > 1400 ? "bg-red-500" : "bg-green-500"
-                          }`}
+                          className={`h-1.5 rounded-full ${k.daily_usage > 1400 ? "bg-red-500" : "bg-green-500"
+                            }`}
                           style={{ width: `${Math.min(100, (k.daily_usage / 1500) * 100)}%` }}
                         ></div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          k.status === "active"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${k.status === "active"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                          }`}
                       >
                         {k.status === "active" ? "نشط" : "متوقف (محدود)"}
                       </span>
@@ -119,11 +133,10 @@ export default function ApiKeysPage() {
                           onClick={() => handleForceActive(k.id)}
                           title="تفعيل إجباري"
                           disabled={k.status === "active"}
-                          className={`p-2 rounded-lg transition-colors ${
-                            k.status === "active"
-                              ? "text-slate-200 cursor-not-allowed"
-                              : "text-slate-400 hover:text-green-600 hover:bg-green-50"
-                          }`}
+                          className={`p-2 rounded-lg transition-colors ${k.status === "active"
+                            ? "text-slate-200 cursor-not-allowed"
+                            : "text-slate-400 hover:text-green-600 hover:bg-green-50"
+                            }`}
                         >
                           <PlayCircle className="w-4 h-4" />
                         </button>

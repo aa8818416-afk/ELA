@@ -119,7 +119,7 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: keyData, error: keyError } = await (supabaseAdmin as any)
         .from("api_keys")
-        .select("id, api_key, daily_usage")
+        .select("id, api_key, daily_usage, model_name")
         .eq("status", "active")
         .eq("project_name", "gemini")
         .lt("daily_usage", 1450)
@@ -138,8 +138,9 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
         );
       }
 
-      // Model name: gemini-3.5-flash (verified working with the project's API key).
-      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${keyData.api_key}`;
+      // Model name: dynamically loaded from DB
+      const modelName = keyData.model_name || "gemini-3.5-flash";
+      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_key}`;
 
       console.log(`[crop-doctor] Attempt ${attemptCount + 1}: Using key ${keyData.id} (usage: ${keyData.daily_usage}), model: gemini-3.5-flash`);
 
@@ -163,7 +164,7 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
           fetchError instanceof DOMException &&
           fetchError.name === "AbortError";
         console.error(
-          `[crop-doctor] FETCH FAILED | Attempt ${attemptCount + 1} | Key: ${keyData.id.slice(0,6)}... | Error:`,
+          `[crop-doctor] FETCH FAILED | Attempt ${attemptCount + 1} | Key: ${keyData.id.slice(0, 6)}... | Error:`,
           fetchError
         );
         // On timeout, retry (image may have been too large — next attempt may succeed)
@@ -185,12 +186,12 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
         clearTimeout(timeout);
       }
 
-      console.log(`[crop-doctor] Gemini responded with HTTP ${response.status} | Attempt ${attemptCount + 1} | Key: ${keyData.id.slice(0,6)}...`);
+      console.log(`[crop-doctor] Gemini responded with HTTP ${response.status} | Attempt ${attemptCount + 1} | Key: ${keyData.id.slice(0, 6)}...`);
 
       if (!response.ok) {
         const errorBody = await response.text();
         console.error(
-          `[crop-doctor] API ERROR | HTTP ${response.status} | Key: ${keyData.id.slice(0,6)}... | Body:`,
+          `[crop-doctor] API ERROR | HTTP ${response.status} | Key: ${keyData.id.slice(0, 6)}... | Body:`,
           errorBody
         );
         if (response.status === 429) {
