@@ -10,6 +10,7 @@ export default function LoginForm() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +25,12 @@ export default function LoginForm() {
     setSuccessMessage(null);
 
     // Basic validation
+    if (isSignUp && !fullName.trim()) {
+      setError("الاسم بالكامل مطلوب للتسجيل.");
+      setIsLoading(false);
+      return;
+    }
+
     if (password.length < 6) {
       setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل.");
       setIsLoading(false);
@@ -40,7 +47,7 @@ export default function LoginForm() {
           password,
           options: {
             // Pass the role as metadata — the DB trigger will read it
-            data: { role: "farmer" },
+            data: { role: "farmer", full_name: fullName },
           },
         });
 
@@ -129,6 +136,24 @@ export default function LoginForm() {
             className="w-full bg-white border border-slate-300 text-slate-900 placeholder-slate-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500 transition-all"
           />
         </div>
+
+        {/* Full Name Field */}
+        {isSignUp && (
+          <div className="space-y-2">
+            <label htmlFor="fullName" className="block text-sm font-medium text-slate-300">
+              الاسم بالكامل
+            </label>
+            <input
+              id="fullName"
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="محمد أحمد"
+              required={isSignUp}
+              className="w-full bg-white border border-slate-300 text-slate-900 placeholder-slate-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500 transition-all"
+            />
+          </div>
+        )}
 
         {/* Password Field */}
         <div className="space-y-2">
