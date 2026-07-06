@@ -65,7 +65,7 @@ export async function registerFarmer(formData: FormData) {
     // 3. The `on_auth_user_created` Postgres Trigger automatically creates a `profiles` row.
     // Wait a brief moment to ensure trigger completes (or rely on robust retry/upsert logic)
     // Here we'll just update the profile with the phone number, then insert the farmer row.
-    
+
     await supabaseAdmin
       .from("profiles")
       .update({ phone: phone })
@@ -165,7 +165,7 @@ export async function createOrder(formData: FormData) {
 export async function diagnoseCrop(imageBase64: string) {
   try {
     const supabase = await createServerClient();
-    
+
     // 1. Validate auth
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) {
@@ -197,7 +197,7 @@ Return a JSON object strictly matching this format without markdown code blocks 
     `;
 
     const base64Data = imageBase64.split(",")[1] || imageBase64;
-    
+
     const requestBody = {
       contents: [
         {
@@ -259,7 +259,7 @@ Return a JSON object strictly matching this format without markdown code blocks 
             .from("api_keys")
             .update({ status: "rate_limited" })
             .eq("id", keyData.id);
-          
+
           // Recursively try again with the next key
           return attemptDiagnosis(attemptCount + 1);
         }
@@ -278,7 +278,7 @@ Return a JSON object strictly matching this format without markdown code blocks 
 
       const data = await response.json();
       const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      
+
       if (!resultText) {
         return { error: "لم يتم التعرف على المرض" };
       }
@@ -303,10 +303,10 @@ Return a JSON object strictly matching this format without markdown code blocks 
         }
       }
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         diagnosis: aiResult,
-        recommendedProduct 
+        recommendedProduct
       };
     }
 
@@ -326,7 +326,7 @@ Return a JSON object strictly matching this format without markdown code blocks 
 export async function markOrderDelivered(orderId: string) {
   try {
     const supabase = await createServerClient();
-    
+
     // 1. Validate auth
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) {
@@ -359,22 +359,23 @@ export async function markOrderDelivered(orderId: string) {
       });
     }
 
-    // 4. Update the order
+    // 4. Update the order atomically and only if it is not already delivered
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
+    const { data: updatedOrders, error: updateError } = await (supabase as any)
       .from("orders")
       .update({
         status: "delivered",
         payment_status: "paid"
       })
-      .eq("id", orderId);
+      .eq("id", orderId)
+      .eq("distributor_id", currentUser.id);
 
     if (updateError) {
+      console.error("[markOrderDelivered] Update Error:", updateError);
       return { error: "فشل تحديث حالة الطلب" };
     }
 
-    // 5. Update distributor wallet (using a Postgres RPC if available, or fetch and update)
-    // For simplicity, we fetch current balance and update. In production, use RPC to avoid race conditions.
+    // 5. Update distributor wallet
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: distData } = await (supabase as any)
       .from("distributors")
@@ -395,7 +396,7 @@ export async function markOrderDelivered(orderId: string) {
     revalidatePath("/distributor/deliveries");
     revalidatePath("/distributor");
     return { success: true };
-    
+
   } catch (error) {
     console.error("[markOrderDelivered] Unexpected Error:", error);
     return { error: "حدث خطأ غير متوقع أثناء تحديث الطلب" };

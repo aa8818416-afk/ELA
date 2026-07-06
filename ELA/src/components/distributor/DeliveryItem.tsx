@@ -16,23 +16,28 @@ type OrderProp = {
 export default function DeliveryItem({ order }: { order: OrderProp }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const handleMarkDelivered = async () => {
+    if (isLoading || isSuccess) return;
+
     setIsLoading(true);
     setError(null);
 
     const result = await markOrderDelivered(order.id);
     if (result.error) {
       setError(result.error);
+      setIsLoading(false);
+    } else {
+      setIsSuccess(true);
+      setIsLoading(false);
     }
-    // On success, the Server Action revalidates the path and the item disappears from the "pending" list
-    setIsLoading(false);
   };
 
   return (
     <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 hover:bg-slate-800/50 transition-colors">
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-        
+
         <div className="flex gap-4">
           <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 shrink-0">
             <Package className="w-6 h-6 text-indigo-400" />
@@ -56,19 +61,24 @@ export default function DeliveryItem({ order }: { order: OrderProp }) {
           </div>
           <button
             onClick={handleMarkDelivered}
-            disabled={isLoading}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm font-bold px-4 py-2 rounded-xl flex items-center gap-2 transition-all"
+            disabled={isLoading || isSuccess}
+            className={`text-white text-sm font-bold px-4 py-2 rounded-xl flex items-center gap-2 transition-all ${isSuccess
+                ? "bg-emerald-800 cursor-not-allowed"
+                : "bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500"
+              }`}
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
+            ) : isSuccess ? (
+              <CheckCircle className="w-4 h-4 text-emerald-400" />
             ) : (
               <CheckCircle className="w-4 h-4" />
             )}
-            تأكيد التسليم
+            {isSuccess ? "تم تأكيد التسليم" : "تأكيد التسليم"}
           </button>
         </div>
       </div>
-      
+
       {error && (
         <div className="mt-4 text-red-400 text-sm bg-red-500/10 px-3 py-2 rounded-lg">
           {error}
