@@ -52,6 +52,16 @@ export default function FarmerCropScanner() {
     stopListening,
   } = useSpeechRecognition();
 
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening((text) => {
+        setFarmerNotes((prev) => (prev ? prev + " " + text : text));
+      });
+    }
+  };
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
