@@ -172,6 +172,16 @@ export async function diagnoseCrop(imageBase64: string) {
       return { error: "غير مصرح لك" };
     }
 
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey) {
+      console.error("[diagnoseCrop] SUPABASE_SERVICE_ROLE_KEY is missing.");
+      return { error: "إعداد الخادم غير مكتمل" };
+    }
+    const supabaseAdmin = createAdminClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceRoleKey
+    );
+
     // 2. Fetch all products to inject into the system prompt.
     // NOTE: `description_ar` does not exist on the products table, use `active_ingredient`.
     const { data: products } = await supabase
@@ -218,19 +228,25 @@ Return a JSON object strictly matching this format without markdown code blocks 
     };
 
     // Recursive function to handle Key Rotation
-    async function attemptDiagnosis(attemptCount = 0): Promise<Record<string, unknown>> {
+    async function attemptDiagnosis(attemptCount = 0, excludedIds: string[] = []): Promise<Record<string, unknown>> {
       if (attemptCount > 5) {
         return { error: "فشلت جميع المحاولات للاتصال بخدمة التشخيص (Keys exhausted)" };
       }
 
       // Fetch the first available key
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: keyData, error: keyError } = await (supabase as any)
+      let query = (supabaseAdmin as any)
         .from("api_keys")
-        .select("id, api_key, daily_usage")
+        .select("id, api_key, daily_usage, model_name")
         .eq("status", "active")
         .eq("project_name", "gemini")
-        .lt("daily_usage", 1450)
+        .lt("daily_usage", 1450);
+
+      if (excludedIds.length > 0) {
+        query = query.not("id", "in", `(${excludedIds.join(",")})`);
+      }
+
+      const { data: keyData, error: keyError } = await query
         .order("daily_usage", { ascending: true })
         .limit(1)
         .single();
@@ -240,8 +256,8 @@ Return a JSON object strictly matching this format without markdown code blocks 
         return { error: "نظام الذكاء الاصطناعي غير متاح حالياً (جميع المفاتيح مستنفدة)" };
       }
 
-      // The model identifier: gemini-3.5-flash (verified working).
-      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${keyData.api_key}`;
+      const modelName = keyData.model_name || "gemini-3.5-flash";
+      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_key}`;
 
       const response = await fetch(geminiEndpoint, {
         method: "POST",
@@ -255,23 +271,28 @@ Return a JSON object strictly matching this format without markdown code blocks 
           console.warn(`[diagnoseCrop] Key ${keyData.id} hit rate limit (429). Rotating...`);
           // Immediately mark this key as rate_limited
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any)
+          await (supabaseAdmin as any)
             .from("api_keys")
             .update({ status: "rate_limited" })
             .eq("id", keyData.id);
 
-          // Recursively try again with the next key
-          return attemptDiagnosis(attemptCount + 1);
+          return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
+        }
+        // Handle 503 Model Overloaded
+        if (response.status === 503) {
+          console.warn(`[diagnoseCrop] Key ${keyData.id} overloaded (503). Rotating...`);
+          await new Promise((r) => setTimeout(r, 3000));
+          return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
         }
 
         console.error("[diagnoseCrop] Gemini API Error:", await response.text());
-        return { error: "فشل الاتصال بخدمة التشخيص" };
+        return { error: `فشل الاتصال بخدمة التشخيص (${response.status})` };
       }
 
       // Call successful!
       // Increment daily usage
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
+      await (supabaseAdmin as any)
         .from("api_keys")
         .update({ daily_usage: keyData.daily_usage + 1 })
         .eq("id", keyData.id);

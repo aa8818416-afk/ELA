@@ -107,7 +107,7 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
     };
 
     // 4. Recursive Key Rotation
-    async function attemptDiagnosis(attemptCount = 0): Promise<NextResponse> {
+    async function attemptDiagnosis(attemptCount = 0, excludedIds: string[] = []): Promise<NextResponse> {
       if (attemptCount > 5) {
         return NextResponse.json(
           { error: "خدمة الذكاء الاصطناعي مشغولة حالياً، يرجى المحاولة بعد بضع دقائق" },
@@ -117,12 +117,18 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
 
       // Read the active key via the service-role client to bypass RLS.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: keyData, error: keyError } = await (supabaseAdmin as any)
+      let query = (supabaseAdmin as any)
         .from("api_keys")
         .select("id, api_key, daily_usage, model_name")
         .eq("status", "active")
         .eq("project_name", "gemini")
-        .lt("daily_usage", 1450)
+        .lt("daily_usage", 1450);
+
+      if (excludedIds.length > 0) {
+        query = query.not("id", "in", `(${excludedIds.join(",")})`);
+      }
+
+      const { data: keyData, error: keyError } = await query
         .order("daily_usage", { ascending: true })
         .limit(1)
         .single();
@@ -172,7 +178,7 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
           console.warn(
             `[crop-doctor] Request timed out after ${timeoutMs}ms. Retrying... (attempt ${attemptCount + 1}/6)`
           );
-          return attemptDiagnosis(attemptCount + 1);
+          return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
         }
         return NextResponse.json(
           {
@@ -203,7 +209,7 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
             .from("api_keys")
             .update({ status: "rate_limited" })
             .eq("id", keyData.id);
-          return attemptDiagnosis(attemptCount + 1);
+          return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
         }
         // 503 = model overloaded (temporary). Retry after a short delay.
         if (response.status === 503) {
@@ -211,7 +217,7 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
             `[crop-doctor] Model overloaded (503). Retrying in 5s... (attempt ${attemptCount + 1}/6)`
           );
           await new Promise((r) => setTimeout(r, 5000));
-          return attemptDiagnosis(attemptCount + 1);
+          return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
         }
         // Other errors: return immediately with details.
         return NextResponse.json(
