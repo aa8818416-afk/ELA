@@ -9,6 +9,7 @@ import {
   ScanLine,
   CheckSquare,
   LogOut,
+  Package,
 } from "lucide-react";
 import { signOut } from "@/app/actions/auth";
 
@@ -16,6 +17,7 @@ const navItems = [
   { name: "الرئيسية", href: "/distributor", icon: LayoutDashboard },
   { name: "إدارة الفلاحين", href: "/distributor/farmers", icon: Users },
   { name: "طلب جديد", href: "/distributor/orders", icon: ShoppingCart },
+  { name: "دليل المنتجات", href: "/distributor/products", icon: Package },
   { name: "فحص المحاصيل", href: "/distributor/scanner", icon: ScanLine },
   { name: "التسليمات والتحصيل", href: "/distributor/deliveries", icon: CheckSquare },
 ];

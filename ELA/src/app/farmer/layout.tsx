@@ -8,6 +8,7 @@ import { signOut } from "@/app/actions/auth";
 const navItems = [
   { href: "/farmer", icon: "🏠", label: "الرئيسية" },
   { href: "/farmer/scanner", icon: "🌿", label: "طبيب المحاصيل" },
+  { href: "/farmer/products", icon: "🛒", label: "المنتجات" },
   { href: "/farmer/orders", icon: "📦", label: "طلباتي" },
 ];
 

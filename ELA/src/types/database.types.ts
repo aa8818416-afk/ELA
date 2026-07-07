@@ -217,7 +217,9 @@ export type Database = {
           image_url: string | null
           name_ar: string
           price_to_farmer: number
+          product_type: string[] | null
           stock_status: boolean
+          target_crops: string[] | null
           wholesale_cost: number
         }
         Insert: {
@@ -227,7 +229,9 @@ export type Database = {
           image_url?: string | null
           name_ar: string
           price_to_farmer?: number
+          product_type?: string[] | null
           stock_status?: boolean
+          target_crops?: string[] | null
           wholesale_cost?: number
         }
         Update: {
@@ -237,7 +241,9 @@ export type Database = {
           image_url?: string | null
           name_ar?: string
           price_to_farmer?: number
+          product_type?: string[] | null
           stock_status?: boolean
+          target_crops?: string[] | null
           wholesale_cost?: number
         }
         Relationships: []

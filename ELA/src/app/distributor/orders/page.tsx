@@ -31,7 +31,7 @@ export default async function OrdersPage() {
   // 2. Fetch available products
   const { data: productsData } = await supabase
     .from("products")
-    .select("id, name_ar, price_to_farmer, image_url")
+    .select("id, name_ar, price_to_farmer, image_url, product_type, target_crops")
     .eq("stock_status", true);
 
   const products = productsData || [];
