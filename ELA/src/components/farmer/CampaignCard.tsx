@@ -9,6 +9,7 @@ interface CampaignCardProps {
     name_ar: string;
     price_to_farmer: number;
     stock_status: boolean;
+    image_url?: string | null;
   };
   currentVolume: number;
   targetVolume: number;
@@ -63,10 +64,18 @@ export default function CampaignCard({
               <span className="text-sm font-medium text-emerald-500/70">ج.م</span>
             </p>
           </div>
-          {/* Emoji Icon Placeholder */}
-          <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl shrink-0">
-            🧪
-          </div>
+          {/* Product Image or Emoji Icon Placeholder */}
+          {product.image_url ? (
+            <img
+              src={product.image_url}
+              alt={product.name_ar}
+              className="w-14 h-14 rounded-2xl object-cover border border-emerald-500/20 shrink-0"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl shrink-0">
+              🧪
+            </div>
+          )}
         </div>
 
         {/* Progress Info */}

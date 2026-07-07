@@ -27,7 +27,7 @@ export default async function DeliveriesPage() {
       order_items (id)
     `)
     .eq("distributor_id", user.id)
-    .in("status", ["pending", "in_transit"])
+    .in("status", ["pending", "in_transit", "delivered"])
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -40,7 +40,7 @@ export default async function DeliveriesPage() {
     const farmerProfile = Array.isArray(order.farmers)
       ? (order.farmers[0] as any)?.profiles // eslint-disable-line @typescript-eslint/no-explicit-any
       : (order.farmers as any)?.profiles; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
+
     const profileObj = Array.isArray(farmerProfile) ? farmerProfile[0] : farmerProfile;
 
     return {

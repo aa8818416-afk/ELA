@@ -16,7 +16,7 @@ type OrderProp = {
 export default function DeliveryItem({ order }: { order: OrderProp }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(order.status === "delivered");
 
   const handleMarkDelivered = async () => {
     if (isLoading || isSuccess) return;
@@ -35,7 +35,7 @@ export default function DeliveryItem({ order }: { order: OrderProp }) {
   };
 
   return (
-    <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 hover:bg-slate-800/50 transition-colors">
+    <div className={`bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 transition-colors ${isSuccess ? "opacity-50" : "hover:bg-slate-800/50"}`}>
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
 
         <div className="flex gap-4">
@@ -63,8 +63,8 @@ export default function DeliveryItem({ order }: { order: OrderProp }) {
             onClick={handleMarkDelivered}
             disabled={isLoading || isSuccess}
             className={`text-white text-sm font-bold px-4 py-2 rounded-xl flex items-center gap-2 transition-all ${isSuccess
-                ? "bg-emerald-800 cursor-not-allowed"
-                : "bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500"
+              ? "bg-emerald-800/60 cursor-not-allowed"
+              : "bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500"
               }`}
           >
             {isLoading ? (
@@ -74,7 +74,7 @@ export default function DeliveryItem({ order }: { order: OrderProp }) {
             ) : (
               <CheckCircle className="w-4 h-4" />
             )}
-            {isSuccess ? "تم تأكيد التسليم" : "تأكيد التسليم"}
+            {isSuccess ? "تم التأكيد" : "تأكيد التسليم"}
           </button>
         </div>
       </div>

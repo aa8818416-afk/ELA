@@ -49,7 +49,7 @@ export default async function FarmerOrdersPage() {
       payment_status,
       order_items (
         quantity,
-        products ( name_ar )
+        products ( name_ar, image_url )
       ),
       distributors (
         village,
@@ -156,12 +156,25 @@ export default async function FarmerOrdersPage() {
                     {items.map((item: any, idx: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                       <div
                         key={idx}
-                        className="flex items-center justify-between text-sm"
+                        className="flex items-center justify-between text-sm animate-fade-in"
                       >
-                        <span className="text-slate-300">
-                          {item.products?.name_ar || "منتج"}
-                        </span>
-                        <span className="text-slate-500">
+                        <div className="flex items-center gap-2.5">
+                          {item.products?.image_url ? (
+                            <img
+                              src={item.products.image_url}
+                              alt={item.products.name_ar}
+                              className="w-8 h-8 rounded-lg object-cover bg-slate-800 border border-slate-800"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-800 flex items-center justify-center text-xs">
+                              📦
+                            </div>
+                          )}
+                          <span className="text-slate-300 font-medium">
+                            {item.products?.name_ar || "منتج"}
+                          </span>
+                        </div>
+                        <span className="text-slate-500 font-semibold">
                           × {item.quantity}
                         </span>
                       </div>

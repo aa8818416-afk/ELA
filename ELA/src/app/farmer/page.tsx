@@ -42,7 +42,7 @@ export default async function FarmerHomePage() {
   // 2. Fetch active products
   const { data: products } = await supabase
     .from("products")
-    .select("id, name_ar, price_to_farmer, stock_status")
+    .select("id, name_ar, price_to_farmer, stock_status, image_url")
     .eq("stock_status", true);
 
   // 3. For each product, count how many units have been ordered in this village

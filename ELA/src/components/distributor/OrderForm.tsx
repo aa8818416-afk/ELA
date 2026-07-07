@@ -5,7 +5,7 @@ import { createOrder } from "@/app/actions/distributor";
 import { ShoppingCart, Loader2, CheckCircle2 } from "lucide-react";
 
 type Farmer = { profile_id: string; full_name: string };
-type Product = { id: string; name_ar: string; price_to_farmer: number };
+type Product = { id: string; name_ar: string; price_to_farmer: number; image_url?: string | null };
 
 export default function OrderForm({
   farmers,
@@ -93,20 +93,35 @@ export default function OrderForm({
           <label className="block text-sm font-medium text-slate-300 mb-2">
             المنتج / المبيد
           </label>
-          <select
-            name="productId"
-            required
-            value={selectedProductId}
-            onChange={(e) => setSelectedProductId(e.target.value)}
-            className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 appearance-none"
-          >
-            <option value="">-- اختر المنتج --</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name_ar} - {p.price_to_farmer} ج.م
-              </option>
-            ))}
-          </select>
+          <div className="flex gap-3 items-center">
+            {selectedProduct?.image_url ? (
+              <img
+                src={selectedProduct.image_url}
+                alt={selectedProduct.name_ar}
+                className="w-12 h-12 rounded-xl object-cover bg-slate-800 shrink-0 border border-slate-700"
+              />
+            ) : selectedProduct ? (
+              <div className="w-12 h-12 rounded-xl bg-slate-850 border border-slate-800 flex items-center justify-center shrink-0 text-slate-400 text-lg">
+                📦
+              </div>
+            ) : null}
+            <div className="relative flex-1">
+              <select
+                name="productId"
+                required
+                value={selectedProductId}
+                onChange={(e) => setSelectedProductId(e.target.value)}
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 appearance-none"
+              >
+                <option value="">-- اختر المنتج --</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name_ar} - {p.price_to_farmer} ج.م
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-6">
