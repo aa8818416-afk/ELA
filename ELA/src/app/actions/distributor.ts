@@ -158,9 +158,79 @@ export async function createOrder(formData: FormData) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Helpers for multi-provider AI support (Gemini | Groq)
+// To add a new provider in the future: add its project_name below.
+// ---------------------------------------------------------------------------
+function buildDistributorProviderRequest(
+  projectName: string,
+  modelName: string,
+  apiKey: string,
+  promptText: string,
+  base64Data: string
+): { url: string; body: string; headers: Record<string, string> } {
+  if (projectName === "groq") {
+    // Groq: OpenAI-compatible Chat Completions API with vision support
+    const url = "https://api.groq.com/openai/v1/chat/completions";
+    const body = JSON.stringify({
+      model: modelName,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: promptText },
+            {
+              type: "image_url",
+              image_url: { url: `data:image/jpeg;base64,${base64Data}` },
+            },
+          ],
+        },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+    });
+    return {
+      url,
+      body,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+    };
+  }
+
+  // Default: Google Gemini
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+  const body = JSON.stringify({
+    contents: [
+      {
+        parts: [
+          { text: promptText },
+          { inline_data: { mime_type: "image/jpeg", data: base64Data } },
+        ],
+      },
+    ],
+    generationConfig: { response_mime_type: "application/json" },
+  });
+  return { url, body, headers: { "Content-Type": "application/json" } };
+}
+
+function extractDistributorResultText(
+  projectName: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any
+): string | null {
+  if (projectName === "groq") {
+    return data.choices?.[0]?.message?.content ?? null;
+  }
+  // Gemini
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+}
+
 /**
  * Server Action: AI Crop Doctor Scanner with Key Rotation
- * Processes the base64 image via Gemini 3.5 Flash API using active keys from api_keys table
+ * Supports multiple AI providers: "gemini" | "groq"
+ * Provider is determined automatically from `project_name` column in api_keys table.
  */
 export async function diagnoseCrop(imageBase64: string) {
   try {
@@ -183,7 +253,6 @@ export async function diagnoseCrop(imageBase64: string) {
     );
 
     // 2. Fetch all products to inject into the system prompt.
-    // NOTE: `description_ar` does not exist on the products table, use `active_ingredient`.
     const { data: products } = await supabase
       .from("products")
       .select("id, name_ar, active_ingredient");
@@ -192,7 +261,7 @@ export async function diagnoseCrop(imageBase64: string) {
 
     // 3. Define the prompt
     const promptText = `
-You are an expert agronomist. Analyze this plant leaf image. Identify the disease name in Arabic. 
+You are an expert agronomist. Analyze this plant leaf image. Identify the disease name in Arabic.
 Here is our product database:
 ${productsContext}
 
@@ -208,38 +277,18 @@ Return a JSON object strictly matching this format without markdown code blocks 
 
     const base64Data = imageBase64.split(",")[1] || imageBase64;
 
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            { text: promptText },
-            {
-              inline_data: {
-                mime_type: "image/jpeg",
-                data: base64Data
-              }
-            }
-          ]
-        }
-      ],
-      generationConfig: {
-        response_mime_type: "application/json"
-      }
-    };
-
-    // Recursive function to handle Key Rotation
+    // Recursive function to handle Key Rotation — provider-agnostic
     async function attemptDiagnosis(attemptCount = 0, excludedIds: string[] = []): Promise<Record<string, unknown>> {
       if (attemptCount > 5) {
         return { error: "فشلت جميع المحاولات للاتصال بخدمة التشخيص (Keys exhausted)" };
       }
 
-      // Fetch the first available key
+      // Fetch the first available key — read project_name to detect provider
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let query = (supabaseAdmin as any)
         .from("api_keys")
-        .select("id, api_key, daily_usage, model_name")
+        .select("id, api_key, daily_usage, model_name, project_name")
         .eq("status", "active")
-        .eq("project_name", "gemini")
         .lt("daily_usage", 1450);
 
       if (excludedIds.length > 0) {
@@ -256,41 +305,51 @@ Return a JSON object strictly matching this format without markdown code blocks 
         return { error: "نظام الذكاء الاصطناعي غير متاح حالياً (جميع المفاتيح مستنفدة)" };
       }
 
-      const modelName = keyData.model_name || "gemini-3.5-flash";
-      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_key}`;
+      const projectName: string = keyData.project_name ?? "gemini";
+      const modelName: string =
+        keyData.model_name ||
+        (projectName === "groq"
+          ? "llama-4-scout-17b-16e-instruct"
+          : "gemini-3.5-flash");
 
-      const response = await fetch(geminiEndpoint, {
+      console.log(
+        `[diagnoseCrop] Attempt ${attemptCount + 1}: provider=${projectName}, model=${modelName}, key=${keyData.id.slice(0, 6)}...`
+      );
+
+      const { url, body: reqBody, headers } = buildDistributorProviderRequest(
+        projectName,
+        modelName,
+        keyData.api_key,
+        promptText,
+        base64Data
+      );
+
+      const response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
+        headers,
+        body: reqBody,
       });
 
       if (!response.ok) {
-        // Handle 429 Rate Limit
         if (response.status === 429) {
           console.warn(`[diagnoseCrop] Key ${keyData.id} hit rate limit (429). Rotating...`);
-          // Immediately mark this key as rate_limited
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabaseAdmin as any)
             .from("api_keys")
             .update({ status: "rate_limited" })
             .eq("id", keyData.id);
-
           return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
         }
-        // Handle 503 Model Overloaded
         if (response.status === 503) {
           console.warn(`[diagnoseCrop] Key ${keyData.id} overloaded (503). Rotating...`);
           await new Promise((r) => setTimeout(r, 3000));
           return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
         }
-
-        console.error("[diagnoseCrop] Gemini API Error:", await response.text());
+        console.error(`[diagnoseCrop] AI API Error (${projectName}):`, await response.text());
         return { error: `فشل الاتصال بخدمة التشخيص (${response.status})` };
       }
 
-      // Call successful!
-      // Increment daily usage
+      // Success — increment daily usage
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabaseAdmin as any)
         .from("api_keys")
@@ -298,9 +357,10 @@ Return a JSON object strictly matching this format without markdown code blocks 
         .eq("id", keyData.id);
 
       const data = await response.json();
-      const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const resultText = extractDistributorResultText(projectName, data);
 
       if (!resultText) {
+        console.error(`[diagnoseCrop] AI (${projectName}) returned no text:`, data);
         return { error: "لم يتم التعرف على المرض" };
       }
 
@@ -308,7 +368,7 @@ Return a JSON object strictly matching this format without markdown code blocks 
       try {
         aiResult = JSON.parse(resultText);
       } catch (_parseError) {
-        console.error("Failed to parse JSON from Gemini:", resultText);
+        console.error(`[diagnoseCrop] Failed to parse JSON from ${projectName}:`, resultText);
         return { error: "صيغة غير مدعومة من خدمة التشخيص" };
       }
 
@@ -327,11 +387,10 @@ Return a JSON object strictly matching this format without markdown code blocks 
       return {
         success: true,
         diagnosis: aiResult,
-        recommendedProduct
+        recommendedProduct,
       };
     }
 
-    // Start the recursive API call chain
     return await attemptDiagnosis(0);
 
   } catch (error) {

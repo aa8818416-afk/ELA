@@ -5,15 +5,89 @@ import type { Database } from "@/types/database.types";
 
 /**
  * POST /api/crop-doctor
- * Accepts: { imageBase64: string }
- * Performs AI diagnosis with Gemini 3.5 Flash + Key Rotation.
+ * Accepts: { imageBase64: string, farmerNotes?: string }
+ * Performs AI diagnosis with Key Rotation.
+ * Supports multiple AI providers: "gemini" | "groq"
+ * Provider is determined automatically from `project_name` column in api_keys table.
  * Returns: { diagnosis, recommendedProduct, distributorContact }
  */
+
+// ---------------------------------------------------------------------------
+// Helper: build the fetch request (endpoint + body + headers) per provider
+// ---------------------------------------------------------------------------
+function buildProviderRequest(
+  projectName: string,
+  modelName: string,
+  apiKey: string,
+  promptText: string,
+  base64Data: string
+): { url: string; body: string; headers: Record<string, string> } {
+  if (projectName === "groq") {
+    // Groq uses the OpenAI-compatible Chat Completions API with vision support
+    const url = "https://api.groq.com/openai/v1/chat/completions";
+    const body = JSON.stringify({
+      model: modelName,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: promptText },
+            {
+              type: "image_url",
+              image_url: { url: `data:image/jpeg;base64,${base64Data}` },
+            },
+          ],
+        },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+    });
+    return {
+      url,
+      body,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+    };
+  }
+
+  // Default: Google Gemini Generative Language API
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+  const body = JSON.stringify({
+    contents: [
+      {
+        parts: [
+          { text: promptText },
+          { inline_data: { mime_type: "image/jpeg", data: base64Data } },
+        ],
+      },
+    ],
+    generationConfig: { response_mime_type: "application/json" },
+  });
+  return { url, body, headers: { "Content-Type": "application/json" } };
+}
+
+// ---------------------------------------------------------------------------
+// Helper: extract the text content from a provider response
+// ---------------------------------------------------------------------------
+function extractResultText(
+  projectName: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any
+): string | null {
+  if (projectName === "groq") {
+    return data.choices?.[0]?.message?.content ?? null;
+  }
+  // Gemini
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createServerClient();
 
-    // 1. Validate auth (uses the user's session cookies — subject to RLS, which is fine here)
+    // 1. Validate auth
     const {
       data: { user: currentUser },
     } = await supabase.auth.getUser();
@@ -22,7 +96,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { imageBase64, farmerNotes } = body as { imageBase64: string; farmerNotes?: string };
+    const { imageBase64, farmerNotes } = body as {
+      imageBase64: string;
+      farmerNotes?: string;
+    };
 
     if (!imageBase64) {
       return NextResponse.json(
@@ -32,7 +109,6 @@ export async function POST(request: Request) {
     }
 
     // Admin client (service_role) — bypasses RLS so the server can always read/update api_keys.
-    // Same pattern already used in src/app/actions/distributor.ts and src/app/api/cron/reset-keys/route.ts.
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceRoleKey) {
       console.error(
@@ -49,7 +125,6 @@ export async function POST(request: Request) {
     );
 
     // 2. Fetch all products to inject into the system prompt.
-    // Include stock_status + price so the model recommends only available products.
     const { data: products } = await supabase
       .from("products")
       .select("id, name_ar, active_ingredient, price_to_farmer, stock_status");
@@ -87,41 +162,27 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
 
     const base64Data = imageBase64.split(",")[1] || imageBase64;
 
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            { text: promptText },
-            {
-              inline_data: {
-                mime_type: "image/jpeg",
-                data: base64Data,
-              },
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        response_mime_type: "application/json",
-      },
-    };
-
-    // 4. Recursive Key Rotation
-    async function attemptDiagnosis(attemptCount = 0, excludedIds: string[] = []): Promise<NextResponse> {
+    // 4. Recursive Key Rotation — provider-agnostic
+    async function attemptDiagnosis(
+      attemptCount = 0,
+      excludedIds: string[] = []
+    ): Promise<NextResponse> {
       if (attemptCount > 5) {
         return NextResponse.json(
-          { error: "خدمة الذكاء الاصطناعي مشغولة حالياً، يرجى المحاولة بعد بضع دقائق" },
+          {
+            error:
+              "خدمة الذكاء الاصطناعي مشغولة حالياً، يرجى المحاولة بعد بضع دقائق",
+          },
           { status: 503 }
         );
       }
 
-      // Read the active key via the service-role client to bypass RLS.
+      // Read the active key — fetch project_name to detect the provider
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let query = (supabaseAdmin as any)
         .from("api_keys")
-        .select("id, api_key, daily_usage, model_name")
+        .select("id, api_key, daily_usage, model_name, project_name")
         .eq("status", "active")
-        .eq("project_name", "gemini")
         .lt("daily_usage", 1450);
 
       if (excludedIds.length > 0) {
@@ -135,7 +196,7 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
 
       if (keyError || !keyData) {
         console.error(
-          "[crop-doctor] No active Gemini key available in DB:",
+          "[crop-doctor] No active AI key available in DB:",
           keyError
         );
         return NextResponse.json(
@@ -144,24 +205,36 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
         );
       }
 
-      // Model name: dynamically loaded from DB
-      const modelName = keyData.model_name || "gemini-3.5-flash";
-      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_key}`;
+      const projectName: string = keyData.project_name ?? "gemini";
+      const modelName: string =
+        keyData.model_name ||
+        (projectName === "groq"
+          ? "llama-4-scout-17b-16e-instruct"
+          : "gemini-3.5-flash");
 
-      console.log(`[crop-doctor] Attempt ${attemptCount + 1}: Using key ${keyData.id} (usage: ${keyData.daily_usage}), model: gemini-3.5-flash`);
+      console.log(
+        `[crop-doctor] Attempt ${attemptCount + 1}: provider=${projectName}, model=${modelName}, key=${keyData.id.slice(0, 6)}... (usage: ${keyData.daily_usage})`
+      );
 
-      // AbortController so a hung request never blocks the response forever.
-      // 90s timeout — images from phone cameras can be large (5-10 MB base64).
+      const { url, body: requestBody, headers } = buildProviderRequest(
+        projectName,
+        modelName,
+        keyData.api_key,
+        promptText,
+        base64Data
+      );
+
+      // AbortController — 90s timeout for large images
       const controller = new AbortController();
       const timeoutMs = 90_000;
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
       let response: Response;
       try {
-        response = await fetch(geminiEndpoint, {
+        response = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
+          headers,
+          body: requestBody,
           signal: controller.signal,
         });
       } catch (fetchError) {
@@ -170,15 +243,17 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
           fetchError instanceof DOMException &&
           fetchError.name === "AbortError";
         console.error(
-          `[crop-doctor] FETCH FAILED | Attempt ${attemptCount + 1} | Key: ${keyData.id.slice(0, 6)}... | Error:`,
+          `[crop-doctor] FETCH FAILED | Attempt ${attemptCount + 1} | provider=${projectName} | Key: ${keyData.id.slice(0, 6)}... | Error:`,
           fetchError
         );
-        // On timeout, retry (image may have been too large — next attempt may succeed)
         if (aborted && attemptCount < 5) {
           console.warn(
             `[crop-doctor] Request timed out after ${timeoutMs}ms. Retrying... (attempt ${attemptCount + 1}/6)`
           );
-          return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
+          return attemptDiagnosis(attemptCount + 1, [
+            ...excludedIds,
+            keyData.id,
+          ]);
         }
         return NextResponse.json(
           {
@@ -192,12 +267,14 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
         clearTimeout(timeout);
       }
 
-      console.log(`[crop-doctor] Gemini responded with HTTP ${response.status} | Attempt ${attemptCount + 1} | Key: ${keyData.id.slice(0, 6)}...`);
+      console.log(
+        `[crop-doctor] AI responded HTTP ${response.status} | Attempt ${attemptCount + 1} | provider=${projectName} | Key: ${keyData.id.slice(0, 6)}...`
+      );
 
       if (!response.ok) {
         const errorBody = await response.text();
         console.error(
-          `[crop-doctor] API ERROR | HTTP ${response.status} | Key: ${keyData.id.slice(0, 6)}... | Body:`,
+          `[crop-doctor] API ERROR | HTTP ${response.status} | provider=${projectName} | Key: ${keyData.id.slice(0, 6)}... | Body:`,
           errorBody
         );
         if (response.status === 429) {
@@ -209,17 +286,21 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
             .from("api_keys")
             .update({ status: "rate_limited" })
             .eq("id", keyData.id);
-          return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
+          return attemptDiagnosis(attemptCount + 1, [
+            ...excludedIds,
+            keyData.id,
+          ]);
         }
-        // 503 = model overloaded (temporary). Retry after a short delay.
         if (response.status === 503) {
           console.warn(
             `[crop-doctor] Model overloaded (503). Retrying in 5s... (attempt ${attemptCount + 1}/6)`
           );
           await new Promise((r) => setTimeout(r, 5000));
-          return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
+          return attemptDiagnosis(attemptCount + 1, [
+            ...excludedIds,
+            keyData.id,
+          ]);
         }
-        // Other errors: return immediately with details.
         return NextResponse.json(
           {
             error: `فشل الاتصال بخدمة الذكاء الاصطناعي (${response.status})`,
@@ -229,7 +310,7 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
         );
       }
 
-      // Success — increment usage via the service-role client (bypass RLS).
+      // Success — increment usage
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabaseAdmin as any)
         .from("api_keys")
@@ -237,10 +318,13 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
         .eq("id", keyData.id);
 
       const data = await response.json();
-      const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const resultText = extractResultText(projectName, data);
 
       if (!resultText) {
-        console.error("[crop-doctor] Gemini returned no candidate text:", data);
+        console.error(
+          `[crop-doctor] AI (${projectName}) returned no text:`,
+          data
+        );
         return NextResponse.json(
           { error: "لم يتمكن النظام من التعرف على المرض" },
           { status: 422 }
@@ -252,7 +336,7 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
         aiResult = JSON.parse(resultText);
       } catch {
         console.error(
-          "[crop-doctor] Failed to parse JSON from Gemini:",
+          `[crop-doctor] Failed to parse JSON from ${projectName}:`,
           resultText
         );
         return NextResponse.json(
