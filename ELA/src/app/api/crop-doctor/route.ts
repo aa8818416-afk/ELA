@@ -345,12 +345,12 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
         );
       }
 
-      // 5. Fetch matched product
+      // 5. Fetch matched product (include image_url for display in scanner)
       let recommendedProduct = null;
       if (aiResult.recommended_product_id) {
         const { data: prodData } = await supabase
           .from("products")
-          .select("id, name_ar, price_to_farmer")
+          .select("id, name_ar, price_to_farmer, image_url")
           .eq("id", aiResult.recommended_product_id)
           .single();
         if (prodData) recommendedProduct = prodData;

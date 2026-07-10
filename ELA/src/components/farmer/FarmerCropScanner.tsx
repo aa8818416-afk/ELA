@@ -1,7 +1,19 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Camera, Loader2, Share2, Phone, AlertCircle, Mic, Square, Volume2, X } from "lucide-react";
+import {
+  Camera,
+  Loader2,
+  Share2,
+  Phone,
+  Mic,
+  Square,
+  Volume2,
+  X,
+  Send,
+  Bot,
+  User,
+} from "lucide-react";
 import {
   useSpeechRecognition,
   speakArabic,
@@ -22,12 +34,19 @@ type ProductResult = {
   id: string;
   name_ar: string;
   price_to_farmer: number;
+  image_url?: string | null;
 };
 
 type DistributorContact = {
   name: string;
   phone: string | null;
   village: string | null;
+};
+
+type ChatMessage = {
+  id: string;
+  role: "user" | "model";
+  content: string;
 };
 
 export default function FarmerCropScanner() {
@@ -40,9 +59,17 @@ export default function FarmerCropScanner() {
   const [distributorContact, setDistributorContact] =
     useState<DistributorContact | null>(null);
 
-  // Farmer notes (voice or typing)
+  // Farmer notes (voice or typing) — before diagnosis
   const [farmerNotes, setFarmerNotes] = useState("");
   const [ttsSupported, setTtsSupported] = useState(false);
+
+  // Follow-up chat — after diagnosis
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
 
   const {
     isListening,
@@ -68,6 +95,28 @@ export default function FarmerCropScanner() {
     setTtsSupported(isTtsSupported());
   }, []);
 
+  // Scroll chat to bottom on new messages
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, isChatLoading]);
+
+  // When diagnosis arrives, seed the chat with a welcome message
+  useEffect(() => {
+    if (!diagnosis) return;
+    const productInfo = recommendedProduct
+      ? `والدواء المقترح هو "${recommendedProduct.name_ar}" بسعر ${recommendedProduct.price_to_farmer} جنيهاً`
+      : diagnosis.availability_note
+      ? `ولا يوجد دواء متوفر حالياً`
+      : "";
+    setChatMessages([
+      {
+        id: "seed",
+        role: "model",
+        content: `تم تشخيص محصولك بـ **${diagnosis.disease_name_ar}** (${diagnosis.disease_name_en}) بنسبة ثقة ${diagnosis.confidence_percentage}%${productInfo ? " " + productInfo : ""}. هل عندك أي سؤال أو تريد معرفة المزيد؟ 🌾`,
+      },
+    ]);
+  }, [diagnosis]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const speakDiagnosis = () => {
     if (!diagnosis) return;
     const parts = [
@@ -89,18 +138,19 @@ export default function FarmerCropScanner() {
     if (!file) return;
     setError(null);
     setDiagnosis(null);
+    setChatMessages([]);
     const reader = new FileReader();
     reader.onload = (ev) => setImage(ev.target?.result as string);
     reader.readAsDataURL(file);
   };
 
-  /**
-   * Compress an image to reduce base64 size before sending to the server.
-   * Draws onto a smaller canvas and exports as JPEG at reduced quality.
-   */
-  function compressImage(dataUrl: string, maxWidth = 1024, quality = 0.7): Promise<string> {
+  function compressImage(
+    dataUrl: string,
+    maxWidth = 1024,
+    quality = 0.7
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
-      const img = new Image();
+      const img = new window.Image();
       img.onload = () => {
         const ratio = Math.min(maxWidth / img.width, maxWidth / img.height, 1);
         const w = Math.round(img.width * ratio);
@@ -109,7 +159,10 @@ export default function FarmerCropScanner() {
         canvas.width = w;
         canvas.height = h;
         const ctx = canvas.getContext("2d");
-        if (!ctx) { reject("Canvas not supported"); return; }
+        if (!ctx) {
+          reject("Canvas not supported");
+          return;
+        }
         ctx.drawImage(img, 0, 0, w, h);
         resolve(canvas.toDataURL("image/jpeg", quality));
       };
@@ -123,18 +176,13 @@ export default function FarmerCropScanner() {
     setIsLoading(true);
     setError(null);
 
-    // Compress the image before sending to avoid large payloads / timeouts
     let compressedImage: string;
     try {
       compressedImage = await compressImage(image);
-      const originalKb = Math.round((image.length * 3) / 4 / 1024);
-      const compressedKb = Math.round((compressedImage.length * 3) / 4 / 1024);
-      console.log(`[scanner] Image compressed: ${originalKb}KB → ${compressedKb}KB`);
     } catch {
-      compressedImage = image; // fallback to original if compression fails
+      compressedImage = image;
     }
 
-    // Client-side timeout — must be longer than server timeout (90s) + overhead.
     const controller = new AbortController();
     const timeoutMs = 120_000;
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -143,7 +191,10 @@ export default function FarmerCropScanner() {
       const res = await fetch("/api/crop-doctor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: compressedImage, farmerNotes: farmerNotes.trim() || undefined }),
+        body: JSON.stringify({
+          imageBase64: compressedImage,
+          farmerNotes: farmerNotes.trim() || undefined,
+        }),
         signal: controller.signal,
       });
 
@@ -156,8 +207,7 @@ export default function FarmerCropScanner() {
         setDistributorContact(data.distributorContact || null);
       }
     } catch (err) {
-      const aborted =
-        err instanceof DOMException && err.name === "AbortError";
+      const aborted = err instanceof DOMException && err.name === "AbortError";
       setError(
         aborted
           ? "الخادم لا يستجيب، تأكد من اتصال الإنترنت وحاول مرة أخرى"
@@ -166,6 +216,58 @@ export default function FarmerCropScanner() {
     } finally {
       clearTimeout(timeout);
       setIsLoading(false);
+    }
+  };
+
+  // ── Follow-up chat send ─────────────────────────────────────────────────
+  const handleChatSend = async (textOverride?: string) => {
+    const text = (textOverride ?? chatInput).trim();
+    if (!text || isChatLoading) return;
+
+    setChatInput("");
+    setChatError(null);
+
+    const userMsg: ChatMessage = {
+      id: `u-${Date.now()}`,
+      role: "user",
+      content: text,
+    };
+    const updatedMessages = [...chatMessages, userMsg];
+    setChatMessages(updatedMessages);
+    setIsChatLoading(true);
+
+    try {
+      // Build history excluding the seed message (role=model) — send it as context
+      const historyForApi = updatedMessages
+        .filter((m) => m.id !== "seed")
+        .map((m) => ({ role: m.role, content: m.content }));
+
+      const res = await fetch("/api/crop-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          history: historyForApi.slice(0, -1), // exclude last user msg (sent as message)
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setChatError(data.error || "حدث خطأ، حاول مرة أخرى");
+      } else {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `m-${Date.now()}`,
+            role: "model",
+            content: data.text,
+          },
+        ]);
+      }
+    } catch {
+      setChatError("تعذر الاتصال، تأكد من الإنترنت");
+    } finally {
+      setIsChatLoading(false);
     }
   };
 
@@ -193,6 +295,9 @@ export default function FarmerCropScanner() {
     setRecommendedProduct(null);
     setDistributorContact(null);
     setFarmerNotes("");
+    setChatMessages([]);
+    setChatInput("");
+    setChatError(null);
     stopSpeaking();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -226,10 +331,10 @@ export default function FarmerCropScanner() {
     );
   }
 
-  // ─── SCREEN 2 & 3: Image preview (+ diagnosis below, instead of replacing) ──
+  // ─── SCREEN 2 & 3: Image preview + diagnosis + chat ───────────────────
   return (
     <div className="space-y-5">
-      {/* Image preview — always shown while image exists */}
+      {/* Image preview */}
       <div className="relative rounded-3xl overflow-hidden border border-slate-800 aspect-video">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -246,7 +351,7 @@ export default function FarmerCropScanner() {
         </button>
       </div>
 
-      {/* Farmer notes (voice + typing) — only before diagnosis */}
+      {/* Farmer notes — only before diagnosis */}
       {!diagnosis && (
         <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
           <div className="flex items-center justify-between mb-2">
@@ -288,7 +393,11 @@ export default function FarmerCropScanner() {
           <textarea
             value={farmerNotes}
             onChange={(e) => setFarmerNotes(e.target.value)}
-            placeholder={speechSupported ? "اكتب أو تحدث بمعلومات عن المحصول (نوع النبات، العمر، الأعراض)..." : "اكتب معلومات عن المحصول (نوع النبات، العمر، الأعراض)..."}
+            placeholder={
+              speechSupported
+                ? "اكتب أو تحدث بمعلومات عن المحصول (نوع النبات، العمر، الأعراض)..."
+                : "اكتب معلومات عن المحصول (نوع النبات، العمر، الأعراض)..."
+            }
             rows={2}
             className="w-full bg-slate-950/50 text-white text-sm rounded-xl p-3 border border-slate-800 focus:border-emerald-500 outline-none resize-none placeholder:text-slate-600"
           />
@@ -301,7 +410,7 @@ export default function FarmerCropScanner() {
         </div>
       )}
 
-      {/* Analyze button — hidden once we have a diagnosis */}
+      {/* Analyze button — hidden once diagnosis exists */}
       {!diagnosis && (
         <button
           onClick={handleAnalyze}
@@ -319,7 +428,7 @@ export default function FarmerCropScanner() {
         </button>
       )}
 
-      {/* Diagnosis results — shown BELOW the image */}
+      {/* ── Diagnosis results ─────────────────────────────────────────── */}
       {diagnosis && (
         <>
           {/* Listen button (TTS) */}
@@ -356,26 +465,40 @@ export default function FarmerCropScanner() {
             </p>
           </div>
 
-          {/* Recommended Product (in stock) */}
+          {/* ── Recommended Product — with real image ─────────────────── */}
           {recommendedProduct ? (
             <div className="bg-amber-500/5 border border-amber-500/20 rounded-3xl p-5">
-              <p className="text-amber-500/70 text-xs font-medium mb-2">
+              <p className="text-amber-500/70 text-xs font-medium mb-3">
                 💊 العلاج المقترح
               </p>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-bold text-lg">
+              <div className="flex items-center gap-4">
+                {/* Real product image */}
+                <div className="w-20 h-20 rounded-2xl overflow-hidden bg-slate-800 border border-slate-700 flex-shrink-0 flex items-center justify-center">
+                  {recommendedProduct.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={recommendedProduct.image_url}
+                      alt={recommendedProduct.name_ar}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-4xl">🧪</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-bold text-lg leading-tight">
                     {recommendedProduct.name_ar}
                   </p>
-                  <p className="text-amber-400 font-bold text-xl">
-                    {recommendedProduct.price_to_farmer} ج.م
+                  <p className="text-amber-400 font-bold text-2xl mt-1">
+                    {recommendedProduct.price_to_farmer}{" "}
+                    <span className="text-base font-normal text-amber-500/70">
+                      ج.م
+                    </span>
                   </p>
                 </div>
-                <span className="text-4xl">🧪</span>
               </div>
             </div>
           ) : (
-            /* Availability note when no product */
             diagnosis.availability_note && (
               <div className="bg-orange-500/5 border border-orange-500/20 rounded-3xl p-5 text-center">
                 <span className="text-3xl block mb-2">📦</span>
@@ -389,15 +512,15 @@ export default function FarmerCropScanner() {
           {/* Distributor Contact CTA */}
           {distributorContact && (
             <div className="bg-[#25D366]/5 border border-[#25D366]/30 rounded-3xl p-5">
-              <p className="text-slate-400 text-xs mb-3">احجز الدواء من سفير قريتك</p>
+              <p className="text-slate-400 text-xs mb-3">
+                احجز الدواء من سفير قريتك
+              </p>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xl">
                   👨‍🌾
                 </div>
                 <div>
-                  <p className="text-white font-bold">
-                    {distributorContact.name}
-                  </p>
+                  <p className="text-white font-bold">{distributorContact.name}</p>
                   {distributorContact.village && (
                     <p className="text-slate-400 text-xs">
                       📍 {distributorContact.village}
@@ -422,6 +545,113 @@ export default function FarmerCropScanner() {
               </button>
             </div>
           )}
+
+          {/* ── Follow-up Chat ─────────────────────────────────────────── */}
+          <div className="bg-slate-900/60 border border-slate-800 rounded-3xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-800 bg-slate-900/80">
+              <div className="w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <Bot className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-white text-sm font-bold">استفسر عن التشخيص</p>
+                <p className="text-slate-500 text-xs">
+                  اسأل أي سؤال عن المرض أو العلاج
+                </p>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="max-h-72 overflow-y-auto p-4 space-y-3 scroll-smooth">
+              {chatMessages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex gap-2.5 ${
+                    msg.role === "user" ? "flex-row-reverse" : ""
+                  }`}
+                >
+                  {/* Avatar */}
+                  <div
+                    className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs ${
+                      msg.role === "model"
+                        ? "bg-emerald-500/10 border border-emerald-500/20"
+                        : "bg-slate-700"
+                    }`}
+                  >
+                    {msg.role === "model" ? (
+                      <Bot className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <User className="w-4 h-4 text-slate-300" />
+                    )}
+                  </div>
+                  {/* Bubble */}
+                  <div
+                    className={`max-w-[82%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                      msg.role === "model"
+                        ? "bg-slate-800 text-slate-200 rounded-tl-sm"
+                        : "bg-emerald-600 text-white rounded-tr-sm"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+
+              {/* Typing indicator */}
+              {isChatLoading && (
+                <div className="flex gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                    <Bot className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div className="bg-slate-800 px-4 py-3 rounded-2xl rounded-tl-sm">
+                    <div className="flex gap-1 items-center">
+                      <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0ms]" />
+                      <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                      <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {chatError && (
+                <p className="text-red-400 text-xs text-center bg-red-500/10 border border-red-500/20 rounded-xl p-2">
+                  {chatError}
+                </p>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Input bar */}
+            <div className="border-t border-slate-800 p-3 flex gap-2">
+              <input
+                ref={chatInputRef}
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleChatSend();
+                  }
+                }}
+                placeholder="اسأل عن المرض أو طريقة العلاج..."
+                disabled={isChatLoading}
+                className="flex-1 bg-slate-800 text-white text-sm rounded-xl px-3 py-2.5 border border-slate-700 focus:border-emerald-500 outline-none placeholder:text-slate-600 disabled:opacity-50"
+              />
+              <button
+                onClick={() => handleChatSend()}
+                disabled={isChatLoading || !chatInput.trim()}
+                className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white p-2.5 rounded-xl transition-colors flex-shrink-0"
+                aria-label="إرسال"
+              >
+                {isChatLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
 
           {/* Scan Again */}
           <button
