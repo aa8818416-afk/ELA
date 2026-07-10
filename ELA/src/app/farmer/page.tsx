@@ -4,10 +4,6 @@ import CampaignCard from "@/components/farmer/CampaignCard";
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
 
-// Group-buying targets per product (in a real app, store in DB)
-const GROUP_BUY_TARGET = 20;
-const DISCOUNT_PERCENT = 15;
-
 export default async function FarmerHomePage() {
   const supabase = await createClient();
   const {
@@ -39,23 +35,54 @@ export default async function FarmerHomePage() {
   const distributorPhone = distributorProfile?.phone || null;
   const village = farmerData?.distributors?.village || null;
 
-  // 2. Fetch active products
-  const { data: products } = await supabase
-    .from("products")
-    .select("id, name_ar, price_to_farmer, stock_status, image_url")
-    .eq("stock_status", true);
+  // 2. Fetch active group buy campaigns
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: campaignsData } = await (supabase as any)
+    .from("group_buy_offers")
+    .select(`
+      id,
+      product_id,
+      tier1_qty,
+      tier1_discount,
+      tier2_qty,
+      tier2_discount,
+      tier3_qty,
+      tier3_discount,
+      end_date,
+      products (
+        id,
+        name_ar,
+        price_to_farmer,
+        stock_status,
+        image_url
+      )
+    `)
+    .eq("active_status", true);
 
-  // 3. For each product, count how many units have been ordered in this village
+  const campaigns = campaignsData || [];
+
+  // Filter out campaigns that have reached their end date
+  const activeCampaigns = campaigns.filter((c: any) => {
+    if (c.end_date) {
+      return new Date(c.end_date) > new Date();
+    }
+    return true;
+  });
+
+  // 3. For each active campaign's product, count how many units have been ordered in this village
   //    (approximated via orders by the same distributor)
   const productVolumes: Record<string, number> = {};
 
-  if (farmerData?.distributor_id && products?.length) {
+  if (farmerData?.distributor_id && activeCampaigns.length > 0) {
+    const productIds = activeCampaigns.map((c: any) => c.product_id);
+    
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: orderItems } = await (supabase as any)
       .from("order_items")
       .select("product_id, quantity, orders!inner(distributor_id, status)")
       .eq("orders.distributor_id", farmerData.distributor_id)
-      .in("orders.status", ["pending", "in_transit", "delivered"]);
+      .in("orders.status", ["pending", "in_transit", "delivered"])
+      .in("product_id", productIds);
 
     if (orderItems) {
       for (const item of orderItems) {
@@ -107,19 +134,17 @@ export default async function FarmerHomePage() {
       </div>
 
       {/* Campaign Cards */}
-      {!products || products.length === 0 ? (
+      {activeCampaigns.length === 0 ? (
         <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-10 text-center">
-          <p className="text-slate-400">لا توجد منتجات نشطة حالياً</p>
+          <p className="text-slate-400">لا توجد عروض شراء جماعي نشطة حالياً</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {products.map((product: any) => (
+          {activeCampaigns.map((camp: any) => (
             <CampaignCard
-              key={product.id as string}
-              product={product}
-              currentVolume={(productVolumes[product.id as string] as number) || 0}
-              targetVolume={GROUP_BUY_TARGET}
-              discountPercent={DISCOUNT_PERCENT}
+              key={camp.id}
+              campaign={camp}
+              currentVolume={productVolumes[camp.product_id] || 0}
               distributorName={distributorName}
               distributorPhone={distributorPhone}
             />
