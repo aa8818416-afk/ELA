@@ -376,7 +376,7 @@ Return a JSON object strictly matching this format without markdown code blocks 
       if (aiResult.recommended_product_id) {
         const { data: prodData } = await supabase
           .from("products")
-          .select("id, name_ar, price_to_farmer")
+          .select("id, name_ar, price_to_farmer, image_url")
           .eq("id", aiResult.recommended_product_id)
           .single();
         if (prodData) {
