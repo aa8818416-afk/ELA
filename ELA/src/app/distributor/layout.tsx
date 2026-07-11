@@ -1,16 +1,33 @@
 import type { Metadata } from "next";
 import Sidebar from "@/components/distributor/Sidebar";
+import { createClient } from "@/utils/supabase/server";
 
 export const metadata: Metadata = {
   title: "بوابة الموزع | منصة ELA",
   description: "لوحة تحكم الموزع - منصة ELA",
 };
 
-export default function DistributorLayout({
+export default async function DistributorLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let distributorName = "الموزع";
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.full_name) {
+      distributorName = profile.full_name;
+    }
+  }
+
   return (
     <div className="flex min-h-screen bg-slate-950">
       {/* Sidebar - fixed on the right in RTL */}
@@ -26,7 +43,7 @@ export default function DistributorLayout({
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-slate-200 text-sm font-medium">مرحباً بك</p>
-              <p className="text-slate-500 text-xs">حساب الموزع</p>
+              <p className="text-slate-500 text-xs">{distributorName}</p>
             </div>
             <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300">
               👤
