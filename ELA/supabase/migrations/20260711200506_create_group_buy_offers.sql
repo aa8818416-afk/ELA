@@ -1,4 +1,3 @@
--- Create public.group_buy_offers table
 CREATE TABLE IF NOT EXISTS public.group_buy_offers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID UNIQUE NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
@@ -13,15 +12,12 @@ CREATE TABLE IF NOT EXISTS public.group_buy_offers (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
 );
 
--- Enable Row Level Security (RLS)
 ALTER TABLE public.group_buy_offers ENABLE ROW LEVEL SECURITY;
 
--- Drop existing policies if they exist to avoid duplication errors
 DROP POLICY IF EXISTS "admin_all_group_buy_offers" ON public.group_buy_offers;
 DROP POLICY IF EXISTS "distributor_read_group_buy_offers" ON public.group_buy_offers;
 DROP POLICY IF EXISTS "farmer_read_group_buy_offers" ON public.group_buy_offers;
 
--- Create RLS Policies
 CREATE POLICY "admin_all_group_buy_offers" ON public.group_buy_offers FOR ALL TO public
   USING (get_my_role() = 'admin'::public.user_role)
   WITH CHECK (get_my_role() = 'admin'::public.user_role);
