@@ -3,15 +3,30 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/utils/supabase/server";
 import type { Database } from "@/types/database.types";
 
+interface GeminiPart {
+    text?: string;
+    inline_data?: { mime_type: string; data: string };
+}
+
 interface ChatMessage {
     role: "user" | "model";
-    parts: { text: string }[];
+    parts: GeminiPart[];
+}
+
+interface RequestHistoryItem {
+    role: "user" | "model";
+    content: string;
+    imageBase64?: string; // Optional image specifically attached to this message
 }
 
 /**
  * POST /api/crop-chat
- * Accepts: { history: { role: 'user' | 'model', content: string }[], message: string }
- * Performs AI chat with Gemini 3.5 Flash + Key Rotation.
+ * Accepts: {
+ *   history: { role: 'user' | 'model', content: string, imageBase64?: string }[],
+ *   message: string,
+ *   imageBase64?: string // Optional image for the current message
+ * }
+ * Performs AI chat with Gemini + Key Rotation.
  * Returns: { success: true, text: string }
  */
 export async function POST(request: Request) {
@@ -27,9 +42,10 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { history, message } = body as {
-            history?: { role: "user" | "model"; content: string }[];
+        const { history, message, imageBase64 } = body as {
+            history?: RequestHistoryItem[];
             message: string;
+            imageBase64?: string;
         };
 
         if (!message) {
@@ -84,28 +100,41 @@ ${productsContext}
 4. حافظ على ردود واضحة ومباشرة وليست طويلة جداً لتناسب القراءة على شاشات الهاتف المحمول.
 `;
 
-        // Format historical messages for Gemini API format (contents)
+        // 4. Build Gemini contents array preserving original images at their correct turns
         const contents: ChatMessage[] = [];
 
-        // Add previous history if exists
+        // Add previous history
         if (history && history.length > 0) {
             history.forEach((h) => {
+                const parts: GeminiPart[] = [{ text: h.content }];
+                if (h.imageBase64) {
+                    const rawBase64 = h.imageBase64.split(",")[1] || h.imageBase64;
+                    parts.push({
+                        inline_data: { mime_type: "image/jpeg", data: rawBase64 },
+                    });
+                }
                 contents.push({
                     role: h.role,
-                    parts: [{ text: h.content }],
+                    parts,
                 });
             });
         }
 
-        // Add system instruction as part of system prompt instructions (if API supports, or inject in first message/prompt)
-        // For gemini-3.5-flash with history, we can prepend a system message or pass systemInstruction.
-        // To be compatible with general gemini endpoints, we can pass systemInstruction inside request configuration.
+        // Build current user message parts
+        const currentUserParts: GeminiPart[] = [{ text: message }];
+        if (imageBase64) {
+            const rawBase64 = imageBase64.split(",")[1] || imageBase64;
+            currentUserParts.push({
+                inline_data: { mime_type: "image/jpeg", data: rawBase64 },
+            });
+        }
+
         const requestBody = {
             contents: [
                 ...contents,
                 {
                     role: "user" as const,
-                    parts: [{ text: message }],
+                    parts: currentUserParts,
                 },
             ],
             systemInstruction: {
@@ -117,7 +146,7 @@ ${productsContext}
             },
         };
 
-        // 4. Recursive Key Rotation (same pattern as crop-doctor)
+        // 5. Recursive Key Rotation (same pattern as crop-doctor)
         async function attemptChat(attemptCount = 0, excludedIds: string[] = []): Promise<NextResponse> {
             if (attemptCount > 5) {
                 return NextResponse.json(
@@ -154,13 +183,13 @@ ${productsContext}
                 );
             }
 
-            const modelName = keyData.model_name || "gemini-3.5-flash";
+            const modelName = keyData.model_name || "gemini-2.0-flash";
             const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_key}`;
 
             console.log(`[crop-chat] Attempt ${attemptCount + 1}: Using key ${keyData.id} (usage: ${keyData.daily_usage})`);
 
             const controller = new AbortController();
-            const timeoutMs = 45_000; // Chat responses should be faster than image diagnosis
+            const timeoutMs = 60_000; // slightly longer for multimodal
             const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
             let response: Response;
