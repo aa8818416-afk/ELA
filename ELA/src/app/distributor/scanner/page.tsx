@@ -19,9 +19,9 @@ export default async function ScannerPage() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-6">
           <Sparkles className="w-8 h-8 text-emerald-400" />
         </div>
-        <h2 className="text-3xl font-bold text-white mb-4">طبيب المحاصيل الذكي</h2>
+        <h2 className="text-3xl font-bold text-white mb-4">المرشد الزراعي الذكي</h2>
         <p className="text-slate-400">
-          استخدم الذكاء الاصطناعي لتشخيص أمراض النباتات وتقديم الحلول الفورية للفلاحين عبر التقاط صورة بسيطة.
+          تواصل مع المرشد الزراعي الذكي، اسأله عن أي مشكلة أو أرفق صور النباتات المصابة للحصول على تشخيص فوري ومقترحات علاجية.
         </p>
       </div>
 
