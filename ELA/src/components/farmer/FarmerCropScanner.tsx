@@ -10,7 +10,17 @@ import {
   Camera,
   FolderOpen,
   RotateCcw,
+  Mic,
+  Square,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
+import {
+  useAudioRecorder,
+  speakArabic,
+  isTtsSupported,
+  stopSpeaking,
+} from "@/utils/speech";
 
 type ChatMessage = {
   id: string;
@@ -39,6 +49,8 @@ export default function FarmerCropScanner() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [chatAttachedImage, setChatAttachedImage] = useState<string | null>(null);
+  const [activeSpeechId, setActiveSpeechId] = useState<string | null>(null);
+  
   // Stores the last failed request so we can retry it
   const [failedPayload, setFailedPayload] = useState<FailedPayload | null>(null);
 
@@ -47,10 +59,25 @@ export default function FarmerCropScanner() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
+  const {
+    isRecording,
+    transcribing,
+    error: recorderError,
+    hasMic,
+    startRecording,
+    stopRecording,
+  } = useAudioRecorder();
+
   // Scroll to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, isChatLoading]);
+
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+    };
+  }, []);
 
   // Image compression helper
   function compressImage(dataUrl: string, maxWidth = 768, quality = 0.65): Promise<string> {
@@ -84,7 +111,6 @@ export default function FarmerCropScanner() {
     if (galleryInputRef.current) galleryInputRef.current.value = "";
   };
 
-  // Core API call — shared by handleChatSend and handleRetry
   const callChatApi = async (payload: FailedPayload) => {
     setIsChatLoading(true);
     setChatError(null);
@@ -98,16 +124,22 @@ export default function FarmerCropScanner() {
       const data = await res.json();
       if (!res.ok || data.error) {
         setChatError(data.error || "حدث خطأ، حاول مرة أخرى");
-        setFailedPayload(payload); // keep payload for retry
+        setFailedPayload(payload);
       } else {
+        const newMsgId = `m-${Date.now()}`;
         setChatMessages((prev) => [
           ...prev,
-          { id: `m-${Date.now()}`, role: "model", content: data.text },
+          { id: newMsgId, role: "model", content: data.text },
         ]);
+
+        // Auto-play the AI response if TTS is supported
+        if (isTtsSupported()) {
+          handleSpeak(data.text, newMsgId);
+        }
       }
     } catch {
       setChatError("تعذر الاتصال، تأكد من الإنترنت");
-      setFailedPayload(payload); // keep payload for retry
+      setFailedPayload(payload);
     } finally {
       setIsChatLoading(false);
     }
@@ -158,6 +190,30 @@ export default function FarmerCropScanner() {
   const handleRetry = () => {
     if (!failedPayload) return;
     callChatApi(failedPayload);
+  };
+
+  const handleMicClick = async () => {
+    if (isRecording) {
+      await stopRecording((transcript) => {
+        setChatInput((prev) => (prev ? prev + " " + transcript : transcript));
+      });
+    } else {
+      await startRecording();
+    }
+  };
+
+  const handleSpeak = (text: string, msgId: string) => {
+    if (activeSpeechId === msgId) {
+      stopSpeaking();
+      setActiveSpeechId(null);
+    } else {
+      setActiveSpeechId(msgId);
+      speakArabic(
+        text,
+        () => setActiveSpeechId(msgId),
+        () => setActiveSpeechId(null)
+      );
+    }
   };
 
   return (
@@ -212,13 +268,31 @@ export default function FarmerCropScanner() {
               {/* Text content — hide if it's just the placeholder emoji */}
               {msg.content && msg.content !== "📷" && (
                 <div
-                  className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                  className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed relative ${
                     msg.role === "model"
                       ? "bg-slate-800 text-slate-200 rounded-tl-sm"
                       : "bg-emerald-600 text-white rounded-tr-sm"
                   }`}
                 >
-                  {msg.content}
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+
+                  {/* TTS Speaker icon for model replies */}
+                  {msg.role === "model" && isTtsSupported() && (
+                    <button
+                      onClick={() => handleSpeak(msg.content, msg.id)}
+                      className={`absolute -bottom-3 -left-3 p-1.5 rounded-full border shadow-md transition-colors ${activeSpeechId === msg.id
+                        ? "bg-emerald-500 text-white border-emerald-400"
+                        : "bg-slate-800 text-slate-400 hover:text-white border-slate-700 hover:bg-slate-700"
+                        }`}
+                      title={activeSpeechId === msg.id ? "إيقاف الصوت" : "قراءة الرسالة بصوت عالي"}
+                    >
+                      {activeSpeechId === msg.id ? (
+                        <VolumeX className="w-4 h-4" />
+                      ) : (
+                        <Volume2 className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -241,10 +315,26 @@ export default function FarmerCropScanner() {
           </div>
         )}
 
-        {chatError && (
+        {/* Audio transcribing indicator */}
+        {transcribing && (
+          <div className="flex gap-2.5 mr-auto flex-row-reverse">
+            <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center bg-slate-700">
+              <User className="w-4 h-4 text-slate-300" />
+            </div>
+            <div className="bg-slate-800 px-4 py-3 rounded-2xl rounded-tr-sm">
+              <div className="flex gap-2 items-center text-slate-400 text-sm">
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                <span>جاري ترجمة صوتك لنص...</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Errors display */}
+        {(chatError || recorderError) && (
           <div className="flex flex-col items-center gap-2">
             <p className="text-red-400 text-xs text-center bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2">
-              {chatError}
+              {chatError || recorderError}
             </p>
             {failedPayload && (
               <button
@@ -287,7 +377,7 @@ export default function FarmerCropScanner() {
         <button
           type="button"
           onClick={() => cameraInputRef.current?.click()}
-          disabled={isChatLoading}
+          disabled={isChatLoading || transcribing}
           className="flex-shrink-0 p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/40 disabled:opacity-40 transition-colors"
           title="تصوير فوري بالكاميرا"
         >
@@ -299,13 +389,33 @@ export default function FarmerCropScanner() {
         <button
           type="button"
           onClick={() => galleryInputRef.current?.click()}
-          disabled={isChatLoading}
+          disabled={isChatLoading || transcribing}
           className="flex-shrink-0 p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/40 disabled:opacity-40 transition-colors"
           title="اختر صورة من الجهاز"
         >
           <FolderOpen className="w-5 h-5" />
         </button>
         <input type="file" accept="image/*" ref={galleryInputRef} onChange={handleImageSelect} className="hidden" />
+
+        {/* Microphone button (Speech-to-Text via Groq Whisper) */}
+        {hasMic && (
+          <button
+            type="button"
+            onClick={handleMicClick}
+            disabled={isChatLoading || transcribing}
+            className={`flex-shrink-0 p-2.5 rounded-xl border transition-all duration-300 ${isRecording
+                ? "bg-red-500 text-white border-red-400 animate-pulse scale-105"
+                : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
+              }`}
+            title={isRecording ? "إيقاف التسجيل" : "تحدث بالصوت"}
+          >
+            {isRecording ? (
+              <Square className="w-5 h-5 fill-current" />
+            ) : (
+              <Mic className="w-5 h-5" />
+            )}
+          </button>
+        )}
 
         {/* Text input */}
         <input
@@ -319,15 +429,23 @@ export default function FarmerCropScanner() {
               handleChatSend();
             }
           }}
-          placeholder={chatAttachedImage ? "اكتب سؤالك عن الصورة (اختياري)..." : "اسأل المرشد أو أرفق صورة..."}
-          disabled={isChatLoading}
-          className="flex-1 bg-slate-800 text-white text-sm rounded-xl px-4 py-2.5 border border-slate-700 focus:border-emerald-500 outline-none placeholder:text-slate-500 disabled:opacity-50"
+          placeholder={
+            isRecording
+              ? "جاري تسجيل صوتك... انقر للتوقف والكتابة"
+              : transcribing
+              ? "جاري ترجمة صوتك لنص..."
+              : chatAttachedImage
+              ? "اكتب سؤالك عن الصورة (اختياري)..."
+              : "اسأل المرشد أو أرفق صورة..."
+          }
+          disabled={isChatLoading || transcribing}
+          className="flex-1 bg-slate-800 text-white text-sm rounded-xl px-3 py-2.5 border border-slate-700 focus:border-emerald-500 outline-none placeholder:text-slate-500 disabled:opacity-50"
         />
 
         {/* Send */}
         <button
           onClick={handleChatSend}
-          disabled={isChatLoading || (!chatInput.trim() && !chatAttachedImage)}
+          disabled={isChatLoading || transcribing || (!chatInput.trim() && !chatAttachedImage)}
           className="flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white p-2.5 rounded-xl transition-colors"
           aria-label="إرسال"
         >

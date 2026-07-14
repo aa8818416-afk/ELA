@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
-    useSpeechRecognition,
+    useAudioRecorder,
     speakArabic,
     isTtsSupported,
     stopSpeaking,
@@ -67,12 +67,13 @@ export default function FarmerChat() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const {
-        isListening,
-        supported: speechSupported,
-        error: speechError,
-        startListening,
-        stopListening,
-    } = useSpeechRecognition();
+        isRecording,
+        transcribing,
+        error: recorderError,
+        hasMic,
+        startRecording,
+        stopRecording,
+    } = useAudioRecorder();
 
     useEffect(() => {
         setTtsSupported(isTtsSupported());
@@ -217,13 +218,13 @@ export default function FarmerChat() {
         callChatApi(failedPayload);
     };
 
-    const handleMicClick = () => {
-        if (isListening) {
-            stopListening();
-        } else {
-            startListening((transcript) => {
+    const handleMicClick = async () => {
+        if (isRecording) {
+            await stopRecording((transcript) => {
                 setInputText((prev) => (prev ? prev + " " + transcript : transcript));
             });
+        } else {
+            await startRecording();
         }
     };
 
@@ -232,18 +233,12 @@ export default function FarmerChat() {
             stopSpeaking();
             setActiveSpeechId(null);
         } else {
-            stopSpeaking();
             setActiveSpeechId(msgId);
-            speakArabic(text);
-
-            if (typeof window !== "undefined" && "speechSynthesis" in window) {
-                const checkSpeech = setInterval(() => {
-                    if (!window.speechSynthesis.speaking) {
-                        setActiveSpeechId(null);
-                        clearInterval(checkSpeech);
-                    }
-                }, 500);
-            }
+            speakArabic(
+                text,
+                () => setActiveSpeechId(msgId),
+                () => setActiveSpeechId(null)
+            );
         }
     };
 
@@ -348,15 +343,28 @@ export default function FarmerChat() {
                     </div>
                 )}
 
+                {/* Audio transcribing indicator */}
+                {transcribing && (
+                    <div className="flex gap-3 max-w-[85%] mr-auto flex-row-reverse">
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                            <User className="w-5 h-5" />
+                        </div>
+                        <div className="bg-slate-900 border border-slate-800 text-slate-400 rounded-2xl rounded-tr-none p-4 text-sm flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                            <span>جاري كتابة صوتك بالذكاء الاصطناعي...</span>
+                        </div>
+                    </div>
+                )}
+
                 <div ref={messagesEndRef} />
             </div>
 
             {/* Errors or Mic Alerts with Retry Button */}
-            {(error || speechError) && (
+            {(error || recorderError) && (
                 <div className="mx-4 p-3 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col items-center gap-2.5 text-red-400 text-xs">
                     <div className="flex items-start gap-2.5 w-full">
                         <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                        <p className="leading-relaxed flex-1">{error || speechError}</p>
+                        <p className="leading-relaxed flex-1">{error || recorderError}</p>
                     </div>
                     {failedPayload && (
                         <button
@@ -393,18 +401,12 @@ export default function FarmerChat() {
 
             {/* Footer / Input form */}
             <div className="p-4 bg-slate-900 border-t border-slate-800 space-y-3">
-                <form
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        handleSend();
-                    }}
-                    className="flex items-center gap-2"
-                >
+                <div className="flex items-center gap-2">
                     {/* Camera: instant capture */}
                     <button
                         type="button"
                         onClick={() => cameraInputRef.current?.click()}
-                        disabled={isLoading}
+                        disabled={isLoading || transcribing}
                         className="p-3 rounded-full border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors shrink-0"
                         title="تصوير فوري بالكاميرا"
                     >
@@ -423,7 +425,7 @@ export default function FarmerChat() {
                     <button
                         type="button"
                         onClick={() => galleryInputRef.current?.click()}
-                        disabled={isLoading}
+                        disabled={isLoading || transcribing}
                         className="p-3 rounded-full border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors shrink-0"
                         title="اختر صورة من الهاتف"
                     >
@@ -437,18 +439,19 @@ export default function FarmerChat() {
                         className="hidden"
                     />
 
-                    {/* Microphone button */}
-                    {speechSupported && (
+                    {/* Microphone button (Speech-to-Text via Groq Whisper) */}
+                    {hasMic && (
                         <button
                             type="button"
                             onClick={handleMicClick}
-                            className={`p-3 rounded-full border transition-all duration-300 ${isListening
+                            disabled={isLoading || transcribing}
+                            className={`p-3 rounded-full border transition-all duration-300 shrink-0 ${isRecording
                                     ? "bg-red-500 text-white border-red-400 animate-pulse scale-105"
                                     : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
                                 }`}
-                            title={isListening ? "إيقاف التسجيل" : "تحدث بالصوت"}
+                            title={isRecording ? "إيقاف التسجيل" : "تحدث بالصوت"}
                         >
-                            {isListening ? (
+                            {isRecording ? (
                                 <Square className="w-5 h-5 fill-current" />
                             ) : (
                                 <Mic className="w-5 h-5" />
@@ -461,30 +464,39 @@ export default function FarmerChat() {
                         type="text"
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
-                        disabled={isLoading}
+                        disabled={isLoading || transcribing}
                         placeholder={
-                            isListening
-                                ? "تحدث الآن بوضوح، جاري كتابة صوتك..."
+                            isRecording
+                                ? "جاري تسجيل صوتك... انقر للتوقف والكتابة"
+                                : transcribing
+                                ? "جاري ترجمة صوتك لنص..."
                                 : attachedImage
                                 ? "اكتب سؤالك عن الصورة (اختياري)..."
                                 : "اكتب سؤالك هنا عن الزرع والسماد والأمراض..."
                         }
                         className="flex-1 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 text-white placeholder-slate-500 rounded-full py-3 px-5 text-sm outline-none transition-colors disabled:opacity-50"
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSend();
+                            }
+                        }}
                     />
 
                     {/* Send Button */}
                     <button
-                        type="submit"
-                        disabled={isLoading || (!inputText.trim() && !attachedImage)}
+                        type="button"
+                        onClick={() => handleSend()}
+                        disabled={isLoading || transcribing || (!inputText.trim() && !attachedImage)}
                         className="p-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-full transition-colors active:scale-95 shadow-md flex items-center justify-center shrink-0"
                         title="إرسال"
                     >
                         <Send className="w-5 h-5 rotate-180" />
                     </button>
-                </form>
-                {isListening && (
+                </div>
+                {isRecording && (
                     <p className="text-center text-[10px] text-red-400 animate-pulse">
-                        الميكروفون نشط الآن. انقر على المربع الأحمر عند الانتهاء للتسجيل والتعديل.
+                        الميكروفون نشط الآن. انقر على المربع الأحمر عند الانتهاء لترجمة كلامك إلى نص تلقائياً.
                     </p>
                 )}
             </div>

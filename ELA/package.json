@@ -16,6 +16,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.8",
+    "edge-tts-universal": "^1.4.0",
     "lucide-react": "^0.523.0",
     "next": "16.2.9",
     "react": "^19.0.0",

@@ -10,7 +10,17 @@ import {
   FolderOpen,
   X,
   RotateCcw,
+  Mic,
+  Square,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
+import {
+  useAudioRecorder,
+  speakArabic,
+  isTtsSupported,
+  stopSpeaking,
+} from "@/utils/speech";
 
 type ChatMessage = {
   id: string;
@@ -38,6 +48,7 @@ export default function CropScanner() {
   const [chatInput, setChatInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [activeSpeechId, setActiveSpeechId] = useState<string | null>(null);
   
   // Image attached inside chat
   const [chatAttachedImage, setChatAttachedImage] = useState<string | null>(null);
@@ -48,10 +59,25 @@ export default function CropScanner() {
   // Stores the last failed request so we can retry it
   const [failedPayload, setFailedPayload] = useState<FailedPayload | null>(null);
 
+  const {
+    isRecording,
+    transcribing,
+    error: recorderError,
+    hasMic,
+    startRecording,
+    stopRecording,
+  } = useAudioRecorder();
+
   // Scroll chat to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, isChatLoading]);
+
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+    };
+  }, []);
 
   // Compress image helper
   function compressImage(
@@ -111,10 +137,16 @@ export default function CropScanner() {
         setChatError(data.error || "حدث خطأ، حاول مرة أخرى");
         setFailedPayload(payload);
       } else {
+        const newMsgId = `m-${Date.now()}`;
         setChatMessages((prev) => [
           ...prev,
-          { id: `m-${Date.now()}`, role: "model", content: data.text },
+          { id: newMsgId, role: "model", content: data.text },
         ]);
+
+        // Auto-play the AI response if TTS is supported
+        if (isTtsSupported()) {
+          handleSpeak(data.text, newMsgId);
+        }
       }
     } catch {
       setChatError("تعذر الاتصال، تأكد من الإنترنت");
@@ -154,7 +186,7 @@ export default function CropScanner() {
     setChatMessages(updatedMessages);
 
     const historyForApi = updatedMessages
-      .filter((m) => m.id !== "welcome" && !m.id.startsWith("diag-"))
+      .filter((m) => m.id !== "welcome")
       .slice(0, -1) // exclude last user msg (sent as `message`)
       .map((m) => ({
         role: m.role,
@@ -176,6 +208,30 @@ export default function CropScanner() {
     callChatApi(failedPayload);
   };
 
+  const handleMicClick = async () => {
+    if (isRecording) {
+      await stopRecording((transcript) => {
+        setChatInput((prev) => (prev ? prev + " " + transcript : transcript));
+      });
+    } else {
+      await startRecording();
+    }
+  };
+
+  const handleSpeak = (text: string, msgId: string) => {
+    if (activeSpeechId === msgId) {
+      stopSpeaking();
+      setActiveSpeechId(null);
+    } else {
+      setActiveSpeechId(msgId);
+      speakArabic(
+        text,
+        () => setActiveSpeechId(msgId),
+        () => setActiveSpeechId(null)
+      );
+    }
+  };
+
   return (
     <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-4 lg:p-6 max-w-3xl mx-auto space-y-4">
       {/* ── Follow-up Chat directly underneath ── */}
@@ -187,7 +243,7 @@ export default function CropScanner() {
           </div>
           <div>
             <p className="text-white text-sm font-bold">المرشد الزراعي الذكي (سفير القرية)</p>
-            <p className="text-slate-500 text-xs">اسأل المرشد أو صوّر الإصابة مباشرة لمساعدتك</p>
+            <p className="text-slate-550 text-xs">اسأل المرشد أو صوّر الإصابة مباشرة لمساعدتك</p>
           </div>
         </div>
 
@@ -222,13 +278,31 @@ export default function CropScanner() {
                 )}
                 {msg.content && msg.content !== "📷" && (
                   <div
-                    className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                    className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed relative ${
                       msg.role === "model"
                         ? "bg-slate-800 text-slate-200 rounded-tl-sm"
                         : "bg-emerald-600 text-white rounded-tr-sm"
                     }`}
                   >
-                    {msg.content}
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+
+                    {/* TTS Speaker icon for model replies */}
+                    {msg.role === "model" && isTtsSupported() && (
+                      <button
+                        onClick={() => handleSpeak(msg.content, msg.id)}
+                        className={`absolute -bottom-3 -left-3 p-1.5 rounded-full border shadow-md transition-colors ${activeSpeechId === msg.id
+                          ? "bg-emerald-500 text-white border-emerald-400"
+                          : "bg-slate-800 text-slate-400 hover:text-white border-slate-700 hover:bg-slate-700"
+                          }`}
+                        title={activeSpeechId === msg.id ? "إيقاف الصوت" : "قراءة الرسالة بصوت عالي"}
+                      >
+                        {activeSpeechId === msg.id ? (
+                          <VolumeX className="w-4 h-4" />
+                        ) : (
+                          <Volume2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -251,10 +325,26 @@ export default function CropScanner() {
             </div>
           )}
 
-          {chatError && (
+          {/* Audio transcribing indicator */}
+          {transcribing && (
+            <div className="flex gap-2.5 mr-auto flex-row-reverse">
+              <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-slate-700">
+                <User className="w-4 h-4 text-slate-300" />
+              </div>
+              <div className="bg-slate-800 px-4 py-3 rounded-2xl rounded-tr-sm">
+                <div className="flex gap-2 items-center text-slate-400 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                  <span>جاري ترجمة صوتك لنص...</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Errors display */}
+          {(chatError || recorderError) && (
             <div className="flex flex-col items-center gap-2">
               <p className="text-red-400 text-xs text-center bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2">
-                {chatError}
+                {chatError || recorderError}
               </p>
               {failedPayload && (
                 <button
@@ -297,7 +387,7 @@ export default function CropScanner() {
           <button
             type="button"
             onClick={() => chatImageCameraInputRef.current?.click()}
-            disabled={isChatLoading}
+            disabled={isChatLoading || transcribing}
             className="flex-shrink-0 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors p-2 bg-slate-850 rounded-xl"
             title="التقاط صورة فورا بالكاميرا"
           >
@@ -316,7 +406,7 @@ export default function CropScanner() {
           <button
             type="button"
             onClick={() => chatImageGalleryInputRef.current?.click()}
-            disabled={isChatLoading}
+            disabled={isChatLoading || transcribing}
             className="flex-shrink-0 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors p-2 bg-slate-850 rounded-xl"
             title="إرفاق صورة من الهاتف"
           >
@@ -330,6 +420,26 @@ export default function CropScanner() {
             className="hidden"
           />
 
+          {/* Microphone button (Speech-to-Text via Groq Whisper) */}
+          {hasMic && (
+            <button
+              type="button"
+              onClick={handleMicClick}
+              disabled={isChatLoading || transcribing}
+              className={`flex-shrink-0 p-2 bg-slate-850 border border-slate-700 text-slate-350 hover:text-emerald-400 rounded-xl transition-all duration-300 ${isRecording
+                  ? "bg-red-500 text-white border-red-400 animate-pulse scale-105"
+                  : ""
+                }`}
+              title={isRecording ? "إيقاف التسجيل" : "تحدث بالصوت"}
+            >
+              {isRecording ? (
+                <Square className="w-5 h-5 fill-current" />
+              ) : (
+                <Mic className="w-5 h-5" />
+              )}
+            </button>
+          )}
+
           <input
             type="text"
             value={chatInput}
@@ -340,13 +450,21 @@ export default function CropScanner() {
                 handleChatSend();
               }
             }}
-            placeholder={chatAttachedImage ? "اكتب سؤالك عن الصورة (اختياري)..." : "اسأل المرشد أو أرفق صورة..."}
-            disabled={isChatLoading}
+            placeholder={
+              isRecording
+                ? "جاري تسجيل صوتك... انقر للتوقف والكتابة"
+                : transcribing
+                ? "جاري ترجمة صوتك لنص..."
+                : chatAttachedImage
+                ? "اكتب سؤالك عن الصورة (اختياري)..."
+                : "اسأل المرشد أو أرفق صورة..."
+            }
+            disabled={isChatLoading || transcribing}
             className="flex-1 bg-slate-800 text-white text-sm rounded-xl px-3 py-2.5 border border-slate-700 focus:border-emerald-500 outline-none placeholder:text-slate-500 disabled:opacity-50"
           />
           <button
             onClick={() => handleChatSend()}
-            disabled={isChatLoading || (!chatInput.trim() && !chatAttachedImage)}
+            disabled={isChatLoading || transcribing || (!chatInput.trim() && !chatAttachedImage)}
             className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white p-2.5 rounded-xl transition-colors flex-shrink-0"
             aria-label="إرسال"
           >
