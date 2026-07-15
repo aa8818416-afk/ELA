@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
     Send,
     Loader2,
@@ -65,6 +65,7 @@ export default function FarmerChat() {
     const [failedPayload, setFailedPayload] = useState<FailedPayload | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const {
         isRecording,
@@ -86,6 +87,19 @@ export default function FarmerChat() {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, isLoading]);
+
+    // Auto-resize textarea whenever inputText changes
+    const autoResize = useCallback(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.style.height = "auto";
+        // Max ~6 lines (~144px), min 1 line
+        el.style.height = Math.min(el.scrollHeight, 144) + "px";
+    }, []);
+
+    useEffect(() => {
+        autoResize();
+    }, [inputText, autoResize]);
 
     // Image compression helper
     function compressImage(dataUrl: string, maxWidth = 768, quality = 0.65): Promise<string> {
@@ -400,17 +414,60 @@ export default function FarmerChat() {
             )}
 
             {/* Footer / Input form */}
-            <div className="p-4 bg-slate-900 border-t border-slate-800 space-y-3">
+            <div className="px-3 pt-2 pb-3 bg-slate-900 border-t border-slate-800">
+
+                {/* Row 1: Textarea + Send (always visible, full width) */}
+                <div className="flex items-end gap-2 mb-2">
+                    <textarea
+                        ref={textareaRef}
+                        rows={1}
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        disabled={isLoading || transcribing}
+                        placeholder={
+                            isRecording
+                                ? "🎙️ جاري تسجيل صوتك..."
+                                : transcribing
+                                ? "⏳ جاري ترجمة صوتك..."
+                                : attachedImage
+                                ? "اكتب سؤالك عن الصورة (اختياري)..."
+                                : "اكتب سؤالك هنا..."
+                        }
+                        className="flex-1 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 text-white placeholder-slate-500 rounded-2xl py-3 px-4 text-sm outline-none transition-colors disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
+                        style={{ minHeight: "44px", maxHeight: "144px" }}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSend();
+                            }
+                        }}
+                    />
+
+                    {/* Send Button — always visible and prominent */}
+                    <button
+                        type="button"
+                        onClick={() => handleSend()}
+                        disabled={isLoading || transcribing || (!inputText.trim() && !attachedImage)}
+                        className="p-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-2xl transition-colors active:scale-95 shadow-lg flex items-center justify-center shrink-0 self-end"
+                        title="إرسال"
+                        aria-label="إرسال الرسالة"
+                    >
+                        <Send className="w-5 h-5 rotate-180" />
+                    </button>
+                </div>
+
+                {/* Row 2: Camera / Gallery / Mic icons */}
                 <div className="flex items-center gap-2">
                     {/* Camera: instant capture */}
                     <button
                         type="button"
                         onClick={() => cameraInputRef.current?.click()}
                         disabled={isLoading || transcribing}
-                        className="p-3 rounded-full border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors shrink-0"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors text-xs"
                         title="تصوير فوري بالكاميرا"
                     >
-                        <Camera className="w-5 h-5" />
+                        <Camera className="w-4 h-4" />
+                        <span className="hidden sm:inline">كاميرا</span>
                     </button>
                     <input
                         type="file"
@@ -426,10 +483,11 @@ export default function FarmerChat() {
                         type="button"
                         onClick={() => galleryInputRef.current?.click()}
                         disabled={isLoading || transcribing}
-                        className="p-3 rounded-full border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors shrink-0"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors text-xs"
                         title="اختر صورة من الهاتف"
                     >
-                        <FolderOpen className="w-5 h-5" />
+                        <FolderOpen className="w-4 h-4" />
+                        <span className="hidden sm:inline">معرض</span>
                     </button>
                     <input
                         type="file"
@@ -445,58 +503,25 @@ export default function FarmerChat() {
                             type="button"
                             onClick={handleMicClick}
                             disabled={isLoading || transcribing}
-                            className={`p-3 rounded-full border transition-all duration-300 shrink-0 ${isRecording
-                                    ? "bg-red-500 text-white border-red-400 animate-pulse scale-105"
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border transition-all duration-300 text-xs ${
+                                isRecording
+                                    ? "bg-red-500 text-white border-red-400 animate-pulse"
                                     : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
-                                }`}
+                            }`}
                             title={isRecording ? "إيقاف التسجيل" : "تحدث بالصوت"}
                         >
                             {isRecording ? (
-                                <Square className="w-5 h-5 fill-current" />
+                                <><Square className="w-4 h-4 fill-current" /><span>إيقاف</span></>
                             ) : (
-                                <Mic className="w-5 h-5" />
+                                <><Mic className="w-4 h-4" /><span className="hidden sm:inline">صوت</span></>
                             )}
                         </button>
                     )}
-
-                    {/* Text Input */}
-                    <input
-                        type="text"
-                        value={inputText}
-                        onChange={(e) => setInputText(e.target.value)}
-                        disabled={isLoading || transcribing}
-                        placeholder={
-                            isRecording
-                                ? "جاري تسجيل صوتك... انقر للتوقف والكتابة"
-                                : transcribing
-                                ? "جاري ترجمة صوتك لنص..."
-                                : attachedImage
-                                ? "اكتب سؤالك عن الصورة (اختياري)..."
-                                : "اكتب سؤالك هنا عن الزرع والسماد والأمراض..."
-                        }
-                        className="flex-1 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 text-white placeholder-slate-500 rounded-full py-3 px-5 text-sm outline-none transition-colors disabled:opacity-50"
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleSend();
-                            }
-                        }}
-                    />
-
-                    {/* Send Button */}
-                    <button
-                        type="button"
-                        onClick={() => handleSend()}
-                        disabled={isLoading || transcribing || (!inputText.trim() && !attachedImage)}
-                        className="p-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-full transition-colors active:scale-95 shadow-md flex items-center justify-center shrink-0"
-                        title="إرسال"
-                    >
-                        <Send className="w-5 h-5 rotate-180" />
-                    </button>
                 </div>
+
                 {isRecording && (
-                    <p className="text-center text-[10px] text-red-400 animate-pulse">
-                        الميكروفون نشط الآن. انقر على المربع الأحمر عند الانتهاء لترجمة كلامك إلى نص تلقائياً.
+                    <p className="text-center text-[10px] text-red-400 animate-pulse mt-1.5">
+                        الميكروفون نشط — انقر «إيقاف» عند الانتهاء
                     </p>
                 )}
             </div>
