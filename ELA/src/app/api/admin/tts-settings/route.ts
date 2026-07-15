@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/server";
 import { EdgeTTS } from "edge-tts-universal";
 import type { Database } from "@/types/database.types";
+import { invalidateTtsSettingsCache } from "../../text-to-speech/route";
 
 type TtsSettingsUpdate = Database["public"]["Tables"]["tts_settings"]["Update"];
 
@@ -78,10 +79,9 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Failed to save settings" }, { status: 500 });
     }
 
-    // Invalidate the in-memory cache in the TTS route module
-    // We do this by hitting a special internal signal via a module-level cache
-    // The cache will naturally expire in 60s — acceptable UX for admin usage
-    console.log("[tts-settings] Settings saved, cache will expire in 60s:", data);
+    // Invalidate the in-memory cache in the TTS route module instantly
+    invalidateTtsSettingsCache();
+    console.log("[tts-settings] Settings saved, cache invalidated immediately:", data);
 
     return NextResponse.json({ success: true, settings: data });
   } catch (err) {

@@ -138,7 +138,7 @@ let globalTtsAudio: HTMLAudioElement | null = null;
  * Text-to-Speech: Converts text to Egyptian Neural voice (ar-EG-SalmaNeural)
  * using ELA's Edge-TTS Next.js API endpoint (/api/text-to-speech).
  */
-export async function speakArabic(text: string, onStart?: () => void, onEnd?: () => void): Promise<void> {
+export async function speakArabic(text: string, onStart?: () => void, onEnd?: () => void, voice?: string): Promise<void> {
   if (typeof window === "undefined") return;
 
   try {
@@ -150,7 +150,7 @@ export async function speakArabic(text: string, onStart?: () => void, onEnd?: ()
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text,
-        voice: "ar-EG-SalmaNeural", // Egyptian Neural Voice (Female)
+        ...(voice ? { voice } : {}),
       }),
     });
 
