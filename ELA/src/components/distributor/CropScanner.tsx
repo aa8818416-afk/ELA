@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Camera,
   Loader2,
@@ -53,6 +53,7 @@ export default function CropScanner() {
   // Image attached inside chat
   const [chatAttachedImage, setChatAttachedImage] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const chatImageGalleryInputRef = useRef<HTMLInputElement>(null);
   const chatImageCameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,6 +79,18 @@ export default function CropScanner() {
       stopSpeaking();
     };
   }, []);
+
+  // Auto-resize textarea whenever chatInput changes
+  const autoResize = useCallback(() => {
+    const el = chatInputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 144) + "px";
+  }, []);
+
+  useEffect(() => {
+    autoResize();
+  }, [chatInput, autoResize]);
 
   // Compress image helper
   function compressImage(
@@ -382,98 +395,116 @@ export default function CropScanner() {
         )}
 
         {/* Input bar */}
-        <div className="border-t border-slate-800 p-3 flex gap-2 items-center bg-slate-900 shrink-0">
-          {/* Action Button 1: Camera capture */}
-          <button
-            type="button"
-            onClick={() => chatImageCameraInputRef.current?.click()}
-            disabled={isChatLoading || transcribing}
-            className="flex-shrink-0 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors p-2 bg-slate-850 rounded-xl"
-            title="التقاط صورة فورا بالكاميرا"
-          >
-            <Camera className="w-5 h-5" />
-          </button>
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            ref={chatImageCameraInputRef}
-            onChange={handleChatImageSelect}
-            className="hidden"
-          />
-
-          {/* Action Button 2: Upload from gallery */}
-          <button
-            type="button"
-            onClick={() => chatImageGalleryInputRef.current?.click()}
-            disabled={isChatLoading || transcribing}
-            className="flex-shrink-0 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors p-2 bg-slate-850 rounded-xl"
-            title="إرفاق صورة من الهاتف"
-          >
-            <FolderOpen className="w-5 h-5" />
-          </button>
-          <input
-            type="file"
-            accept="image/*"
-            ref={chatImageGalleryInputRef}
-            onChange={handleChatImageSelect}
-            className="hidden"
-          />
-
-          {/* Microphone button (Speech-to-Text via Groq Whisper) */}
-          {hasMic && (
-            <button
-              type="button"
-              onClick={handleMicClick}
+        <div className="border-t border-slate-800 px-3 pt-2 pb-3 flex flex-col bg-slate-900 shrink-0">
+          {/* Row 1: Textarea + Send (always visible, full width) */}
+          <div className="flex items-end gap-2 mb-2">
+            <textarea
+              ref={chatInputRef}
+              rows={1}
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleChatSend();
+                }
+              }}
+              placeholder={
+                isRecording
+                  ? "🎙️ جاري تسجيل صوتك..."
+                  : transcribing
+                  ? "⏳ جاري ترجمة صوتك..."
+                  : chatAttachedImage
+                  ? "اكتب سؤالك عن الصورة (اختياري)..."
+                  : "اسأل المرشد أو أرفق صورة..."
+              }
               disabled={isChatLoading || transcribing}
-              className={`flex-shrink-0 p-2 bg-slate-850 border border-slate-700 text-slate-350 hover:text-emerald-400 rounded-xl transition-all duration-300 ${isRecording
-                  ? "bg-red-500 text-white border-red-400 animate-pulse scale-105"
-                  : ""
-                }`}
-              title={isRecording ? "إيقاف التسجيل" : "تحدث بالصوت"}
+              className="flex-1 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 text-white placeholder-slate-500 rounded-2xl py-3 px-4 text-sm outline-none transition-colors disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
+              style={{ minHeight: "44px", maxHeight: "144px" }}
+            />
+
+            <button
+              onClick={() => handleChatSend()}
+              disabled={isChatLoading || transcribing || (!chatInput.trim() && !chatAttachedImage)}
+              className="p-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-2xl transition-colors active:scale-95 shadow-lg flex items-center justify-center shrink-0 self-end"
+              aria-label="إرسال"
             >
-              {isRecording ? (
-                <Square className="w-5 h-5 fill-current" />
+              {isChatLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <Mic className="w-5 h-5" />
+                <Send className="w-4 h-4" />
               )}
             </button>
-          )}
+          </div>
 
-          <input
-            type="text"
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleChatSend();
-              }
-            }}
-            placeholder={
-              isRecording
-                ? "جاري تسجيل صوتك... انقر للتوقف والكتابة"
-                : transcribing
-                ? "جاري ترجمة صوتك لنص..."
-                : chatAttachedImage
-                ? "اكتب سؤالك عن الصورة (اختياري)..."
-                : "اسأل المرشد أو أرفق صورة..."
-            }
-            disabled={isChatLoading || transcribing}
-            className="flex-1 bg-slate-800 text-white text-sm rounded-xl px-3 py-2.5 border border-slate-700 focus:border-emerald-500 outline-none placeholder:text-slate-500 disabled:opacity-50"
-          />
-          <button
-            onClick={() => handleChatSend()}
-            disabled={isChatLoading || transcribing || (!chatInput.trim() && !chatAttachedImage)}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white p-2.5 rounded-xl transition-colors flex-shrink-0"
-            aria-label="إرسال"
-          >
-            {isChatLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
+          {/* Row 2: Camera / Gallery / Mic icons */}
+          <div className="flex items-center gap-2">
+            {/* Camera: instant capture */}
+            <button
+              type="button"
+              onClick={() => chatImageCameraInputRef.current?.click()}
+              disabled={isChatLoading || transcribing}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors text-xs"
+              title="التقاط صورة فورا بالكاميرا"
+            >
+              <Camera className="w-4 h-4" />
+              <span className="hidden sm:inline">كاميرا</span>
+            </button>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              ref={chatImageCameraInputRef}
+              onChange={handleChatImageSelect}
+              className="hidden"
+            />
+
+            {/* Gallery: pick from device */}
+            <button
+              type="button"
+              onClick={() => chatImageGalleryInputRef.current?.click()}
+              disabled={isChatLoading || transcribing}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors text-xs"
+              title="إرفاق صورة من الهاتف"
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">معرض</span>
+            </button>
+            <input
+              type="file"
+              accept="image/*"
+              ref={chatImageGalleryInputRef}
+              onChange={handleChatImageSelect}
+              className="hidden"
+            />
+
+            {/* Microphone button (Speech-to-Text via Groq Whisper) */}
+            {hasMic && (
+              <button
+                type="button"
+                onClick={handleMicClick}
+                disabled={isChatLoading || transcribing}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border transition-all duration-300 text-xs ${
+                  isRecording
+                    ? "bg-red-500 text-white border-red-400 animate-pulse"
+                    : "bg-slate-800 hover:bg-slate-700 text-slate-350 border-slate-700"
+                }`}
+                title={isRecording ? "إيقاف التسجيل" : "تحدث بالصوت"}
+              >
+                {isRecording ? (
+                  <><Square className="w-4 h-4 fill-current" /><span>إيقاف</span></>
+                ) : (
+                  <><Mic className="w-4 h-4" /><span className="hidden sm:inline">صوت</span></>
+                )}
+              </button>
             )}
-          </button>
+          </div>
+
+          {isRecording && (
+            <p className="text-center text-[10px] text-red-400 animate-pulse mt-1.5">
+              الميكروفون نشط — انقر «إيقاف» عند الانتهاء
+            </p>
+          )}
         </div>
       </div>
     </div>
