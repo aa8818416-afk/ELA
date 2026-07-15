@@ -381,6 +381,45 @@ export type Database = {
         }
         Relationships: []
       }
+      tts_settings: {
+        Row: {
+          id: string
+          voice: string
+          rate: string
+          pitch: string
+          volume: string
+          break_on_comma_ms: number
+          break_on_period_ms: number
+          chunk_max_chars: number
+          auto_breaks_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          voice?: string
+          rate?: string
+          pitch?: string
+          volume?: string
+          break_on_comma_ms?: number
+          break_on_period_ms?: number
+          chunk_max_chars?: number
+          auto_breaks_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          voice?: string
+          rate?: string
+          pitch?: string
+          volume?: string
+          break_on_comma_ms?: number
+          break_on_period_ms?: number
+          chunk_max_chars?: number
+          auto_breaks_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

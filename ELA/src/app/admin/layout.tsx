@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Package, Truck, Users, KeySquare, Network, Menu, X, LogOut } from "lucide-react";
+import { Package, Truck, Users, KeySquare, Network, Menu, X, LogOut, Volume2 } from "lucide-react";
 import { signOut } from "@/app/actions/auth";
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { href: "/admin/trips", label: "الشحن والرحلات", icon: Truck },
   { href: "/admin/distributors", label: "الموزعين والعمولات", icon: Users },
   { href: "/admin/api-keys", label: "مفاتيح API", icon: KeySquare },
+  { href: "/admin/smart-voice", label: "المتحدث الذكي", icon: Volume2 },
 ];
 
 export default function AdminLayout({
