@@ -287,7 +287,9 @@ ${productsContext}
                 .eq("id", keyData.id);
 
             const data = await response.json();
-            const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            const parts = data.candidates?.[0]?.content?.parts ?? [];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const resultText = parts.find((p: any) => !p.thought)?.text;
 
             if (!resultText) {
                 console.error("[crop-chat] Gemini returned no text content:", data);

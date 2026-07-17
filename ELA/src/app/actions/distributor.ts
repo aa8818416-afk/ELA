@@ -223,8 +223,10 @@ function extractDistributorResultText(
   if (projectName === "groq") {
     return data.choices?.[0]?.message?.content ?? null;
   }
-  // Gemini
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+  // Gemini — skip "thought" parts (thinking models like gemma-4-31b-it)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const geminiParts: any[] = data.candidates?.[0]?.content?.parts ?? [];
+  return geminiParts.find((p) => !p.thought)?.text ?? null;
 }
 
 /**
