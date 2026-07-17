@@ -60,6 +60,16 @@ async function runPenTests() {
     log("FAIL", "Anonymous → api_keys SELECT", `LEAK! Got ${anonApiKeys.length} rows`);
   }
 
+  // Test 1b: Anon cannot read api_key_models
+  const { data: anonApiKeyModels, error: anonApiKeyModelsErr } = await anonClient
+    .from("api_key_models")
+    .select("*");
+  if (!anonApiKeyModels || anonApiKeyModels.length === 0 || anonApiKeyModelsErr) {
+    log("PASS", "Anonymous → api_key_models SELECT", "Empty or denied ✓");
+  } else {
+    log("FAIL", "Anonymous → api_key_models SELECT", `LEAK! Got ${anonApiKeyModels.length} rows`);
+  }
+
   // Test 2: Anon cannot read profiles
   const { data: anonProfiles, error: anonProfilesErr } = await anonClient
     .from("profiles")
@@ -118,6 +128,17 @@ async function runPenTests() {
     log("FAIL", "Anonymous → api_keys INSERT", "Security breach! Key injected anonymously");
   }
 
+  // Test 7b: Anon cannot INSERT into api_key_models
+  const { error: anonModelInsertErr } = await anonClient.from("api_key_models").insert({
+    key_id: "00000000-0000-0000-0000-000000000000",
+    model_name: "gemini-3.5-flash",
+  });
+  if (anonModelInsertErr) {
+    log("PASS", "Anonymous → api_key_models INSERT", `Blocked ✓`);
+  } else {
+    log("FAIL", "Anonymous → api_key_models INSERT", "Security breach! Key model injected anonymously");
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   console.log("\n" + colors.cyan("TEST GROUP 2: Authenticated Distributor (بمصادقة موزع)"));
   console.log("─────────────────────────────────────────────────");
@@ -140,6 +161,14 @@ async function runPenTests() {
       log("PASS", "Distributor → api_keys SELECT", "Blocked ✓");
     } else {
       log("FAIL", "Distributor → api_keys SELECT", `LEAK! Got ${distApiKeys.length} rows`);
+    }
+
+    // Test: Distributor cannot read api_key_models
+    const { data: distApiKeyModels } = await distClient.from("api_key_models").select("*");
+    if (!distApiKeyModels || distApiKeyModels.length === 0) {
+      log("PASS", "Distributor → api_key_models SELECT", "Blocked ✓");
+    } else {
+      log("FAIL", "Distributor → api_key_models SELECT", `LEAK! Got ${distApiKeyModels.length} rows`);
     }
 
     // Test: Distributor can read only their own farmers (RLS: distributor_id = auth.uid())

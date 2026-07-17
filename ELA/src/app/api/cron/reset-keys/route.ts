@@ -24,11 +24,25 @@ export async function GET(request: Request) {
         status: "active",
         last_reset: new Date().toISOString()
       })
-      .neq("status", "permanently_banned"); // Assuming you might have banned keys
+      .neq("status", "permanently_banned");
 
     if (error) {
-      console.error("[Cron Reset] Database Error:", error);
+      console.error("[Cron Reset] Database Error (api_keys):", error);
       return NextResponse.json({ error: "Failed to reset keys" }, { status: 500 });
+    }
+
+    // 4. Reset all model-specific usages and restore rate_limited models to active
+    const { error: modelError } = await supabaseAdmin
+      .from("api_key_models")
+      .update({
+        daily_usage: 0,
+        status: "active"
+      })
+      .neq("status", "permanently_banned");
+
+    if (modelError) {
+      console.error("[Cron Reset] Database Error (api_key_models):", modelError);
+      return NextResponse.json({ error: "Failed to reset model usage" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, message: "All keys have been reset." });

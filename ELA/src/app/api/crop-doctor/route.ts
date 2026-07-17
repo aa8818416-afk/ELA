@@ -180,21 +180,19 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
       // Read the active key — fetch project_name to detect the provider
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let query = (supabaseAdmin as any)
-        .from("api_keys")
-        .select("id, api_key, daily_usage, model_name, project_name")
+        .from("api_key_models")
+        .select("id, model_name, daily_usage, daily_limit, status, api_keys!inner(id, api_key, status, project_name)")
         .eq("status", "active")
-        .lt("daily_usage", 1450);
+        .eq("api_keys.status", "active")
+        .order("daily_usage", { ascending: true });
 
       if (excludedIds.length > 0) {
         query = query.not("id", "in", `(${excludedIds.join(",")})`);
       }
 
-      const { data: keyData, error: keyError } = await query
-        .order("daily_usage", { ascending: true })
-        .limit(1)
-        .single();
+      const { data: keyModels, error: keyError } = await query;
 
-      if (keyError || !keyData) {
+      if (keyError || !keyModels || keyModels.length === 0) {
         console.error(
           "[crop-doctor] No active AI key available in DB:",
           keyError
@@ -205,21 +203,30 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
         );
       }
 
-      const projectName: string = keyData.project_name ?? "gemini";
-      const modelName: string =
-        keyData.model_name ||
-        (projectName === "groq"
-          ? "llama-4-scout-17b-16e-instruct"
-          : "gemini-3.5-flash");
+      // Filter in JS to ensure daily_usage < daily_limit
+      const validKeys = keyModels.filter((km: any) => km.daily_usage < km.daily_limit);
+
+      if (validKeys.length === 0) {
+        console.error("[crop-doctor] All active AI keys have exceeded their daily limits.");
+        return NextResponse.json(
+          { error: "نظام الذكاء الاصطناعي غير متاح حالياً (تم تجاوز حد الاستخدام)" },
+          { status: 503 }
+        );
+      }
+
+      const keyData = validKeys[0];
+
+      const projectName: string = keyData.api_keys.project_name ?? "gemini";
+      const modelName: string = keyData.model_name;
 
       console.log(
-        `[crop-doctor] Attempt ${attemptCount + 1}: provider=${projectName}, model=${modelName}, key=${keyData.id.slice(0, 6)}... (usage: ${keyData.daily_usage})`
+        `[crop-doctor] Attempt ${attemptCount + 1}: provider=${projectName}, model=${modelName}, key=${keyData.api_keys.id.slice(0, 6)}... (model usage: ${keyData.daily_usage})`
       );
 
       const { url, body: requestBody, headers } = buildProviderRequest(
         projectName,
         modelName,
-        keyData.api_key,
+        keyData.api_keys.api_key,
         promptText,
         base64Data
       );
@@ -243,7 +250,7 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
           fetchError instanceof DOMException &&
           fetchError.name === "AbortError";
         console.error(
-          `[crop-doctor] FETCH FAILED | Attempt ${attemptCount + 1} | provider=${projectName} | Key: ${keyData.id.slice(0, 6)}... | Error:`,
+          `[crop-doctor] FETCH FAILED | Attempt ${attemptCount + 1} | provider=${projectName} | Key: ${keyData.api_keys.id.slice(0, 6)}... | Error:`,
           fetchError
         );
         if (aborted && attemptCount < 5) {
@@ -268,22 +275,22 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
       }
 
       console.log(
-        `[crop-doctor] AI responded HTTP ${response.status} | Attempt ${attemptCount + 1} | provider=${projectName} | Key: ${keyData.id.slice(0, 6)}...`
+        `[crop-doctor] AI responded HTTP ${response.status} | Attempt ${attemptCount + 1} | provider=${projectName} | Key: ${keyData.api_keys.id.slice(0, 6)}...`
       );
 
       if (!response.ok) {
         const errorBody = await response.text();
         console.error(
-          `[crop-doctor] API ERROR | HTTP ${response.status} | provider=${projectName} | Key: ${keyData.id.slice(0, 6)}... | Body:`,
+          `[crop-doctor] API ERROR | HTTP ${response.status} | provider=${projectName} | Key: ${keyData.api_keys.id.slice(0, 6)}... | Body:`,
           errorBody
         );
         if (response.status === 429) {
           console.warn(
-            `[crop-doctor] Key ${keyData.id} rate limited (429). Rotating...`
+            `[crop-doctor] Key model ${keyData.id} rate limited (429). Rotating...`
           );
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabaseAdmin as any)
-            .from("api_keys")
+            .from("api_key_models")
             .update({ status: "rate_limited" })
             .eq("id", keyData.id);
           return attemptDiagnosis(attemptCount + 1, [
@@ -313,7 +320,7 @@ Return a JSON object strictly matching this format (no markdown, just raw JSON):
       // Success — increment usage
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabaseAdmin as any)
-        .from("api_keys")
+        .from("api_key_models")
         .update({ daily_usage: keyData.daily_usage + 1 })
         .eq("id", keyData.id);
 

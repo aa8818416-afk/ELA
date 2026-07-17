@@ -169,22 +169,20 @@ ${productsContext}
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let query = (supabaseAdmin as any)
-                .from("api_keys")
-                .select("id, api_key, daily_usage, model_name")
+                .from("api_key_models")
+                .select("id, model_name, daily_usage, daily_limit, status, api_keys!inner(id, api_key, status, project_name)")
                 .eq("status", "active")
-                .eq("project_name", "gemini")
-                .lt("daily_usage", 1450);
+                .eq("api_keys.status", "active")
+                .eq("api_keys.project_name", "gemini")
+                .order("daily_usage", { ascending: true });
 
             if (excludedIds.length > 0) {
                 query = query.not("id", "in", `(${excludedIds.join(",")})`);
             }
 
-            const { data: keyData, error: keyError } = await query
-                .order("daily_usage", { ascending: true })
-                .limit(1)
-                .single();
+            const { data: keyModels, error: keyError } = await query;
 
-            if (keyError || !keyData) {
+            if (keyError || !keyModels || keyModels.length === 0) {
                 console.error(
                     "[crop-chat] No active Gemini key available in DB:",
                     keyError
@@ -195,10 +193,23 @@ ${productsContext}
                 );
             }
 
-            const modelName = keyData.model_name || "gemini-2.0-flash";
-            const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_key}`;
+            // Filter in JS to ensure daily_usage < daily_limit
+            const validKeys = keyModels.filter((km: any) => km.daily_usage < km.daily_limit);
 
-            console.log(`[crop-chat] Attempt ${attemptCount + 1}: Using key ${keyData.id} (usage: ${keyData.daily_usage})`);
+            if (validKeys.length === 0) {
+                console.error("[crop-chat] All active Gemini keys have exceeded their daily limits.");
+                return NextResponse.json(
+                    { error: "نظام الذكاء الاصطناعي غير متاح حالياً (تم تجاوز حد الاستخدام)" },
+                    { status: 503 }
+                );
+            }
+
+            const keyData = validKeys[0];
+
+            const modelName = keyData.model_name || "gemini-2.0-flash";
+            const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_keys.api_key}`;
+
+            console.log(`[crop-chat] Attempt ${attemptCount + 1}: Using model ${modelName} on key ${keyData.api_keys.id.slice(0, 6)}... (model usage: ${keyData.daily_usage})`);
 
             const controller = new AbortController();
             const timeoutMs = 60_000; // slightly longer for multimodal
@@ -218,7 +229,7 @@ ${productsContext}
                     fetchError instanceof DOMException &&
                     fetchError.name === "AbortError";
                 console.error(
-                    `[crop-chat] FETCH FAILED | Attempt ${attemptCount + 1} | Key: ${keyData.id.slice(0, 6)}... | Error:`,
+                    `[crop-chat] FETCH FAILED | Attempt ${attemptCount + 1} | Key: ${keyData.api_keys.id.slice(0, 6)}... | Error:`,
                     fetchError
                 );
                 if (aborted && attemptCount < 5) {
@@ -239,13 +250,13 @@ ${productsContext}
             if (!response.ok) {
                 const errorBody = await response.text();
                 console.error(
-                    `[crop-chat] API ERROR | HTTP ${response.status} | Key: ${keyData.id.slice(0, 6)}... | Body:`,
+                    `[crop-chat] API ERROR | HTTP ${response.status} | Key: ${keyData.api_keys.id.slice(0, 6)}... | Body:`,
                     errorBody
                 );
                 if (response.status === 429) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     await (supabaseAdmin as any)
-                        .from("api_keys")
+                        .from("api_key_models")
                         .update({ status: "rate_limited" })
                         .eq("id", keyData.id);
                     return attemptChat(attemptCount + 1, [...excludedIds, keyData.id]);
@@ -266,7 +277,7 @@ ${productsContext}
             // Success — increment usage
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (supabaseAdmin as any)
-                .from("api_keys")
+                .from("api_key_models")
                 .update({ daily_usage: keyData.daily_usage + 1 })
                 .eq("id", keyData.id);
 

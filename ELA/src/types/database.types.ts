@@ -44,6 +44,44 @@ export type Database = {
         }
         Relationships: []
       }
+      api_key_models: {
+        Row: {
+          id: string
+          key_id: string
+          model_name: string
+          daily_usage: number
+          daily_limit: number
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          key_id: string
+          model_name: string
+          daily_usage?: number
+          daily_limit?: number
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          key_id?: string
+          model_name?: string
+          daily_usage?: number
+          daily_limit?: number
+          status?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_key_models_key_id_fkey"
+            columns: ["key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       diseases: {
         Row: {
           id: string

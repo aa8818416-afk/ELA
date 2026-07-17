@@ -286,40 +286,44 @@ Return a JSON object strictly matching this format without markdown code blocks 
       // Fetch the first available key — read project_name to detect provider
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let query = (supabaseAdmin as any)
-        .from("api_keys")
-        .select("id, api_key, daily_usage, model_name, project_name")
+        .from("api_key_models")
+        .select("id, model_name, daily_usage, daily_limit, status, api_keys!inner(id, api_key, status, project_name)")
         .eq("status", "active")
-        .lt("daily_usage", 1450);
+        .eq("api_keys.status", "active")
+        .order("daily_usage", { ascending: true });
 
       if (excludedIds.length > 0) {
         query = query.not("id", "in", `(${excludedIds.join(",")})`);
       }
 
-      const { data: keyData, error: keyError } = await query
-        .order("daily_usage", { ascending: true })
-        .limit(1)
-        .single();
+      const { data: keyModels, error: keyError } = await query;
 
-      if (keyError || !keyData) {
+      if (keyError || !keyModels || keyModels.length === 0) {
         console.error("[diagnoseCrop] No active keys available:", keyError);
         return { error: "نظام الذكاء الاصطناعي غير متاح حالياً (جميع المفاتيح مستنفدة)" };
       }
 
-      const projectName: string = keyData.project_name ?? "gemini";
-      const modelName: string =
-        keyData.model_name ||
-        (projectName === "groq"
-          ? "llama-4-scout-17b-16e-instruct"
-          : "gemini-3.5-flash");
+      // Filter in JS to ensure daily_usage < daily_limit
+      const validKeys = keyModels.filter((km: any) => km.daily_usage < km.daily_limit);
+
+      if (validKeys.length === 0) {
+        console.error("[diagnoseCrop] All active AI keys have exceeded their daily limits.");
+        return { error: "نظام الذكاء الاصطناعي غير متاح حالياً (تم تجاوز حد الاستخدام)" };
+      }
+
+      const keyData = validKeys[0];
+
+      const projectName: string = keyData.api_keys.project_name ?? "gemini";
+      const modelName: string = keyData.model_name;
 
       console.log(
-        `[diagnoseCrop] Attempt ${attemptCount + 1}: provider=${projectName}, model=${modelName}, key=${keyData.id.slice(0, 6)}...`
+        `[diagnoseCrop] Attempt ${attemptCount + 1}: provider=${projectName}, model=${modelName}, key=${keyData.api_keys.id.slice(0, 6)}... (model usage: ${keyData.daily_usage})`
       );
 
       const { url, body: reqBody, headers } = buildDistributorProviderRequest(
         projectName,
         modelName,
-        keyData.api_key,
+        keyData.api_keys.api_key,
         promptText,
         base64Data
       );
@@ -332,16 +336,16 @@ Return a JSON object strictly matching this format without markdown code blocks 
 
       if (!response.ok) {
         if (response.status === 429) {
-          console.warn(`[diagnoseCrop] Key ${keyData.id} hit rate limit (429). Rotating...`);
+          console.warn(`[diagnoseCrop] Key model ${keyData.id} hit rate limit (429). Rotating...`);
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabaseAdmin as any)
-            .from("api_keys")
+            .from("api_key_models")
             .update({ status: "rate_limited" })
             .eq("id", keyData.id);
           return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
         }
         if (response.status === 503) {
-          console.warn(`[diagnoseCrop] Key ${keyData.id} overloaded (503). Rotating...`);
+          console.warn(`[diagnoseCrop] Key model ${keyData.id} overloaded (503). Rotating...`);
           await new Promise((r) => setTimeout(r, 3000));
           return attemptDiagnosis(attemptCount + 1, [...excludedIds, keyData.id]);
         }
@@ -352,7 +356,7 @@ Return a JSON object strictly matching this format without markdown code blocks 
       // Success — increment daily usage
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabaseAdmin as any)
-        .from("api_keys")
+        .from("api_key_models")
         .update({ daily_usage: keyData.daily_usage + 1 })
         .eq("id", keyData.id);
 
