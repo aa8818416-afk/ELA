@@ -53,6 +53,7 @@ export type Database = {
           daily_limit: number
           status: string
           created_at: string
+          thinking_level: string | null
         }
         Insert: {
           id?: string
@@ -62,6 +63,7 @@ export type Database = {
           daily_limit?: number
           status?: string
           created_at?: string
+          thinking_level?: string | null
         }
         Update: {
           id?: string
@@ -71,6 +73,7 @@ export type Database = {
           daily_limit?: number
           status?: string
           created_at?: string
+          thinking_level?: string | null
         }
         Relationships: [
           {

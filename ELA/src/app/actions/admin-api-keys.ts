@@ -107,3 +107,19 @@ export async function updateKeyModelLimit(id: string, dailyLimit: number) {
   revalidatePath("/admin/api-keys");
   return { success: true };
 }
+
+export async function updateKeyModelThinkingLevel(id: string, thinkingLevel: string | null) {
+  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("api_key_models")
+    .update({ thinking_level: thinkingLevel })
+    .eq("id", id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/admin/api-keys");
+  return { success: true };
+}
