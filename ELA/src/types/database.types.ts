@@ -110,6 +110,18 @@ export type Database = {
           profile_id: string
           village: string | null
           wallet_balance: number
+          full_name: string | null
+          email: string | null
+          governorate: string | null
+          center: string | null
+          main_road: string | null
+          village_name: string | null
+          landmark: string | null
+          latitude: number | null
+          longitude: number | null
+          supervised_villages: string[] | null
+          total_acres: number | null
+          status: Database["public"]["Enums"]["distributor_status"]
         }
         Insert: {
           active_status?: boolean
@@ -117,6 +129,18 @@ export type Database = {
           profile_id: string
           village?: string | null
           wallet_balance?: number
+          full_name?: string | null
+          email?: string | null
+          governorate?: string | null
+          center?: string | null
+          main_road?: string | null
+          village_name?: string | null
+          landmark?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          supervised_villages?: string[] | null
+          total_acres?: number | null
+          status?: Database["public"]["Enums"]["distributor_status"]
         }
         Update: {
           active_status?: boolean
@@ -124,6 +148,18 @@ export type Database = {
           profile_id?: string
           village?: string | null
           wallet_balance?: number
+          full_name?: string | null
+          email?: string | null
+          governorate?: string | null
+          center?: string | null
+          main_road?: string | null
+          village_name?: string | null
+          landmark?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          supervised_villages?: string[] | null
+          total_acres?: number | null
+          status?: Database["public"]["Enums"]["distributor_status"]
         }
         Relationships: [
           {
@@ -138,24 +174,27 @@ export type Database = {
       farmers: {
         Row: {
           current_crop: string | null
-          distributor_id: string | null
+          distributor_id: string
           farm_profile: Json | null
           land_size: number | null
           profile_id: string
+          pin_hash: string | null
         }
         Insert: {
           current_crop?: string | null
-          distributor_id?: string | null
+          distributor_id: string
           farm_profile?: Json | null
           land_size?: number | null
           profile_id: string
+          pin_hash?: string | null
         }
         Update: {
           current_crop?: string | null
-          distributor_id?: string | null
+          distributor_id?: string
           farm_profile?: Json | null
           land_size?: number | null
           profile_id?: string
+          pin_hash?: string | null
         }
         Relationships: [
           {
@@ -473,6 +512,10 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      get_my_distributor_status: {
+        Args: never
+        Returns: Database["public"]["Enums"]["distributor_status"]
+      }
       merge_farm_profile: {
         Args: {
           farmer_id: string
@@ -486,6 +529,7 @@ export type Database = {
       order_status: "pending" | "in_transit" | "delivered" | "cancelled"
       payment_status: "unpaid" | "paid"
       user_role: "admin" | "distributor" | "farmer"
+      distributor_status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -616,6 +660,7 @@ export const Constants = {
       order_status: ["pending", "in_transit", "delivered", "cancelled"],
       payment_status: ["unpaid", "paid"],
       user_role: ["admin", "distributor", "farmer"],
+      distributor_status: ["PENDING_APPROVAL", "APPROVED", "REJECTED"],
     },
   },
 } as const
