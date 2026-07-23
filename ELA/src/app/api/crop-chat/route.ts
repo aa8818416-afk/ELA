@@ -6,10 +6,18 @@ import type { Database } from "@/types/database.types";
 interface GeminiPart {
     text?: string;
     inline_data?: { mime_type: string; data: string };
+    functionCall?: {
+        name: string;
+        args: Record<string, any>;
+    };
+    functionResponse?: {
+        name: string;
+        response: Record<string, any>;
+    };
 }
 
 interface ChatMessage {
-    role: "user" | "model";
+    role: "user" | "model" | "function";
     parts: GeminiPart[];
 }
 
@@ -20,14 +28,79 @@ interface RequestHistoryItem {
 }
 
 /**
+ * Single Source of Truth for Default Profile Values
+ */
+export const DEFAULT_FARM_DEFAULTS = {
+    sprayer_capacity: "رشاشة ظهرية 20 لتر",
+    land_area: "1 فدان",
+    irrigation_type: "ري غمر",
+};
+
+/**
+ * Top 20 Egyptian Crops + General & Other Scope Enum
+ */
+export const EGYPTIAN_CROP_ENUM = [
+    "general",
+    "قمح",
+    "طماطم",
+    "بطاطس",
+    "بصل",
+    "ذرة",
+    "قطن",
+    "أرز",
+    "برسيم",
+    "قصب السكر",
+    "بنجر السكر",
+    "خيار",
+    "كوسة",
+    "باذنجان",
+    "فلفل",
+    "ثوم",
+    "فراولة",
+    "عنب",
+    "مانجو",
+    "موالح",
+    "فول بلدي",
+    "other_crop",
+] as const;
+
+/**
+ * Gemini Tool Declaration for Atomic Farmer Profile Updating
+ */
+const farmProfileToolDeclaration = {
+    functionDeclarations: [
+        {
+            name: "update_farm_profile",
+            description: "استخدم هذه الأداة فوراً عندما يؤكد المزارع حقيقة أو معلومة دائمة عن أرضه، معداته، ريه، أو محصوله.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    target_scope: {
+                        type: "STRING",
+                        enum: [...EGYPTIAN_CROP_ENUM],
+                        description: "حدد نطاق المعلومة: اختر 'general' للمعدات أو البيانات العامة، أو اختر اسم المحصول."
+                    },
+                    properties_to_update: {
+                        type: "OBJECT",
+                        properties: {
+                            sprayer_capacity: { type: "STRING", description: "سعة الرشاشة أو الموتور (مثال: '20 لتر'، '600 لتر')" },
+                            land_area: { type: "STRING", description: "مساحة الأرض (مثال: '2 فدان'، '12 قيراط')" },
+                            irrigation_type: { type: "STRING", enum: ["تنقيط", "غمر", "رش", "أخرى"], description: "طريقة الري" },
+                            seed_variety: { type: "STRING", description: "نوع الصنف أو التقاوي (مثال: 'سدس 12')" },
+                            soil_type: { type: "STRING", enum: ["طينية", "رملية", "صفراء", "أخرى"], description: "نوع التربة" },
+                            custom_notes: { type: "STRING", description: "أي معلومة إضافية هامة لم تندرج تحت ما سبق" }
+                        },
+                        description: "قم بملء الحقول التي ذكرها المزارع فقط، واترك الباقي فارغاً."
+                    }
+                },
+                required: ["target_scope", "properties_to_update"]
+            }
+        }
+    ]
+};
+
+/**
  * POST /api/crop-chat
- * Accepts: {
- *   history: { role: 'user' | 'model', content: string, imageBase64?: string }[],
- *   message: string,
- *   imageBase64?: string // Optional image for the current message
- * }
- * Performs AI chat with Gemini + Key Rotation.
- * Returns: { success: true, text: string }
  */
 export async function POST(request: Request) {
     try {
@@ -37,9 +110,12 @@ export async function POST(request: Request) {
         const {
             data: { user: currentUser },
         } = await supabase.auth.getUser();
+
         if (!currentUser) {
             return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
         }
+
+        const userId = currentUser.id;
 
         const body = await request.json();
         const { history, message, imageBase64 } = body as {
@@ -55,7 +131,7 @@ export async function POST(request: Request) {
             );
         }
 
-        // Admin client (service_role) — bypasses RLS so the server can read/update api_keys.
+        // Admin client (service_role) — bypasses RLS so the server can read/update api_keys & profiles.
         const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
         if (!serviceRoleKey) {
             console.error(
@@ -71,7 +147,20 @@ export async function POST(request: Request) {
             serviceRoleKey
         );
 
-        // 2. Fetch all products to inject into the system prompt.
+        // 2. Fetch fresh farmer profile on every message request
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: farmerRow } = await (supabaseAdmin as any)
+            .from("farmers")
+            .select("farm_profile")
+            .eq("profile_id", userId)
+            .maybeSingle();
+
+        const farmerProfile = (farmerRow?.farm_profile as Record<string, any>) || {};
+        const farmerProfileFormatted = Object.keys(farmerProfile).length > 0
+            ? JSON.stringify(farmerProfile, null, 2)
+            : "لا توجد بيانات مسجلة مسبقاً لمزرعة هذا المزارع.";
+
+        // 3. Fetch all products to inject into the system prompt.
         const { data: products } = await supabase
             .from("products")
             .select("id, name_ar, active_ingredient, price_to_farmer, stock_status");
@@ -79,25 +168,37 @@ export async function POST(request: Request) {
         const productsContext =
             products
                 ?.map(
-                    (p: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
+                    (p: any) =>
                         `- الاسم: ${p.name_ar} | المادة الفعالة: ${p.active_ingredient ?? "غير محددة"} | السعر للمزارع: ${p.price_to_farmer} جنيهاً | متوفر: ${p.stock_status ? "نعم" : "لا"}`
                 )
                 .join("\n") || "لا توجد منتجات متوفرة حالياً في المعرض.";
 
-        // 3. Define System Prompt for the AI chat
+        // 4. Define System Prompt for the AI chat
         const systemPrompt = `أنت مرشد زراعي وخبير ذكي وودود لمساعدة الفلاحين والمزارعين في مصر عبر منصة ELA.
 مهمتك هي الإجابة عن تساؤلات المزارع بخصوص المحاصيل، الأمراض، طرق الري والتسميد
 ومكافحة الآفات.
 
 أسلوب التحدث واللغة:
 
-1.  تحدث بـ اللغة العربية الفصحى المعاصرة والمبسطة جداً (لتسهيل قراءتها صوتياً
-    بدقة عالية من محرك Edge TTS دون أخطاء نطق)، ولكن بأسلوب مليء بالدفء
-    والتعاطف، بحيث يشعر المزارع أنك رفيق ومزارع خبير مثله تماماً، يفهم تعبه
-    ويقدر جهده ويشاركه مشاعره بحب وأخوة، وليس مجرد مرشد أكاديمي رسمي.
-2.  استخدم عبارات ترحيبية وتشجيعية دافئة تدل على المودة والأخوة والزمالة في
-    الحقل (مثل: "أعانك الله يا أخي"، "بارك الله في رزقك وزرعك"، "خطوة ممتازة
-    لزيادة إنتاجك"، "أهلاً بك يا صديقي").
+1. تحدث بـ اللغة العربية الفصحى المعاصرة والمبسطة جداً (لتسهيل قراءتها صوتياً بدقة عالية من محرك Edge TTS دون أخطاء نطق)، ولكن بأسلوب لبق وودود ومحترم بدون إفراط أو تكرار ممل.
+2. الترحيب (Welcome Rule): رحب بالمزارع (مثل: "أهلاً بك يا أخي" أو "أهلاً بك يا حاج") في بداية المحادثة فقط (إذا كان هذا هو السؤال الأول في الشات ولا يوجد سجل محادثة سابق). في الرسائل التالية، اجب مباشرة وبشكل طبيعي ولبق دون تكرار عبارات الترحيب في كل رد.
+
+إليك ملف المزارع الحالي المسجل لدينا (Farmer Profile):
+${farmerProfileFormatted}
+
+القيم الافتراضية عند عدم توفر المعلومة في الملف:
+- سعة الرشاشة الافتراضية: ${DEFAULT_FARM_DEFAULTS.sprayer_capacity}
+- مساحة الأرض الافتراضية: ${DEFAULT_FARM_DEFAULTS.land_area}
+- طريقة الري الافتراضية: ${DEFAULT_FARM_DEFAULTS.irrigation_type}
+
+قواعد ملف المزارع واستخدام الأدوات (Farm Profile & Tool Rules):
+
+1. أولوية معلومات المساحة (land_area Override Rule): عند الإجابة أو حساب الكميات الخاصة بمحصول معين (مثل القمح)، تحقق أولاً إذا كان للمحصول مساحة خاصة به في ملف المزارع تحت اسم المحصول (مثال: farm_profile["قمح"]["land_area"]). إذا وجدت استخدمها فوراً لحسابات القمح. أما إذا لم تجد، استخدم المساحة العامة من (farm_profile["general"]["land_area"])، وإذا لم توجد أيهما استخدم المساحة الافتراضية (${DEFAULT_FARM_DEFAULTS.land_area}).
+2. شفافية معيار الحساب والتأكيد الضمني (Calculations & Implicit Confirmation Rule):
+   - يطبق هذا التوضيح فقط وحصرياً في حالات الرش، الري، والتسميد، أو أي استفسار يتضمن حسابات ترتبط بحجم الأرض، سعة الرشاشة، أو عدد الرشاشات/الموتورات.
+   - عند حساب الكميات في هذه الحالات، واجه المزارع بالمعيار الذي بنيت عليه الحسبة ووضح له الافتراض إذا تم تحديث بياناته حديثاً (مثال: "تمام يا حاج، ومن أجل أن أريحك في المرات القادمة، أنا من الآن سأفترض أنك [المعلومة المخزنة/المحسوبة] وسأحسب لك عليها مباشرة. هذه النصيحة تمت على أساس [سعة الرشاشة ومساحة الأرض]، إذا كان لديك معدات أو مساحة مختلفة أخبرني لنعدلها معاً").
+   - لا تكرر هذا النص الحسابي في الأسئلة العامة أو الاستفسارات التي لا تحتوي على حسابات كميات أو رش أو ري.
+3. استدعاء أداة التحديث (update_farm_profile Tool): استخدم هذه الأداة فوراً وبدون تردد عندما يؤكد المزارع حقيقة أو معلومة دائمة عن أرضه أو معداته أو ريه أو محصوله. إذا ذكر المزارع محصولاً غير موجود في قائمة الاختيارات، اختر 'other_crop'. يمنع استخدام مصطلحات تقنية مثل ("قاعدة بيانات"، "سجلت داتا").
 
 إليك قاعدة بيانات المنتجات الخاصة بنا (يوصى بها فقط إذا كانت متوفرة أي "متوفر:
 نعم"): ${productsContext}
@@ -142,10 +243,9 @@ export async function POST(request: Request) {
 خاطئة أو تقطعاً غير مبرر في الصوت أثناء التحويل. لا تستخدم النقاط (Bullet
 points) أو القوائم المرقمة؛ بل اجعل النص يتدفق كفقرة حوارية مسترسلة ومريحة في
 الاستماع.
-
 `;
 
-        // 4. Build Gemini contents array preserving original images at their correct turns
+        // 5. Build Gemini contents array preserving original images at their correct turns
         const contents: ChatMessage[] = [];
 
         // Add previous history
@@ -174,24 +274,12 @@ points) أو القوائم المرقمة؛ بل اجعل النص يتدفق �
             });
         }
 
-        const requestBody = {
-            contents: [
-                ...contents,
-                {
-                    role: "user" as const,
-                    parts: currentUserParts,
-                },
-            ],
-            systemInstruction: {
-                parts: [{ text: systemPrompt }],
-            },
-            generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 1024,
-            },
-        };
+        contents.push({
+            role: "user",
+            parts: currentUserParts,
+        });
 
-        // 5. Recursive Key Rotation (same pattern as crop-doctor)
+        // 6. Recursive Key Rotation with Tool Support
         async function attemptChat(attemptCount = 0, excludedIds: string[] = []): Promise<NextResponse> {
             if (attemptCount > 5) {
                 return NextResponse.json(
@@ -238,14 +326,25 @@ points) أو القوائم المرقمة؛ بل اجعل النص يتدفق �
             }
 
             const keyData = validKeys[0];
-
             const modelName = keyData.model_name || "gemini-2.0-flash";
             const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_keys.api_key}`;
 
             console.log(`[crop-chat] Attempt ${attemptCount + 1}: Using model ${modelName} on key ${keyData.api_keys.id.slice(0, 6)}... (model usage: ${keyData.daily_usage})`);
 
+            const requestPayload = {
+                contents,
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }],
+                },
+                tools: [farmProfileToolDeclaration],
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 1024,
+                },
+            };
+
             const controller = new AbortController();
-            const timeoutMs = 60_000; // slightly longer for multimodal
+            const timeoutMs = 60_000;
             const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
             let response: Response;
@@ -253,7 +352,7 @@ points) أو القوائم المرقمة؛ بل اجعل النص يتدفق �
                 response = await fetch(geminiEndpoint, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(requestBody),
+                    body: JSON.stringify(requestPayload),
                     signal: controller.signal,
                 });
             } catch (fetchError) {
@@ -287,7 +386,6 @@ points) أو القوائم المرقمة؛ بل اجعل النص يتدفق �
                     errorBody
                 );
                 if (response.status === 429) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     await (supabaseAdmin as any)
                         .from("api_key_models")
                         .update({ status: "rate_limited" })
@@ -307,17 +405,111 @@ points) أو القوائم المرقمة؛ بل اجعل النص يتدفق �
                 );
             }
 
-            // Success — increment usage
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // Increment usage
             await (supabaseAdmin as any)
                 .from("api_key_models")
                 .update({ daily_usage: keyData.daily_usage + 1 })
                 .eq("id", keyData.id);
 
             const data = await response.json();
-            const parts = data.candidates?.[0]?.content?.parts ?? [];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const resultText = parts.find((p: any) => !p.thought)?.text;
+            const candidates = data.candidates?.[0];
+            const candidateParts: GeminiPart[] = candidates?.content?.parts ?? [];
+
+            // Check if Gemini invoked functionCall
+            const functionCallPart = candidateParts.find((p) => p.functionCall);
+
+            if (functionCallPart && functionCallPart.functionCall) {
+                const { name, args } = functionCallPart.functionCall;
+                console.log(`[crop-chat] Gemini called tool ${name} with args:`, args);
+
+                if (name === "update_farm_profile") {
+                    const { target_scope, properties_to_update } = args;
+
+                    const cleanedData = Object.fromEntries(
+                        Object.entries(properties_to_update || {}).filter(
+                            ([_, v]) => v !== undefined && v !== null && v !== ""
+                        )
+                    );
+
+                    if (Object.keys(cleanedData).length > 0) {
+                        const { error: rpcError } = await (supabaseAdmin as any).rpc("merge_farm_profile", {
+                            farmer_id: userId,
+                            target_scope: target_scope || "general",
+                            new_data: cleanedData,
+                        });
+
+                        if (rpcError) {
+                            console.error("[crop-chat] RPC merge_farm_profile failed:", rpcError);
+                        } else {
+                            console.log(`[crop-chat] Successfully merged farm profile for farmer ${userId} under scope '${target_scope}'`);
+                        }
+                    }
+
+                    // Append tool invocation and tool response to contents for second turn
+                    const updatedContents: ChatMessage[] = [
+                        ...contents,
+                        {
+                            role: "model",
+                            parts: candidateParts,
+                        },
+                        {
+                            role: "function",
+                            parts: [
+                                {
+                                    functionResponse: {
+                                        name: "update_farm_profile",
+                                        response: {
+                                            name: "update_farm_profile",
+                                            content: {
+                                                status: "success",
+                                                message: "تم دمج وتحديث البيانات بنجاح في كشكول المزارع."
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ];
+
+                    // Issue follow-up request to get Gemini's natural text output
+                    const followUpPayload = {
+                        contents: updatedContents,
+                        systemInstruction: {
+                            parts: [{ text: systemPrompt }],
+                        },
+                        generationConfig: {
+                            temperature: 0.7,
+                            maxOutputTokens: 1024,
+                        },
+                    };
+
+                    try {
+                        const followUpRes = await fetch(geminiEndpoint, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(followUpPayload),
+                        });
+
+                        if (followUpRes.ok) {
+                            const followUpData = await followUpRes.json();
+                            const followUpParts = followUpData.candidates?.[0]?.content?.parts ?? [];
+                            const finalFollowUpText = followUpParts.find((p: any) => !p.thought && p.text)?.text;
+
+                            if (finalFollowUpText) {
+                                return NextResponse.json({
+                                    success: true,
+                                    text: finalFollowUpText,
+                                });
+                            }
+                        }
+                    } catch (followUpErr) {
+                        console.error("[crop-chat] Follow up request failed after tool execution:", followUpErr);
+                    }
+                }
+            }
+
+            // Standard text response (when no function call or fallback)
+            const resultText = candidateParts.find((p: any) => !p.thought && p.text)?.text;
 
             if (!resultText) {
                 console.error("[crop-chat] Gemini returned no text content:", data);

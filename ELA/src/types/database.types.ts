@@ -139,18 +139,21 @@ export type Database = {
         Row: {
           current_crop: string | null
           distributor_id: string | null
+          farm_profile: Json | null
           land_size: number | null
           profile_id: string
         }
         Insert: {
           current_crop?: string | null
           distributor_id?: string | null
+          farm_profile?: Json | null
           land_size?: number | null
           profile_id: string
         }
         Update: {
           current_crop?: string | null
           distributor_id?: string | null
+          farm_profile?: Json | null
           land_size?: number | null
           profile_id?: string
         }
@@ -469,6 +472,14 @@ export type Database = {
       get_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      merge_farm_profile: {
+        Args: {
+          farmer_id: string
+          target_scope: string
+          new_data: Json
+        }
+        Returns: void
       }
     }
     Enums: {
