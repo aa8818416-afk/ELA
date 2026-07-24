@@ -6,6 +6,7 @@ import { saveProduct } from "@/app/actions/admin-products";
 import { saveGroupBuyOffer, deleteGroupBuyOffer } from "@/app/actions/admin-group-buys";
 import type { Database } from "@/types/database.types";
 import { Package, Plus, Edit2, X, CheckCircle2, TrendingUp, Loader2, Image as ImageIcon, Trash2, Percent, Calendar } from "lucide-react";
+import { ZoomableImage } from "@/components/ui/ImageModal";
 
 type Product = Database["public"]["Tables"]["products"]["Row"];
 type GroupBuyOffer = Database["public"]["Tables"]["group_buy_offers"]["Row"] & {
@@ -356,7 +357,7 @@ export default function ProductsPage() {
                       <td className="px-6 py-4 font-bold text-slate-800">
                         <div className="flex items-center gap-3">
                           {p.image_url ? (
-                            <img src={p.image_url} alt={p.name_ar} className="w-10 h-10 object-cover rounded-lg border border-slate-200" />
+                            <ZoomableImage src={p.image_url} alt={p.name_ar} className="w-10 h-10 object-cover rounded-lg border border-slate-200" />
                           ) : (
                             <div className="w-10 h-10 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400">
                               <ImageIcon className="w-5 h-5" />

@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import { Package } from "lucide-react";
+import { Package, Clock, CheckCircle2, AlertCircle, ShoppingBag } from "lucide-react";
+import { ZoomableImage } from "@/components/ui/ImageModal";
 
 const statusMap: Record<
   string,
@@ -160,7 +161,7 @@ export default async function FarmerOrdersPage() {
                       >
                         <div className="flex items-center gap-2.5">
                           {item.products?.image_url ? (
-                            <img
+                            <ZoomableImage
                               src={item.products.image_url}
                               alt={item.products.name_ar}
                               className="w-8 h-8 rounded-lg object-cover bg-slate-800 border border-slate-800"

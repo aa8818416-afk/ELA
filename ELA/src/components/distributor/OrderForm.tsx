@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { createOrder } from "@/app/actions/distributor";
 import { ShoppingCart, Loader2, CheckCircle2, ChevronDown, Filter, X, Search } from "lucide-react";
+import { ZoomableImage } from "@/components/ui/ImageModal";
 
 type Farmer = { profile_id: string; full_name: string };
 type Product = {
@@ -348,7 +349,7 @@ export default function OrderForm({
           </label>
           <div className="flex gap-3 items-center">
             {selectedProduct?.image_url ? (
-              <img
+              <ZoomableImage
                 src={selectedProduct.image_url}
                 alt={selectedProduct.name_ar}
                 className="w-12 h-12 rounded-xl object-cover bg-slate-800 shrink-0 border border-slate-700"

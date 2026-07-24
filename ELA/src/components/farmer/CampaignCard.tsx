@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { TrendingUp, Share2, Calendar } from "lucide-react";
+import { ZoomableImage } from "@/components/ui/ImageModal";
 
 interface CampaignCardProps {
   campaign: {
@@ -120,7 +121,7 @@ export default function CampaignCard({
           </div>
           {/* Product Image or Emoji Icon Placeholder */}
           {product.image_url ? (
-            <img
+            <ZoomableImage
               src={product.image_url}
               alt={product.name_ar}
               className="w-14 h-14 rounded-2xl object-cover border border-emerald-500/20 shrink-0"

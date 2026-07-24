@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { Image as ImageIcon, Filter, X, TrendingUp } from "lucide-react";
+import { ZoomableImage } from "@/components/ui/ImageModal";
 
 type Product = {
   id: string;
@@ -204,7 +205,7 @@ export default function DistributorProductsPage() {
                   {/* Image & Basic Info */}
                   <div className="flex gap-4 items-start mb-4">
                     {p.image_url ? (
-                      <img
+                      <ZoomableImage
                         src={p.image_url}
                         alt={p.name_ar}
                         className="w-20 h-20 rounded-2xl object-cover border border-slate-800 bg-slate-950 shrink-0"

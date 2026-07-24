@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { Image as ImageIcon, Filter, X } from "lucide-react";
+import { ZoomableImage } from "@/components/ui/ImageModal";
 
 type Product = {
   id: string;
@@ -200,7 +201,7 @@ export default function FarmerProductsPage() {
               {/* Image */}
               <div className="shrink-0">
                 {p.image_url ? (
-                  <img
+                  <ZoomableImage
                     src={p.image_url}
                     alt={p.name_ar}
                     className="w-16 h-16 rounded-xl object-cover border border-slate-700"
