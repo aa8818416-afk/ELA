@@ -36,3 +36,30 @@ export async function settleDistributorWallet(profileId: string) {
   revalidatePath("/admin/distributors");
   return { success: true };
 }
+
+export async function settleDistributorSales(profileId: string, orderIds?: string[]) {
+  const supabase = await createClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
+    .from("orders")
+    .update({ payment_status: "paid" })
+    .eq("distributor_id", profileId)
+    .eq("status", "delivered");
+
+  if (orderIds && orderIds.length > 0) {
+    query = query.in("id", orderIds);
+  } else {
+    query = query.eq("payment_status", "unpaid");
+  }
+
+  const { error } = await query;
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/admin/distributors");
+  return { success: true };
+}
+
