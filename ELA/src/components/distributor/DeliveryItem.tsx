@@ -22,7 +22,12 @@ type OrderProp = {
   items?: OrderItemProp[];
 };
 
-export default function DeliveryItem({ order }: { order: OrderProp }) {
+interface DeliveryItemProps {
+  order: OrderProp;
+  onDelivered?: (orderId: string) => void;
+}
+
+export default function DeliveryItem({ order, onDelivered }: DeliveryItemProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(order.status === "delivered");
@@ -40,6 +45,8 @@ export default function DeliveryItem({ order }: { order: OrderProp }) {
     } else {
       setIsSuccess(true);
       setIsLoading(false);
+      // Notify parent to move order to completed tab immediately
+      onDelivered?.(order.id);
     }
   };
 
