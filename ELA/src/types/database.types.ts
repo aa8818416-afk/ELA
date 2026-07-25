@@ -115,7 +115,6 @@ export type Database = {
           governorate: string | null
           center: string | null
           main_road: string | null
-          village_name: string | null
           landmark: string | null
           latitude: number | null
           longitude: number | null
@@ -134,7 +133,6 @@ export type Database = {
           governorate?: string | null
           center?: string | null
           main_road?: string | null
-          village_name?: string | null
           landmark?: string | null
           latitude?: number | null
           longitude?: number | null
@@ -153,7 +151,6 @@ export type Database = {
           governorate?: string | null
           center?: string | null
           main_road?: string | null
-          village_name?: string | null
           landmark?: string | null
           latitude?: number | null
           longitude?: number | null

@@ -20,7 +20,6 @@ type DistributorWithProfile = {
   email: string | null;
   governorate: string | null;
   center: string | null;
-  village_name: string | null;
   landmark: string | null;
   main_road: string | null;
   latitude: number | null;
@@ -84,7 +83,7 @@ function DistributorDetailsModal({
             <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">العنوان</h4>
             <InfoRow label="المحافظة" value={dist.governorate} />
             <InfoRow label="المركز" value={dist.center} />
-            <InfoRow label="القرية" value={dist.village_name || dist.village} />
+            <InfoRow label="القرية" value={dist.village} />
             <InfoRow label="الطريق الرئيسي" value={dist.main_road} />
             <InfoRow label="المعلم المميز" value={dist.landmark} />
             {dist.latitude && dist.longitude && (
@@ -277,7 +276,7 @@ export default function DistributorsPage() {
       .from("distributors")
       .select(`
         profile_id, active_status, wallet_balance, pending_commission, village,
-        full_name, email, governorate, center, village_name, landmark, main_road,
+        full_name, email, governorate, center, landmark, main_road,
         latitude, longitude, supervised_villages, total_acres, status,
         profiles(full_name, phone)
       `)

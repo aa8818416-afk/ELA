@@ -129,14 +129,14 @@ export default function DistributorRegisterForm() {
         .map((v) => v.trim())
         .filter(Boolean);
 
-      const { error: distError } = await supabase.from("distributors").insert({
+      const { error: distError } = await (supabase as any).from("distributors").insert({
         profile_id: userId,
         full_name: fullName,
         email,
         governorate,
         center,
         main_road: mainRoad || null,
-        village_name: villageName,
+        village: villageName,
         landmark: landmark || null,
         latitude,
         longitude,
@@ -148,13 +148,13 @@ export default function DistributorRegisterForm() {
       if (distError) {
         // إذا الصف موجود مسبقاً (من تريجر آخر)، نحدّثه
         if (distError.code === "23505") {
-          await supabase.from("distributors").update({
+          await (supabase as any).from("distributors").update({
             full_name: fullName,
             email,
             governorate,
             center,
             main_road: mainRoad || null,
-            village_name: villageName,
+            village: villageName,
             landmark: landmark || null,
             latitude,
             longitude,
