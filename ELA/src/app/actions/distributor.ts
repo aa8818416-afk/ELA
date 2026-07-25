@@ -451,7 +451,6 @@ export async function markOrderDelivered(orderId: string) {
       .from("orders")
       .update({
         status: "delivered",
-        payment_status: "paid"
       })
       .eq("id", orderId)
       .eq("distributor_id", currentUser.id);
