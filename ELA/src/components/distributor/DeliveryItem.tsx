@@ -3,6 +3,14 @@
 import { useState } from "react";
 import { markOrderDelivered } from "@/app/actions/distributor";
 import { Loader2, CheckCircle, Package } from "lucide-react";
+import { ZoomableImage } from "@/components/ui/ImageModal";
+
+type OrderItemProp = {
+  id: string;
+  name_ar: string;
+  image_url: string | null;
+  quantity?: number;
+};
 
 type OrderProp = {
   id: string;
@@ -11,6 +19,7 @@ type OrderProp = {
   village: string | null;
   items_count: number;
   status: string;
+  items?: OrderItemProp[];
 };
 
 export default function DeliveryItem({ order }: { order: OrderProp }) {
@@ -34,23 +43,52 @@ export default function DeliveryItem({ order }: { order: OrderProp }) {
     }
   };
 
+  // Extract first product image if available
+  const firstItemWithImage = order.items?.find((item) => item.image_url);
+
   return (
     <div className={`bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 transition-colors ${isSuccess ? "opacity-50" : "hover:bg-slate-800/50"}`}>
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
 
-        <div className="flex gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 shrink-0">
-            <Package className="w-6 h-6 text-indigo-400" />
-          </div>
+        <div className="flex gap-4 items-start">
+          {firstItemWithImage?.image_url ? (
+            <ZoomableImage
+              src={firstItemWithImage.image_url}
+              alt={firstItemWithImage.name_ar}
+              className="w-14 h-14 rounded-2xl object-cover border border-slate-700/80 bg-slate-950 shrink-0"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 shrink-0">
+              <Package className="w-7 h-7 text-indigo-400" />
+            </div>
+          )}
           <div>
             <h4 className="text-white font-bold text-lg mb-1">{order.farmer_name}</h4>
-            <div className="flex items-center gap-3 text-sm text-slate-400">
-              <span className="bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
-                {order.items_count} أصناف
+            <div className="flex flex-wrap items-center gap-2.5 text-sm text-slate-400 mb-2">
+              <span className="bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 text-xs font-semibold text-indigo-300">
+                {order.items_count} {order.items_count === 1 ? "صنف" : "أصناف"}
               </span>
               <span>•</span>
               <span>{order.village || "قرية غير محددة"}</span>
             </div>
+
+            {/* List of items if available */}
+            {order.items && order.items.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {order.items.map((item) => (
+                  <div key={item.id} className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-2.5 py-1 rounded-xl text-xs text-slate-300">
+                    {item.image_url ? (
+                      <ZoomableImage
+                        src={item.image_url}
+                        alt={item.name_ar}
+                        className="w-5 h-5 rounded-md object-cover"
+                      />
+                    ) : null}
+                    <span>{item.name_ar}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

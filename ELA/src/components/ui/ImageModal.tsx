@@ -31,19 +31,19 @@ export function ImageModal({ isOpen, imageUrl, altText = "صورة المنتج"
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className="relative max-w-4xl max-h-[90vh] w-full flex flex-col items-center justify-center p-2"
+        className="relative max-w-3xl max-h-[80vh] w-full flex items-center justify-center m-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Scaled Image Container */}
-        <div className="relative overflow-hidden max-h-[85vh] max-w-full rounded-2xl border border-slate-700/60 bg-slate-900/90 shadow-2xl flex items-center justify-center group">
+        {/* Scaled Image Container centered strictly */}
+        <div className="relative overflow-hidden max-h-[75vh] max-w-full rounded-2xl border border-slate-700/80 bg-slate-900/95 shadow-2xl flex items-center justify-center group my-auto">
           {/* Close Button Inside Container (Top-Right) */}
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 z-10 p-2.5 rounded-full bg-slate-900/80 hover:bg-red-600/90 text-white backdrop-blur-md transition-all border border-white/20 shadow-lg"
+            className="absolute top-3 right-3 z-20 p-2.5 rounded-full bg-slate-950/90 hover:bg-red-600 text-white backdrop-blur-md transition-all border border-white/20 shadow-xl"
             title="إغلاق والتصفح"
           >
             <X className="w-6 h-6" />
@@ -51,7 +51,7 @@ export function ImageModal({ isOpen, imageUrl, altText = "صورة المنتج"
 
           {/* Optional Alt Text Badge (Top-Left) */}
           {altText && (
-            <div className="absolute top-3 left-3 z-10 text-xs font-medium bg-slate-900/70 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-slate-200 pointer-events-none">
+            <div className="absolute top-3 left-3 z-10 text-xs font-medium bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-slate-200 pointer-events-none">
               {altText}
             </div>
           )}
@@ -59,7 +59,7 @@ export function ImageModal({ isOpen, imageUrl, altText = "صورة المنتج"
           <img
             src={imageUrl}
             alt={altText}
-            className="object-contain max-h-[85vh] w-auto max-w-full hover:scale-105 transition-transform duration-300"
+            className="object-contain max-h-[75vh] w-auto max-w-full hover:scale-105 transition-transform duration-300 p-1"
           />
         </div>
       </div>

@@ -24,7 +24,14 @@ export default async function DeliveriesPage() {
       farmers (
         profiles (full_name)
       ),
-      order_items (id)
+      order_items (
+        id,
+        quantity,
+        products (
+          name_ar,
+          image_url
+        )
+      )
     `)
     .eq("distributor_id", user.id)
     .in("status", ["pending", "in_transit", "delivered"])
@@ -43,13 +50,21 @@ export default async function DeliveriesPage() {
 
     const profileObj = Array.isArray(farmerProfile) ? farmerProfile[0] : farmerProfile;
 
+    const items = (order.order_items || []).map((item: any) => ({
+      id: item.id,
+      quantity: item.quantity,
+      name_ar: item.products?.name_ar || "منتج",
+      image_url: item.products?.image_url || null,
+    }));
+
     return {
       id: order.id,
       total_price: order.total_price,
       status: order.status,
       farmer_name: profileObj?.full_name || "اسم غير معروف",
       village: null, // Would fetch from distributors/farmers if stored there
-      items_count: order.order_items ? order.order_items.length : 0,
+      items_count: items.length,
+      items: items,
     };
   });
 
