@@ -353,6 +353,10 @@ export type Database = {
           stock_status: boolean
           target_crops: string[] | null
           wholesale_cost: number
+          package_size: number | null
+          package_unit: string | null
+          dose_unit: 'per_feddan' | 'per_100L' | null
+          dose_amount: number | null
         }
         Insert: {
           active_ingredient?: string | null
@@ -365,6 +369,10 @@ export type Database = {
           stock_status?: boolean
           target_crops?: string[] | null
           wholesale_cost?: number
+          package_size?: number | null
+          package_unit?: string | null
+          dose_unit?: 'per_feddan' | 'per_100L' | null
+          dose_amount?: number | null
         }
         Update: {
           active_ingredient?: string | null
@@ -377,6 +385,10 @@ export type Database = {
           stock_status?: boolean
           target_crops?: string[] | null
           wholesale_cost?: number
+          package_size?: number | null
+          package_unit?: string | null
+          dose_unit?: 'per_feddan' | 'per_100L' | null
+          dose_amount?: number | null
         }
         Relationships: []
       }

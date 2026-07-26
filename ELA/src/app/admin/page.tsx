@@ -61,6 +61,10 @@ export default function ProductsPage() {
     image_url: "",
     product_type: [] as string[],
     target_crops: [] as string[],
+    package_size: "" as number | "",
+    package_unit: "جرام" as string,
+    dose_unit: "" as "per_feddan" | "per_100L" | "",
+    dose_amount: "" as number | "",
   });
 
   // Group Buy States
@@ -128,6 +132,10 @@ export default function ProductsPage() {
       image_url: "",
       product_type: [],
       target_crops: [],
+      package_size: "",
+      package_unit: "جرام",
+      dose_unit: "",
+      dose_amount: "",
     });
     setImageFile(null);
     setIsModalOpen(true);
@@ -145,6 +153,10 @@ export default function ProductsPage() {
       image_url: product.image_url || "",
       product_type: product.product_type || [],
       target_crops: product.target_crops || [],
+      package_size: product.package_size ?? "",
+      package_unit: product.package_unit || "جرام",
+      dose_unit: (product.dose_unit as "per_feddan" | "per_100L") || "",
+      dose_amount: product.dose_amount ?? "",
     });
     setImageFile(null);
     setIsModalOpen(true);
@@ -180,7 +192,10 @@ export default function ProductsPage() {
 
     const payload = {
       ...formData,
-      image_url: finalImageUrl || null
+      image_url: finalImageUrl || null,
+      package_size: formData.package_size !== "" ? Number(formData.package_size) : null,
+      dose_unit: formData.dose_unit !== "" ? formData.dose_unit : null,
+      dose_amount: formData.dose_amount !== "" ? Number(formData.dose_amount) : null,
     };
 
     const res = await saveProduct(payload, editingId || undefined);
@@ -795,6 +810,113 @@ export default function ProductsPage() {
                   </label>
                 </div>
 
+              </div>
+
+              {/* Package Size Section */}
+              <div className="mb-4 border border-slate-200 rounded-xl p-4 bg-slate-50">
+                <label className="block text-sm font-bold text-slate-700 mb-3">📦 حجم العبوة</label>
+                <div className="flex gap-3 items-center">
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="مثال: 250"
+                    value={formData.package_size}
+                    onChange={(e) => setFormData({ ...formData, package_size: e.target.value === "" ? "" : Number(e.target.value) })}
+                    className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white text-slate-800"
+                  />
+                  <select
+                    value={formData.package_unit}
+                    onChange={(e) => setFormData({ ...formData, package_unit: e.target.value })}
+                    className="px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white text-slate-800 font-medium"
+                  >
+                    <option value="جرام">جرام</option>
+                    <option value="سم3">سم³</option>
+                    <option value="لتر">لتر</option>
+                    <option value="كيلوجرام">كيلوجرام</option>
+                  </select>
+                </div>
+                {formData.package_size !== "" && (
+                  <p className="mt-2 text-xs text-slate-400">حجم العبوة: <span className="font-semibold text-slate-600">{formData.package_size} {formData.package_unit}</span></p>
+                )}
+              </div>
+
+              {/* Dose Type Section */}
+              <div className="mb-4 border border-slate-200 rounded-xl p-4 bg-slate-50">
+                <label className="block text-sm font-bold text-slate-700 mb-3">💊 نوع الجرعة الموصى بها</label>
+                <div className="flex flex-col gap-3">
+                  {/* Option 1: Per Feddan */}
+                  <label className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                    formData.dose_unit === "per_feddan"
+                      ? "border-green-500 bg-green-50"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}>
+                    <input
+                      type="radio"
+                      name="dose_unit"
+                      value="per_feddan"
+                      checked={formData.dose_unit === "per_feddan"}
+                      onChange={() => setFormData({ ...formData, dose_unit: "per_feddan", dose_amount: "" })}
+                      className="mt-0.5 text-green-600 focus:ring-green-500"
+                    />
+                    <div className="flex-1">
+                      <span className="font-semibold text-slate-700 text-sm">🌾 لكل فدان (Per Feddan)</span>
+                      {formData.dose_unit === "per_feddan" && (
+                        <div className="mt-2">
+                          <label className="block text-xs text-slate-500 mb-1">مقدار الجرعة للفدان</label>
+                          <div className="flex gap-2 items-center">
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="مثال: 500"
+                              value={formData.dose_amount}
+                              onChange={(e) => setFormData({ ...formData, dose_amount: e.target.value === "" ? "" : Number(e.target.value) })}
+                              className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white text-slate-800 text-sm"
+                            />
+                            <span className="text-xs text-slate-500 whitespace-nowrap">{formData.package_unit || "وحدة"} / فدان</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+
+                  {/* Option 2: Per 100L */}
+                  <label className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                    formData.dose_unit === "per_100L"
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}>
+                    <input
+                      type="radio"
+                      name="dose_unit"
+                      value="per_100L"
+                      checked={formData.dose_unit === "per_100L"}
+                      onChange={() => setFormData({ ...formData, dose_unit: "per_100L", dose_amount: "" })}
+                      className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div className="flex-1">
+                      <span className="font-semibold text-slate-700 text-sm">💧 لكل 100 لتر ماء (Per 100L)</span>
+                      {formData.dose_unit === "per_100L" && (
+                        <div className="mt-2">
+                          <label className="block text-xs text-slate-500 mb-1">مقدار الجرعة لكل 100 لتر ماء</label>
+                          <div className="flex gap-2 items-center">
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="مثال: 50"
+                              value={formData.dose_amount}
+                              onChange={(e) => setFormData({ ...formData, dose_amount: e.target.value === "" ? "" : Number(e.target.value) })}
+                              className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-800 text-sm"
+                            />
+                            <span className="text-xs text-slate-500 whitespace-nowrap">{formData.package_unit || "وحدة"} / 100 لتر</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                </div>
+                {formData.dose_unit === "" && (
+                  <p className="mt-2 text-xs text-slate-400">اختياري — إذا تركت الجرعة فارغة لن يستطيع الـ AI حساب الكميات تلقائياً</p>
+                )}
               </div>
 
               {/* Product Type Multi-Select */}
