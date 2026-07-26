@@ -24,6 +24,8 @@ import {
     isTtsSupported,
     stopSpeaking,
 } from "@/utils/speech";
+import ProductRecommendationCard from "@/components/chat/ProductRecommendationCard";
+import type { RecommendedProduct } from "@/components/chat/QuickOrderModal";
 
 interface Message {
     id: string;
@@ -32,6 +34,7 @@ interface Message {
     timestamp: Date;
     /** Image specifically attached to this message (base64 preview) */
     imagePreview?: string;
+    recommendedProduct?: RecommendedProduct;
 }
 
 type FailedPayload = {
@@ -160,6 +163,7 @@ export default function FarmerChat() {
                     role: "model",
                     content: data.text,
                     timestamp: new Date(),
+                    recommendedProduct: data.recommendedProduct || undefined,
                 };
                 setMessages((prev) => [...prev, modelMsg]);
 
@@ -315,6 +319,11 @@ export default function FarmerChat() {
                                     }${!msg.content || msg.content === "📷" ? " italic opacity-70" : ""}`}
                             >
                                 {msg.content && msg.content !== "📷" && <p className="whitespace-pre-line">{msg.content}</p>}
+
+                                {/* Product Recommendation Card */}
+                                {msg.role === "model" && msg.recommendedProduct && (
+                                    <ProductRecommendationCard product={msg.recommendedProduct} userRole="farmer" />
+                                )}
 
                                 {/* TTS Speaker icon for model replies */}
                                 {msg.role === "model" && ttsSupported && (

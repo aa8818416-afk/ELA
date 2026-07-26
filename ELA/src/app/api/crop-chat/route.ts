@@ -163,15 +163,39 @@ export async function POST(request: Request) {
         // 3. Fetch all products to inject into the system prompt.
         const { data: products } = await supabase
             .from("products")
-            .select("id, name_ar, active_ingredient, price_to_farmer, stock_status");
+            .select("id, name_ar, active_ingredient, price_to_farmer, stock_status, image_url");
 
         const productsContext =
             products
                 ?.map(
                     (p: any) =>
-                        `- الاسم: ${p.name_ar} | المادة الفعالة: ${p.active_ingredient ?? "غير محددة"} | السعر للمزارع: ${p.price_to_farmer} جنيهاً | متوفر: ${p.stock_status ? "نعم" : "لا"}`
+                        `- المعرف: ${p.id} | الاسم: ${p.name_ar} | المادة الفعالة: ${p.active_ingredient ?? "غير محددة"} | السعر للمزارع: ${p.price_to_farmer} جنيهاً | متوفر: ${p.stock_status ? "نعم" : "لا"}`
                 )
                 .join("\n") || "لا توجد منتجات متوفرة حالياً في المعرض.";
+
+        // Helper to extract product recommendation tag
+        const processResponseText = (rawText: string) => {
+            const match = rawText.match(/\[RECOMMEND_PRODUCT:([a-zA-Z0-9_-]+)\]/);
+            if (!match) {
+                return { cleanText: rawText, recommendedProduct: null };
+            }
+            const productId = match[1];
+            const cleanText = rawText.replace(/\[RECOMMEND_PRODUCT:[a-zA-Z0-9_-]+\]/g, "").trim();
+            const matchedProduct = (products as any[])?.find((p: any) => p.id === productId);
+            if (!matchedProduct) {
+                return { cleanText, recommendedProduct: null };
+            }
+            return {
+                cleanText,
+                recommendedProduct: {
+                    id: matchedProduct.id,
+                    name_ar: matchedProduct.name_ar,
+                    price_to_farmer: matchedProduct.price_to_farmer,
+                    image_url: matchedProduct.image_url || null,
+                    active_ingredient: matchedProduct.active_ingredient || null,
+                },
+            };
+        };
 
         // 4. Define System Prompt for the AI chat
         const systemPrompt = `أنت مرشد زراعي وخبير ذكي وودود لمساعدة الفلاحين والمزارعين في مصر عبر منصة ELA.
@@ -213,6 +237,7 @@ ${farmerProfileFormatted}
     مناسباً، قل له أن يستشير سفير القرية لتوفير العلاج الأنسب.
 4.  حافظ على ردود واضحة ومباشرة وليست طويلة جداً لتناسب القراءة على شاشات الهاتف
     المحمول وتوليد الصوت بكفاءة وسرعة.
+5.  إذا قمت بترشيح أو اقتراح أو إجابة عن منتج معين متوفر في القائمة أعلاه للمستخدم، يجب عليك كتابة كود التوصية بالمنتج في نهاية ردك بالطريقة التالية تماماً: [RECOMMEND_PRODUCT:product_id] (حيث product_id هو المعرف الموضح بجانب اسم المنتج في القائمة أعلاه). لا تضع الكود إلا لمنتج حقيقي من القائمة.
 
 قواعد الكتابة والتنسيق الصوتي (لتحسين أداء قارئ النصوص Edge TTS وتفادي أخطاء
 النطق): بما أن إجابتك سيتم تحويلها مباشرة إلى صوت مسموع لكي يستمع إليها المزارع
@@ -496,9 +521,11 @@ points) أو القوائم المرقمة؛ بل اجعل النص يتدفق �
                             const finalFollowUpText = followUpParts.find((p: any) => !p.thought && p.text)?.text;
 
                             if (finalFollowUpText) {
+                                const { cleanText, recommendedProduct } = processResponseText(finalFollowUpText);
                                 return NextResponse.json({
                                     success: true,
-                                    text: finalFollowUpText,
+                                    text: cleanText,
+                                    recommendedProduct,
                                 });
                             }
                         }
@@ -519,9 +546,12 @@ points) أو القوائم المرقمة؛ بل اجعل النص يتدفق �
                 );
             }
 
+            const { cleanText, recommendedProduct } = processResponseText(resultText);
+
             return NextResponse.json({
                 success: true,
-                text: resultText,
+                text: cleanText,
+                recommendedProduct,
             });
         }
 

@@ -21,6 +21,8 @@ import {
   isTtsSupported,
   stopSpeaking,
 } from "@/utils/speech";
+import ProductRecommendationCard from "@/components/chat/ProductRecommendationCard";
+import type { RecommendedProduct } from "@/components/chat/QuickOrderModal";
 
 type ChatMessage = {
   id: string;
@@ -28,6 +30,7 @@ type ChatMessage = {
   content: string;
   /** Image specifically attached to this message turn (already compressed base64) */
   chatImagePreview?: string;
+  recommendedProduct?: RecommendedProduct;
 };
 
 type FailedPayload = {
@@ -153,7 +156,7 @@ export default function CropScanner() {
         const newMsgId = `m-${Date.now()}`;
         setChatMessages((prev) => [
           ...prev,
-          { id: newMsgId, role: "model", content: data.text },
+          { id: newMsgId, role: "model", content: data.text, recommendedProduct: data.recommendedProduct || undefined },
         ]);
 
         // Auto-play the AI response if TTS is supported
@@ -298,6 +301,11 @@ export default function CropScanner() {
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{msg.content}</p>
+
+                    {/* Product Recommendation Card */}
+                    {msg.role === "model" && msg.recommendedProduct && (
+                      <ProductRecommendationCard product={msg.recommendedProduct} userRole="distributor" />
+                    )}
 
                     {/* TTS Speaker icon for model replies */}
                     {msg.role === "model" && isTtsSupported() && (

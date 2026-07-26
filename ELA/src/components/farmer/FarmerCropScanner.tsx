@@ -21,6 +21,8 @@ import {
   isTtsSupported,
   stopSpeaking,
 } from "@/utils/speech";
+import ProductRecommendationCard from "@/components/chat/ProductRecommendationCard";
+import type { RecommendedProduct } from "@/components/chat/QuickOrderModal";
 
 type ChatMessage = {
   id: string;
@@ -28,6 +30,7 @@ type ChatMessage = {
   content: string;
   /** Image specifically attached to this message turn (base64 preview) */
   chatImagePreview?: string;
+  recommendedProduct?: RecommendedProduct;
 };
 
 type FailedPayload = {
@@ -141,7 +144,7 @@ export default function FarmerCropScanner() {
         const newMsgId = `m-${Date.now()}`;
         setChatMessages((prev) => [
           ...prev,
-          { id: newMsgId, role: "model", content: data.text },
+          { id: newMsgId, role: "model", content: data.text, recommendedProduct: data.recommendedProduct || undefined },
         ]);
 
         // Auto-play the AI response if TTS is supported
@@ -287,6 +290,11 @@ export default function FarmerCropScanner() {
                   }`}
                 >
                   <p className="whitespace-pre-wrap">{msg.content}</p>
+
+                  {/* Product Recommendation Card */}
+                  {msg.role === "model" && msg.recommendedProduct && (
+                    <ProductRecommendationCard product={msg.recommendedProduct} userRole="farmer" />
+                  )}
 
                   {/* TTS Speaker icon for model replies */}
                   {msg.role === "model" && isTtsSupported() && (
