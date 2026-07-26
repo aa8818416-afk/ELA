@@ -746,7 +746,7 @@ export default function DistributorsPage() {
   const totalKPIs = useMemo(() => {
     let totalUncollected = 0;
     let totalCollectedPeriod = 0;
-    let totalCommissions = 0;
+    let totalWalletBalance = 0;
 
     distributors.forEach((dist) => {
       const metrics = distributorMetricsMap.get(dist.profile_id);
@@ -754,7 +754,7 @@ export default function DistributorsPage() {
         totalUncollected += metrics.uncollectedSales;
         totalCollectedPeriod += metrics.collectedSalesPeriod;
       }
-      totalCommissions += Number(dist.pending_commission) || 0;
+      totalWalletBalance += Number(dist.wallet_balance) || 0;
     });
 
     const activeCount = distributors.filter((d) => d.status === "APPROVED" && d.active_status).length;
@@ -763,7 +763,7 @@ export default function DistributorsPage() {
     return {
       totalUncollected,
       totalCollectedPeriod,
-      totalCommissions,
+      totalWalletBalance,
       activeCount,
       pendingCount,
     };
@@ -974,22 +974,22 @@ export default function DistributorsPage() {
           </div>
         </div>
 
-        {/* Card 3: Pending Commissions */}
+        {/* Card 3: Total Distributor Wallet Balances */}
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-blue-700 tracking-wide uppercase">
-              إجمالي العمولات المستحقة
+              إجمالي أرصدة الموزعين (الرصيد المتاح)
             </span>
             <div className="p-2.5 bg-blue-500/10 text-blue-600 rounded-xl">
-              <Coins className="w-5 h-5" />
+              <Wallet className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
             <div className="text-2xl font-extrabold text-blue-900">
-              {totalKPIs.totalCommissions.toLocaleString("ar-EG")} ج.م
+              {totalKPIs.totalWalletBalance.toLocaleString("ar-EG")} ج.م
             </div>
             <p className="text-xs text-blue-700/80 mt-1">
-              عمولات الموزعين المستحقة للتسوية
+              مجموع أرصدة محافظ كافة الموزعين المستحقة للصرف
             </p>
           </div>
         </div>
