@@ -160,8 +160,8 @@ export async function POST(request: Request) {
             ? JSON.stringify(farmerProfile, null, 2)
             : "لا توجد بيانات مسجلة مسبقاً لمزرعة هذا المزارع.";
 
-        // 3. Fetch all products to inject into the system prompt.
-        const { data: products } = await supabase
+        // 3. Fetch all products to inject into the system prompt (using admin client to bypass RLS).
+        const { data: products } = await (supabaseAdmin as any)
             .from("products")
             .select("id, name_ar, active_ingredient, price_to_farmer, stock_status, image_url, dose_unit, dose_amount, package_size, package_unit");
 
@@ -169,9 +169,6 @@ export async function POST(request: Request) {
             products
                 ?.map((p: any) => {
                     let line = `- المعرف: ${p.id} | الاسم: ${p.name_ar} | المادة الفعالة: ${p.active_ingredient ?? "غير محددة"} | السعر للمزارع: ${p.price_to_farmer} جنيهاً | متوفر: ${p.stock_status ? "نعم" : "لا"}`;
-                    if (p.dose_amount != null && p.dose_unit) {
-                        line += ` | الجرعة: ${p.dose_amount} (${p.dose_unit})`;
-                    }
                     if (p.package_size != null) {
                         line += ` | حجم العبوة: ${p.package_size}${p.package_unit ? ` ${p.package_unit}` : ""}`;
                     }
@@ -179,28 +176,54 @@ export async function POST(request: Request) {
                 })
                 .join("\n") || "لا توجد منتجات متوفرة حالياً في المعرض.";
 
-        // Helper to extract product recommendation tag
+        // Helper to extract product recommendation tag or match mentioned product name
         const processResponseText = (rawText: string) => {
-            const match = rawText.match(/\[RECOMMEND_PRODUCT:([a-zA-Z0-9_-]+)\]/);
-            if (!match) {
-                return { cleanText: rawText, recommendedProduct: null };
+            if (!rawText) return { cleanText: "", recommendedProduct: null };
+
+            // 1. Match explicit recommendation tag: [RECOMMEND_PRODUCT: id_or_name]
+            const match = rawText.match(/\[RECOMMEND_PRODUCT:\s*["']?([^\]"']+)["']?\s*\]/i);
+            let recommendedProduct: any = null;
+            const cleanText = rawText.replace(/\[RECOMMEND_PRODUCT:\s*["']?[^\]"']+["']?\s*\]/gi, "").trim();
+
+            if (match) {
+                const tagValue = match[1].trim().toLowerCase();
+                const matchedProduct = (products as any[])?.find(
+                    (p: any) =>
+                        String(p.id).trim().toLowerCase() === tagValue ||
+                        String(p.name_ar).trim().toLowerCase() === tagValue
+                );
+                if (matchedProduct) {
+                    recommendedProduct = {
+                        id: matchedProduct.id,
+                        name_ar: matchedProduct.name_ar,
+                        price_to_farmer: matchedProduct.price_to_farmer,
+                        image_url: matchedProduct.image_url || null,
+                        active_ingredient: matchedProduct.active_ingredient || null,
+                    };
+                }
             }
-            const productId = match[1];
-            const cleanText = rawText.replace(/\[RECOMMEND_PRODUCT:[a-zA-Z0-9_-]+\]/g, "").trim();
-            const matchedProduct = (products as any[])?.find((p: any) => p.id === productId);
-            if (!matchedProduct) {
-                return { cleanText, recommendedProduct: null };
+
+            // 2. Direct fallback: If response text explicitly mentions any product name from DB
+            if (!recommendedProduct && products && products.length > 0) {
+                const sortedProducts = [...(products as any[])].sort(
+                    (a: any, b: any) => (b.name_ar?.length || 0) - (a.name_ar?.length || 0)
+                );
+
+                for (const p of sortedProducts) {
+                    if (p.name_ar && p.name_ar.trim().length > 1 && cleanText.includes(p.name_ar.trim())) {
+                        recommendedProduct = {
+                            id: p.id,
+                            name_ar: p.name_ar,
+                            price_to_farmer: p.price_to_farmer,
+                            image_url: p.image_url || null,
+                            active_ingredient: p.active_ingredient || null,
+                        };
+                        break;
+                    }
+                }
             }
-            return {
-                cleanText,
-                recommendedProduct: {
-                    id: matchedProduct.id,
-                    name_ar: matchedProduct.name_ar,
-                    price_to_farmer: matchedProduct.price_to_farmer,
-                    image_url: matchedProduct.image_url || null,
-                    active_ingredient: matchedProduct.active_ingredient || null,
-                },
-            };
+
+            return { cleanText, recommendedProduct };
         };
 
         // 4. Define System Prompt for the AI chat
@@ -239,7 +262,7 @@ export async function POST(request: Request) {
 
 5. تجنب تماماً الرموز البرمجية أو تنسيقات الماركداون (مثل ** أو _) والرموز
    التعبيرية (Emojis)، ولا تستخدم النقاط أو القوائم المرقمة؛ اجعل النص يتدفق
-   كفقرة حوارية مسترسلة.
+   كفقرة حوارية مسترسلة. استثناء وحيد من هذه القاعدة: كود التوصية بالمنتج بالصيغة [RECOMMEND_PRODUCT:product_id] المذكور في قسم ترشيح المنتج، هذا الكود لا يُقرأ صوتياً وإنما يُستخرج برمجياً قبل تحويل النص لصوت، لذلك اكتبه دائماً بصيغته الكاملة بالأقواس المربعة كما هي دون حذفها.
 
 =====================================================
 القسم الثاني: ملف المزارع (Farm Profile)
@@ -321,9 +344,7 @@ export async function POST(request: Request) {
    فقط، ولا تخترع اسم شركة غير موجود في البيانات. إذا لم يكن اسم الشركة
    متوفراً، لا تذكره إطلاقاً بدلاً من افتراضه.
 2. أكد للمزارع أن المنتج أصلي ومضمون من منصتنا بنسبة 100%.
-3. استخدم أداة recommend_product عند ترشيح منتج محدد بشكل صريح، لكي تظهر له
-   خيارات "اطلب الآن" أو "عرض المزيد" في الشاشة، وأشر في نهاية كلامك إلى أنه
-   يمكنه طلب المنتج مباشرة من هنا واستلامه من الموزع الخاص به.
+3. إذا قمت بترشيح منتج متوفر في القائمة بشكل محدد وصريح، اكتب كود التوصية في نهاية ردك بالضبط بهذه الصيغة: [RECOMMEND_PRODUCT:product_id] (حيث product_id هو المعرف الموضح بجانب اسم المنتج في productsContext)، وذلك لكي تظهر له خيارات "اطلب الآن" أو "عرض المزيد" في الشاشة. لا تكتب هذا الكود إلا لمنتج حقيقي موجود فعلياً في القائمة.
 4. وجّه المزارع للتواصل مع "سفير القرية" (الموزع الخاص به) في الحالات التالية
    فقط: تأكيد الجرعة الدقيقة المكتوبة على العبوة، حجز شحنات للحصول على خصم
    جماعي، أو عدم توفر بيانات كافية لحساب الجرعة كما في القسم الثالث. لا يُذكر
@@ -621,7 +642,10 @@ export async function POST(request: Request) {
                         if (followUpRes.ok) {
                             const followUpData = await followUpRes.json();
                             const followUpParts = followUpData.candidates?.[0]?.content?.parts ?? [];
-                            const finalFollowUpText = followUpParts.find((p: any) => !p.thought && p.text)?.text;
+                            const finalFollowUpText = followUpParts
+                                .filter((p: any) => !p.thought && p.text)
+                                .map((p: any) => p.text)
+                                .join("\n");
 
                             if (finalFollowUpText) {
                                 const { cleanText, recommendedProduct } = processResponseText(finalFollowUpText);
@@ -635,11 +659,41 @@ export async function POST(request: Request) {
                     } catch (followUpErr) {
                         console.error("[crop-chat] Follow up request failed after tool execution:", followUpErr);
                     }
+                } else if (name === "recommend_product") {
+                    const productId = String(args?.product_id || args?.productId || args?.id || "").trim().toLowerCase();
+                    const matchedProduct = (products as any[])?.find(
+                        (p: any) => String(p.id).trim().toLowerCase() === productId
+                    );
+                    let recommendedProduct = null;
+                    if (matchedProduct) {
+                        recommendedProduct = {
+                            id: matchedProduct.id,
+                            name_ar: matchedProduct.name_ar,
+                            price_to_farmer: matchedProduct.price_to_farmer,
+                            image_url: matchedProduct.image_url || null,
+                            active_ingredient: matchedProduct.active_ingredient || null,
+                        };
+                    }
+
+                    const textFromParts = candidateParts
+                        .filter((p: any) => !p.thought && p.text)
+                        .map((p: any) => p.text)
+                        .join("\n")
+                        .trim();
+
+                    return NextResponse.json({
+                        success: true,
+                        text: textFromParts || "أوصي بـ هذا المنتج المناسب لعلاج المحصول.",
+                        recommendedProduct,
+                    });
                 }
             }
 
             // Standard text response (when no function call or fallback)
-            const resultText = candidateParts.find((p: any) => !p.thought && p.text)?.text;
+            const resultText = candidateParts
+                .filter((p: any) => !p.thought && p.text)
+                .map((p: any) => p.text)
+                .join("\n");
 
             if (!resultText) {
                 console.error("[crop-chat] Gemini returned no text content:", data);
