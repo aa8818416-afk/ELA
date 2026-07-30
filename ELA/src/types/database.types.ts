@@ -511,6 +511,381 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      },
+      farmer_fields: {
+        Row: {
+          id: string
+          farmer_id: string
+          field_name: string | null
+          crop_type: string
+          planting_date: string
+          latitude: number | null
+          longitude: number | null
+          area_feddan: number | null
+          is_active: boolean
+          notifications_enabled: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          farmer_id: string
+          field_name?: string | null
+          crop_type: string
+          planting_date: string
+          latitude?: number | null
+          longitude?: number | null
+          area_feddan?: number | null
+          is_active?: boolean
+          notifications_enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          farmer_id?: string
+          field_name?: string | null
+          crop_type?: string
+          planting_date?: string
+          latitude?: number | null
+          longitude?: number | null
+          area_feddan?: number | null
+          is_active?: boolean
+          notifications_enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "farmer_fields_farmer_id_fkey"
+            columns: ["farmer_id"]
+            isOneToOne: false
+            referencedRelation: "farmers"
+            referencedColumns: ["profile_id"]
+          }
+        ]
+      }
+      crop_risk_rules: {
+        Row: {
+          id: string
+          version: number
+          crop_type: string
+          stage_from_day: number
+          stage_to_day: number
+          risk_type: string
+          risk_causes: Json
+          condition_duration_days: number
+          severity: Database["public"]["Enums"]["crop_risk_severity"]
+          advice_text: string
+          advice_reason: string | null
+          follow_up_days: number
+          product_link: string | null
+          source_reference: string | null
+          is_active: boolean
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          version?: number
+          crop_type: string
+          stage_from_day: number
+          stage_to_day: number
+          risk_type: string
+          risk_causes?: Json
+          condition_duration_days?: number
+          severity: Database["public"]["Enums"]["crop_risk_severity"]
+          advice_text: string
+          advice_reason?: string | null
+          follow_up_days?: number
+          product_link?: string | null
+          source_reference?: string | null
+          is_active?: boolean
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          version?: number
+          crop_type?: string
+          stage_from_day?: number
+          stage_to_day?: number
+          risk_type?: string
+          risk_causes?: Json
+          condition_duration_days?: number
+          severity?: Database["public"]["Enums"]["crop_risk_severity"]
+          advice_text?: string
+          advice_reason?: string | null
+          follow_up_days?: number
+          product_link?: string | null
+          source_reference?: string | null
+          is_active?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crop_risk_rules_product_link_fkey"
+            columns: ["product_link"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      crop_quality_tips: {
+        Row: {
+          id: string
+          crop_type: string
+          stage_from_day: number
+          stage_to_day: number
+          tip_text: string
+          tip_reason: string | null
+          rotation_order: number
+        }
+        Insert: {
+          id?: string
+          crop_type: string
+          stage_from_day: number
+          stage_to_day: number
+          tip_text: string
+          tip_reason?: string | null
+          rotation_order?: number
+        }
+        Update: {
+          id?: string
+          crop_type?: string
+          stage_from_day?: number
+          stage_to_day?: number
+          tip_text?: string
+          tip_reason?: string | null
+          rotation_order?: number
+        }
+        Relationships: []
+      }
+      alert_instances: {
+        Row: {
+          id: string
+          farmer_field_id: string
+          risk_type: string
+          matched_risk_rule_id: string
+          rule_version_snapshot: number
+          severity_snapshot: Database["public"]["Enums"]["crop_risk_severity"]
+          follow_up_days_snapshot: number
+          advice_text_snapshot: string
+          advice_reason_snapshot: string | null
+          product_link_snapshot: string | null
+          status: Database["public"]["Enums"]["alert_instance_status"]
+          origin_state: Database["public"]["Enums"]["alert_origin_state"] | null
+          no_response_count: number
+          false_alarm_streak_count: number
+          parent_alert_id: string | null
+          confidence_level: Database["public"]["Enums"]["alert_confidence_level"]
+          order_status: Database["public"]["Enums"]["alert_order_status"] | null
+          order_placed_at: string | null
+          order_delivered_at: string | null
+          diagnosis_started_at: string | null
+          diagnosis_paused_at: string | null
+          follow_up_due_at: string | null
+          escalated_at: string | null
+          escalation_deadline_at: string | null
+          weather_snapshot_at_trigger: Json
+          weather_snapshot_at_response: Json | null
+          created_at: string
+          updated_at: string
+          closed_at: string | null
+          closed_reason: Database["public"]["Enums"]["alert_closed_reason"] | null
+        }
+        Insert: {
+          id?: string
+          farmer_field_id: string
+          risk_type: string
+          matched_risk_rule_id: string
+          rule_version_snapshot: number
+          severity_snapshot: Database["public"]["Enums"]["crop_risk_severity"]
+          follow_up_days_snapshot: number
+          advice_text_snapshot: string
+          advice_reason_snapshot?: string | null
+          product_link_snapshot?: string | null
+          status?: Database["public"]["Enums"]["alert_instance_status"]
+          origin_state?: Database["public"]["Enums"]["alert_origin_state"] | null
+          no_response_count?: number
+          false_alarm_streak_count?: number
+          parent_alert_id?: string | null
+          confidence_level?: Database["public"]["Enums"]["alert_confidence_level"]
+          order_status?: Database["public"]["Enums"]["alert_order_status"] | null
+          order_placed_at?: string | null
+          order_delivered_at?: string | null
+          diagnosis_started_at?: string | null
+          diagnosis_paused_at?: string | null
+          follow_up_due_at?: string | null
+          escalated_at?: string | null
+          escalation_deadline_at?: string | null
+          weather_snapshot_at_trigger?: Json
+          weather_snapshot_at_response?: Json | null
+          created_at?: string
+          updated_at?: string
+          closed_at?: string | null
+          closed_reason?: Database["public"]["Enums"]["alert_closed_reason"] | null
+        }
+        Update: {
+          id?: string
+          farmer_field_id?: string
+          risk_type?: string
+          matched_risk_rule_id?: string
+          rule_version_snapshot?: number
+          severity_snapshot?: Database["public"]["Enums"]["crop_risk_severity"]
+          follow_up_days_snapshot?: number
+          advice_text_snapshot?: string
+          advice_reason_snapshot?: string | null
+          product_link_snapshot?: string | null
+          status?: Database["public"]["Enums"]["alert_instance_status"]
+          origin_state?: Database["public"]["Enums"]["alert_origin_state"] | null
+          no_response_count?: number
+          false_alarm_streak_count?: number
+          parent_alert_id?: string | null
+          confidence_level?: Database["public"]["Enums"]["alert_confidence_level"]
+          order_status?: Database["public"]["Enums"]["alert_order_status"] | null
+          order_placed_at?: string | null
+          order_delivered_at?: string | null
+          diagnosis_started_at?: string | null
+          diagnosis_paused_at?: string | null
+          follow_up_due_at?: string | null
+          escalated_at?: string | null
+          escalation_deadline_at?: string | null
+          weather_snapshot_at_trigger?: Json
+          weather_snapshot_at_response?: Json | null
+          created_at?: string
+          updated_at?: string
+          closed_at?: string | null
+          closed_reason?: Database["public"]["Enums"]["alert_closed_reason"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_instances_farmer_field_id_fkey"
+            columns: ["farmer_field_id"]
+            isOneToOne: false
+            referencedRelation: "farmer_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alert_instances_matched_risk_rule_id_fkey"
+            columns: ["matched_risk_rule_id"]
+            isOneToOne: false
+            referencedRelation: "crop_risk_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alert_instances_parent_alert_id_fkey"
+            columns: ["parent_alert_id"]
+            isOneToOne: false
+            referencedRelation: "alert_instances"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      daily_agenda_log: {
+        Row: {
+          id: string
+          farmer_field_id: string
+          date: string
+          alert_instance_id: string | null
+          quality_tip_id: string | null
+          farmer_feedback_raw: string | null
+          weather_snapshot: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          farmer_field_id: string
+          date: string
+          alert_instance_id?: string | null
+          quality_tip_id?: string | null
+          farmer_feedback_raw?: string | null
+          weather_snapshot?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          farmer_field_id?: string
+          date?: string
+          alert_instance_id?: string | null
+          quality_tip_id?: string | null
+          farmer_feedback_raw?: string | null
+          weather_snapshot?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_agenda_log_farmer_field_id_fkey"
+            columns: ["farmer_field_id"]
+            isOneToOne: false
+            referencedRelation: "farmer_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_agenda_log_alert_instance_id_fkey"
+            columns: ["alert_instance_id"]
+            isOneToOne: false
+            referencedRelation: "alert_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_agenda_log_quality_tip_id_fkey"
+            columns: ["quality_tip_id"]
+            isOneToOne: false
+            referencedRelation: "crop_quality_tips"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      rule_review_flags: {
+        Row: {
+          id: string
+          farmer_field_id: string
+          risk_type: string
+          matched_risk_rule_id: string
+          streak_count: number
+          reviewed: boolean
+          admin_notes: string | null
+          created_at: string
+          reviewed_at: string | null
+        }
+        Insert: {
+          id?: string
+          farmer_field_id: string
+          risk_type: string
+          matched_risk_rule_id: string
+          streak_count?: number
+          reviewed?: boolean
+          admin_notes?: string | null
+          created_at?: string
+          reviewed_at?: string | null
+        }
+        Update: {
+          id?: string
+          farmer_field_id?: string
+          risk_type?: string
+          matched_risk_rule_id?: string
+          streak_count?: number
+          reviewed?: boolean
+          admin_notes?: string | null
+          created_at?: string
+          reviewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rule_review_flags_farmer_field_id_fkey"
+            columns: ["farmer_field_id"]
+            isOneToOne: false
+            referencedRelation: "farmer_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rule_review_flags_matched_risk_rule_id_fkey"
+            columns: ["matched_risk_rule_id"]
+            isOneToOne: false
+            referencedRelation: "crop_risk_rules"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {
@@ -539,6 +914,35 @@ export type Database = {
       payment_status: "unpaid" | "paid"
       user_role: "admin" | "distributor" | "farmer"
       distributor_status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED"
+      crop_risk_severity: "critical" | "moderate" | "preventive"
+      alert_instance_status:
+        | "NO_ALERT"
+        | "SENT"
+        | "CLOSED_FALSE_ALARM"
+        | "AWAITING_DIAGNOSIS"
+        | "DIAGNOSIS_PAUSED"
+        | "CONFIRMED_ACTIVE"
+        | "MISDIAGNOSED_ORIGINAL"
+        | "INCONCLUSIVE"
+        | "PRODUCT_ORDERED"
+        | "NO_RESPONSE"
+        | "AUTO_CLOSED_NO_RESPONSE"
+        | "FOLLOW_UP_SENT"
+        | "RESOLVED"
+        | "CROP_LOSS"
+        | "CLOSED_SEASON_END"
+        | "AMBIGUOUS_RETRY"
+        | "AWAITING_DISTRIBUTOR_ACTION"
+      alert_origin_state: "SENT" | "FOLLOW_UP_SENT" | "INCONCLUSIVE" | "AWAITING_DIAGNOSIS"
+      alert_confidence_level: "weather_based" | "farmer_confirmed" | "purchase_confirmed" | "unconfirmed"
+      alert_order_status: "ordered" | "delivered" | "cancelled" | "expired"
+      alert_closed_reason:
+        | "false_alarm"
+        | "resolved"
+        | "auto_closed_no_response"
+        | "season_end"
+        | "crop_loss"
+        | "superseded_by_higher_severity"
     }
     CompositeTypes: {
       [_ in never]: never

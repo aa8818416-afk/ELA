@@ -1,0 +1,35 @@
+name: Fetch Weather Every 3 Hours
+
+on:
+  schedule:
+    # Run every 3 hours: 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00 UTC
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
+    # Allow manual triggering from GitHub UI for testing
+
+jobs:
+  fetch-weather:
+    name: Fetch Open-Meteo Weather Data
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger weather fetch API
+        run: |
+          echo "Fetching weather data from Open-Meteo for Egyptian agricultural zones..."
+          
+          RESPONSE=$(curl -s -o /tmp/weather_response.json -w "%{http_code}" \
+            -X POST "${{ secrets.APP_URL }}/api/cron/fetch-weather" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          
+          echo "HTTP Status: $RESPONSE"
+          echo "Response body:"
+          cat /tmp/weather_response.json
+          
+          if [ "$RESPONSE" -ne 200 ]; then
+            echo "ERROR: Weather fetch failed with status $RESPONSE"
+            exit 1
+          fi
+          
+          echo "Weather fetch completed successfully."

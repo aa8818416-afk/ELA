@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { Users, ShoppingBag, CheckCircle2, Wallet, TrendingUp } from "lucide-react";
 import { redirect } from "next/navigation";
+import DistributorAgendaWidget from "@/components/distributor/DistributorAgendaWidget";
 
 export default async function DistributorDashboardPage() {
   const supabase = await createClient();
@@ -139,10 +140,8 @@ export default async function DistributorDashboardPage() {
         ))}
       </div>
 
-      {/* Placeholder for future charts or recent activity */}
-      <div className="mt-12 p-8 rounded-3xl border border-slate-800 bg-slate-900/50 text-center">
-        <p className="text-slate-500 text-sm">سيتم إضافة رسوم بيانية تفصيلية للنشاط لاحقاً</p>
-      </div>
+      {/* Farmer Alerts Agenda Widget */}
+      <DistributorAgendaWidget distributorId={user.id} />
     </div>
   );
 }
