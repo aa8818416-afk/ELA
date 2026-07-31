@@ -31,8 +31,6 @@ export default async function FarmerHomePage() {
     .from("farmers")
     .select(
       `
-      current_crop,
-      land_size,
       distributor_id,
       distributors (
         village,
@@ -108,7 +106,7 @@ export default async function FarmerHomePage() {
     .eq("longitude", nearestCenter.lng)
     .maybeSingle();
 
-  const currentCrop = farmerFields?.[0]?.crop_type || farmerData?.current_crop || undefined;
+  const currentCrop = farmerFields?.[0]?.crop_type || undefined;
 
 
   // 4. Fetch active group buy campaigns

@@ -16,7 +16,7 @@ export default async function FarmersDirectoryPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: dist } = await (supabase as any)
     .from("distributors")
-    .select("status")
+    .select("status, supervised_villages")
     .eq("profile_id", user.id)
     .maybeSingle();
 
@@ -26,6 +26,8 @@ export default async function FarmersDirectoryPage() {
   if (dist?.status === "REJECTED") {
     redirect("/login");
   }
+
+  const supervisedVillages: string[] = dist?.supervised_villages ?? [];
 
   // جلب الفلاحين التابعين لهذا الموزع
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,5 +46,10 @@ export default async function FarmersDirectoryPage() {
     console.error("Error fetching farmers:", error);
   }
 
-  return <FarmersPageClient initialFarmers={farmers ?? []} />;
+  return (
+    <FarmersPageClient
+      initialFarmers={farmers ?? []}
+      supervisedVillages={supervisedVillages}
+    />
+  );
 }

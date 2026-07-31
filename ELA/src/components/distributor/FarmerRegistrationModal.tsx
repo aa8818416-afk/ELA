@@ -2,12 +2,20 @@
 
 import { useState } from "react";
 import { registerFarmer } from "@/app/actions/distributor";
-import { X, UserPlus, Loader2 } from "lucide-react";
+import { X, UserPlus, Loader2, ChevronDown } from "lucide-react";
 
-export default function FarmerRegistrationModal() {
+interface FarmerRegistrationModalProps {
+  /** قائمة القرى المشرف عليها من قِبل هذا الموزع */
+  supervisedVillages: string[];
+}
+
+export default function FarmerRegistrationModal({ supervisedVillages }: FarmerRegistrationModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // نحدد ما إذا كان يجب إظهار قائمة اختيار القرية
+  const requireVillageSelection = supervisedVillages.length > 1;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -52,6 +60,7 @@ export default function FarmerRegistrationModal() {
         <h3 className="text-xl font-bold text-white mb-6">تسجيل فلاح جديد</h3>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* الاسم */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
               الاسم بالكامل
@@ -65,6 +74,7 @@ export default function FarmerRegistrationModal() {
             />
           </div>
 
+          {/* الهاتف */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
               رقم الهاتف
@@ -79,45 +89,33 @@ export default function FarmerRegistrationModal() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              القرية (اختياري)
-            </label>
-            <input
-              name="village"
-              type="text"
-              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-              placeholder="اسم القرية"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          {/* القرية — Dropdown إجباري لو متعدد، يُخفى لو قرية واحدة (تُورَّث تلقائيًا) */}
+          {requireVillageSelection ? (
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
-                المحصول الحالي
+                القرية <span className="text-red-400">*</span>
               </label>
-              <input
-                name="currentCrop"
-                type="text"
-                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                placeholder="مثال: طماطم"
-              />
+              <div className="relative">
+                <select
+                  name="village"
+                  required
+                  defaultValue=""
+                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 appearance-none"
+                >
+                  <option value="" disabled>اختر القرية...</option>
+                  {supervisedVillages.map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
-                مساحة الأرض (فدان)
-              </label>
-              <input
-                name="landSize"
-                type="number"
-                step="0.1"
-                min="0"
-                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-right"
-                dir="ltr"
-                placeholder="2.5"
-              />
-            </div>
-          </div>
+          ) : (
+            /* قرية واحدة أو بدون قرية — تُورَّث تلقائيًا، نمرر القيمة المخفية للـ action */
+            supervisedVillages.length === 1 && (
+              <input type="hidden" name="village" value={supervisedVillages[0]} />
+            )
+          )}
 
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-xl p-3">

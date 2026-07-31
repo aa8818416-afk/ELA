@@ -14,9 +14,7 @@ export async function registerFarmer(formData: FormData) {
   try {
     const fullName = formData.get("fullName") as string;
     const phone = formData.get("phone") as string;
-
-    const currentCrop = formData.get("currentCrop") as string;
-    const landSize = Number(formData.get("landSize"));
+    const selectedVillage = (formData.get("village") as string | null) || null;
 
     if (!fullName || !phone) {
       return { error: "الاسم ورقم الهاتف مطلوبان" };
@@ -38,7 +36,29 @@ export async function registerFarmer(formData: FormData) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // 2. Create Farmer Auth User
+    // 2. Fetch distributor location data for inheritance
+    const { data: distData } = await supabaseAdmin
+      .from("distributors")
+      .select("governorate, center, village, supervised_villages")
+      .eq("profile_id", currentUser.id)
+      .single();
+
+    // Determine inherited village:
+    // - If distributor has exactly 1 supervised village → auto-inherit
+    // - If multiple → use what the form provided (selectedVillage)
+    // - Fallback to distributor's general village
+    const supervisedVillages = (distData as { supervised_villages?: string[] | null } | null)?.supervised_villages ?? [];
+    const inheritedVillage =
+      supervisedVillages.length === 1
+        ? supervisedVillages[0]
+        : selectedVillage ?? (distData as { village?: string | null } | null)?.village ?? null;
+
+    // Validate: if multiple villages and no selection was made, block
+    if (supervisedVillages.length > 1 && !inheritedVillage) {
+      return { error: "يرجى تحديد القرية التابع لها الفلاح" };
+    }
+
+    // 3. Create Farmer Auth User
     // We use a dummy email because farmers may only have phones,
     // and Supabase requires unique emails by default.
     const dummyEmail = `${phone}@farmer.ela.com`;
@@ -62,7 +82,7 @@ export async function registerFarmer(formData: FormData) {
 
     const newFarmerId = authData.user.id;
 
-    // 3. The `on_auth_user_created` Postgres Trigger automatically creates a `profiles` row.
+    // 4. The `on_auth_user_created` Postgres Trigger automatically creates a `profiles` row.
     // Wait a brief moment to ensure trigger completes (or rely on robust retry/upsert logic)
     // Here we'll just update the profile with the phone number, then insert the farmer row.
 
@@ -71,12 +91,13 @@ export async function registerFarmer(formData: FormData) {
       .update({ phone: phone })
       .eq("id", newFarmerId);
 
-    // 4. Insert into farmers table linked to current distributor
+    // 5. Insert into farmers table with inherited location from distributor
     const { error: farmerError } = await supabaseAdmin.from("farmers").insert({
       profile_id: newFarmerId,
       distributor_id: currentUser.id,
-      land_size: landSize,
-      current_crop: currentCrop,
+      governorate: (distData as { governorate?: string | null } | null)?.governorate ?? null,
+      center: (distData as { center?: string | null } | null)?.center ?? null,
+      village: inheritedVillage,
     });
 
     if (farmerError) {

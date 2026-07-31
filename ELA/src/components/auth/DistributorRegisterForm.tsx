@@ -131,8 +131,6 @@ export default function DistributorRegisterForm() {
 
       const { error: distError } = await (supabase as any).from("distributors").insert({
         profile_id: userId,
-        full_name: fullName,
-        email,
         governorate,
         center,
         main_road: mainRoad || null,
@@ -149,8 +147,6 @@ export default function DistributorRegisterForm() {
         // إذا الصف موجود مسبقاً (من تريجر آخر)، نحدّثه
         if (distError.code === "23505") {
           await (supabase as any).from("distributors").update({
-            full_name: fullName,
-            email,
             governorate,
             center,
             main_road: mainRoad || null,

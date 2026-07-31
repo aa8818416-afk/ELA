@@ -110,8 +110,6 @@ export type Database = {
           profile_id: string
           village: string | null
           wallet_balance: number
-          full_name: string | null
-          email: string | null
           governorate: string | null
           center: string | null
           main_road: string | null
@@ -128,8 +126,6 @@ export type Database = {
           profile_id: string
           village?: string | null
           wallet_balance?: number
-          full_name?: string | null
-          email?: string | null
           governorate?: string | null
           center?: string | null
           main_road?: string | null
@@ -146,8 +142,6 @@ export type Database = {
           profile_id?: string
           village?: string | null
           wallet_balance?: number
-          full_name?: string | null
-          email?: string | null
           governorate?: string | null
           center?: string | null
           main_road?: string | null
@@ -170,28 +164,31 @@ export type Database = {
       }
       farmers: {
         Row: {
-          current_crop: string | null
           distributor_id: string
           farm_profile: Json | null
-          land_size: number | null
           profile_id: string
           pin_hash: string | null
+          governorate: string | null
+          center: string | null
+          village: string | null
         }
         Insert: {
-          current_crop?: string | null
           distributor_id: string
           farm_profile?: Json | null
-          land_size?: number | null
           profile_id: string
           pin_hash?: string | null
+          governorate?: string | null
+          center?: string | null
+          village?: string | null
         }
         Update: {
-          current_crop?: string | null
           distributor_id?: string
           farm_profile?: Json | null
-          land_size?: number | null
           profile_id?: string
           pin_hash?: string | null
+          governorate?: string | null
+          center?: string | null
+          village?: string | null
         }
         Relationships: [
           {

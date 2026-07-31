@@ -24,24 +24,38 @@ type FarmerRow = {
 // =============================================
 // مودال إضافة فلاح جديد
 // =============================================
-function AddFarmerModal({ onAdded }: { onAdded: (farmer: FarmerRow) => void }) {
+function AddFarmerModal({
+  onAdded,
+  supervisedVillages,
+}: {
+  onAdded: (farmer: FarmerRow) => void;
+  supervisedVillages: string[];
+}) {
   const [open, setOpen] = useState(false);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [selectedVillage, setSelectedVillage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedFarmer | null>(null);
   const [copied, setCopied] = useState<"phone" | "pin" | null>(null);
+
+  const requireVillageSelection = supervisedVillages.length > 1;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
+    const village =
+      supervisedVillages.length === 1
+        ? supervisedVillages[0]
+        : selectedVillage || undefined;
+
     const res = await fetch("/api/distributor/farmers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ full_name: fullName, phone }),
+      body: JSON.stringify({ full_name: fullName, phone, village }),
     });
 
     const data = await res.json();
@@ -70,6 +84,7 @@ function AddFarmerModal({ onAdded }: { onAdded: (farmer: FarmerRow) => void }) {
     setOpen(false);
     setFullName("");
     setPhone("");
+    setSelectedVillage("");
     setError(null);
     setCreated(null);
   }
@@ -131,6 +146,27 @@ function AddFarmerModal({ onAdded }: { onAdded: (farmer: FarmerRow) => void }) {
                       className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-500 transition-all"
                     />
                   </div>
+
+                  {/* القرية — Dropdown إجباري لو متعدد، يُخفى لو قرية واحدة */}
+                  {requireVillageSelection && (
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-slate-300">
+                        القرية <span className="text-red-400">*</span>
+                      </label>
+                      <select
+                        id="farmer-village-select"
+                        value={selectedVillage}
+                        onChange={(e) => setSelectedVillage(e.target.value)}
+                        required
+                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-500 transition-all"
+                      >
+                        <option value="" disabled>اختر القرية...</option>
+                        {supervisedVillages.map((v) => (
+                          <option key={v} value={v}>{v}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {error && (
                     <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-300 text-sm">
@@ -301,8 +337,10 @@ function ResetPinResultModal({
 // =============================================
 export default function FarmersPageClient({
   initialFarmers,
+  supervisedVillages,
 }: {
   initialFarmers: FarmerRow[];
+  supervisedVillages: string[];
 }) {
   const [farmers, setFarmers] = useState<FarmerRow[]>(initialFarmers);
   const [resetResult, setResetResult] = useState<ResetResult | null>(null);
@@ -321,7 +359,7 @@ export default function FarmersPageClient({
             الفلاحون المسجلون عن طريقك ({farmers.length} فلاح)
           </p>
         </div>
-        <AddFarmerModal onAdded={handleFarmerAdded} />
+        <AddFarmerModal onAdded={handleFarmerAdded} supervisedVillages={supervisedVillages} />
       </div>
 
       {/* جدول الفلاحين */}
