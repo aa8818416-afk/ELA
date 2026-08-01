@@ -93,18 +93,14 @@ const farmProfileToolDeclaration = {
         },
         {
             name: "manage_farmer_field",
-            description: "أداة إدارة وتسجيل أراضي الفلاح عبر الشات. استخدمها فوراً في السيناريوهات الـ 5: collect_draft (جمع بيانات مسودة جزئية)، confirm_save (تأكيد الحفظ النهائي بعد التأكد الصريح)، change_crop (تغيير محصول أرض مسجلة بعد تأكيدين)، update_field (تعديل اسم أو مساحة أرض مسجلة بعد تأكيد)، disambiguate (تمييز أرض مكررة بصفة).",
+            description: "أداة إدارة وتسجيل أراضي الفلاح عبر الشات. استخدمها في 4 سيناريوهات: register_field (تسجيل أرض جديدة مكتملة الأربع معلومات بعد تأكيد الفلاح)، change_crop (تغيير محصول أرض مسجلة بعد تأكيدين)، update_field (تعديل اسم أو مساحة أرض مسجلة بعد تأكيد)، disambiguate (تمييز أرض مكررة بصفة).",
             parameters: {
                 type: "OBJECT",
                 properties: {
                     action: {
                         type: "STRING",
-                        enum: ["collect_draft", "confirm_save", "change_crop", "update_field", "disambiguate"],
+                        enum: ["register_field", "change_crop", "update_field", "disambiguate"],
                         description: "إجراء إدارة الأرض."
-                    },
-                    confirm_abandon_draft: {
-                        type: "BOOLEAN",
-                        description: "أرسل true فقط عندما يؤكد الفلاح صراحة التخلي عن مسودة سابقة ناقصة للبدء في أرض جديدة ذات اسم مختلف."
                     },
                     field_id: { type: "STRING", description: "معرف الحقل (uuid) في حال التعديل أو تغيير المحصول." },
                     field_name: { type: "STRING", description: "اسم الأرض أو الحقل (مثال: 'أرض الجمعية' أو 'حقل التسعة')." },
@@ -178,31 +174,21 @@ export async function POST(request: Request) {
         ? JSON.stringify(farmerProfile, null, 2)
         : "لا توجد بيانات مسجلة مسبقاً لمزرعة هذا المزارع.";
 
-    // Fetch existing fields for context
+    // Fetch existing active fields for context
     const { data: farmerFields } = await (supabaseAdmin as any)
         .from("farmer_fields")
-        .select("id, field_name, crop_type, planting_date, area_feddan, area_unit, registration_status, draft_collected_fields, is_active")
+        .select("id, field_name, crop_type, planting_date, area_feddan, area_unit, is_active")
         .eq("farmer_id", userId)
-        .in("registration_status", ["active", "draft"])
+        .eq("is_active", true)
         .order("created_at", { ascending: false });
 
-    const activeFields = (farmerFields as any[])?.filter((f: any) => f.registration_status === "active" && f.is_active) || [];
-    const draftField = (farmerFields as any[])?.find((f: any) => f.registration_status === "draft") || null;
+    const activeFields = (farmerFields as any[]) || [];
 
     const activeFieldsContext = activeFields.length > 0
         ? activeFields.map((f: any) =>
             `- المعرف: ${f.id} | اسم الأرض: ${f.field_name || "بدون اسم"} | المحصول: ${f.crop_type || "غير محدد"} | المساحة: ${displayArea(f.area_feddan || 1, f.area_unit || "فدان")} | تاريخ الزراعة: ${f.planting_date || "غير محدد"}`
-          ).join("\n")
-        : "لا توجد أراضٍ نشطة مسجلة حالياً للفلاح.";
-
-    const draftFieldContext = draftField
-        ? `توجد مسودة ناقصة حالياً:
-- اسم الأرض: ${draftField.field_name || "(لم يذكر الاسم بعد)"}
-- المحصول: ${draftField.crop_type || "(لم يحدد المحصول بعد)"}
-- تاريخ الزراعة: ${draftField.planting_date || "(لم يحدد التاريخ بعد)"}
-- المساحة: ${draftField.area_feddan ? displayArea(draftField.area_feddan, draftField.area_unit || "فدان") : "(لم تذكر المساحة بعد)"}
-- الحقول المكتملة حتى الآن: ${JSON.stringify(draftField.draft_collected_fields || {})}`
-        : "لا توجد أي مسودة ناقصة حالياً.";
+        ).join("\n")
+        : "لا توجد أراضٍ مسجلة حالياً للفلاح.";
 
     // 3. Fetch products
     const { data: products } = await (supabaseAdmin as any)
@@ -330,7 +316,7 @@ export async function POST(request: Request) {
   - package_size: حجم العبوة بالأرقام فقط.
   - package_unit: وحدة حجم العبوة (مثال: جرام، سم3، لتر).
 
-القاعدة الذهبية: يُمنع منعاً باتاً اختراع أو تخمين قيمة الجرعة أو حجم العبوة أو وحدة القياس. إذا لم تكن هذه البيانات مسجلة لمنتج معين، لا تقم بأي حساب، وأخبر المزارع أن الجرعة الدقيقة مكتوبة على عبوة المنتج، ووجهه لسفير القرية للتأكد منها.
+القاعدة الذهبية: يُمنع منعاً باتاً اختراع أو تخمين قيمة الجرعة أو حجم العبوة أو وحدة القياس. إذا لم تكن هذه البيانات مسجلة لمنتج معين، لا تقم بأي حساب، وأخبر المزارع أن الجرعة الدقيقة مكتوبة على عبوة المنتج، ووجهه لسفير القرية للتأكد منها. هذا الشرط صارم ولا يقبل أي استثناء مهما كانت الحالة، حتى لو كانت لديك معرفة عامة تقديرية عن الجرعة الشائعة لهذا المنتج من خبرتك العلمية، فالمرجع الوحيد المسموح باستخدامه هو البيانات المسجلة فعلياً في قاعدة المنتجات أعلاه فقط، دون أي تقريب أو استنتاج ذاتي.
 
 عند ترشيح منتج يحتاج جرعة، اتبع بالضبط أحد المسارين التاليين بحسب dose_unit:
 
@@ -361,8 +347,7 @@ export async function POST(request: Request) {
 2. أكد للمزارع أن المنتج أصلي ومضمون من منصتنا بنسبة 100%.
 3. إذا قمت بترشيح منتج متوفر في القائمة بشكل محدد وصريح، اكتب كود التوصية في نهاية ردك بالضبط بهذه الصيغة: [RECOMMEND_PRODUCT:product_id] (حيث product_id هو المعرف الموضح بجانب اسم المنتج في productsContext)، وذلك لكي تظهر له خيارات "اطلب الآن" أو "عرض المزيد" في الشاشة. لا تكتب هذا الكود إلا لمنتج حقيقي موجود فعلياً في القائمة.
 4. وجّه المزارع للتواصل مع "سفير القرية" (الموزع الخاص به) في الحالات التالية فقط: تأكيد الجرعة الدقيقة المكتوبة على العبوة، حجز شحنات للحصول على خصم جماعي، أو عدم توفر بيانات كافية لحساب الجرعة كما في القسم الثالث. لا يُذكر سفير القرية كخطوة إلزامية ثابتة في كل رد.
-5. لا تقم أبداً بااختلاق منتجات غير موجودة في القائمة. إذا لم تجد منتجاً مناسباً، أخبر المزارع أن يستشير سفير القرية لتوفير العلاج الأنسب.
-6. إذا قمت بترشيح منتج متوفر في القائمة، اكتب كود التوصية في نهاية ردك بالطريقة التالية تماماً: [RECOMMEND_PRODUCT:product_id] (حيث product_id هو المعرف الموضح بجانب اسم المنتج في القائمة أعلاه). لا تضع الكود إلا لمنتج حقيقي من القائمة.
+5. لا تقم أبداً باختلاق منتجات غير موجودة في القائمة. إذا لم تجد منتجاً مناسباً، أخبر المزارع أن يستشير سفير القرية لتوفير العلاج الأنسب.
 
 =====================================================
 القسم السادس: شرح الأمراض بطريقة مفهومة للفلاح
@@ -391,40 +376,54 @@ export async function POST(request: Request) {
 2. إذا سُئلت عن معلومة لا تملكها بثقة (سواء عن جرعة، أو مرض، أو منتج)، لا تخترع إجابة؛ وجّه المزارع لسفير القرية بدلاً من التخمين.
 
 =====================================================
-القسم التاسع: إدارة وتأكيد أراضي الفلاح الزراعيه (إلزامي)
+القسم التاسع: إدارة وتسجيل أراضي الفلاح الزراعية (إلزامي)
 =====================================================
 
 بيانات الأراضي المسجلة حالياً للفلاح:
 ${activeFieldsContext}
 
-حالة المسودة الحالية:
-${draftFieldContext}
+قواعد إدارة وتسجيل الأراضي (اقرأها واتبعها بالضبط):
 
-قواعد إدارة وتأكيد الأراضي (اقرأها واتبعها بالضبط):
-1. المعلومات الأربعة الإلزامية لكل أرض: (اسم الأرض، نوع المحصول، تاريخ الزراعة، المساحة).
-2. التأكيد الإلزامي بملخص قبل الحفظ: عند جمع الأربعة معلومات كاملة، لا تحفظ فوراً بل اعرض ملخصاً تأكيدياً بلغة ودية ومنسقة:
+1. المعلومات الأربعة الإلزامية لكل أرض: (اسم الأرض، نوع المحصول، تاريخ الزراعة، المساحة). لا يتم تسجيل أرض إلا إذا توفرت الأربعة معاً كاملة. لا يوجد تسجيل جزئي أو مسودة.
+
+2. منع تسمية الأرض بلقب مشتق من اسم المحصول الحالي: إذا كان الاسم الذي يذكره الفلاح للأرض مطابقاً بشكل مباشر لاسم المحصول الذي يسجله حالياً، لا تحفظ هذا الاسم كلقب دائم للأرض مباشرة. اسأله بلطف قبل الحفظ: "هذه الأرض، هل لها اسم تُعرف به بين الأهل والجيران، أم أن هذا هو اسمها الفعلي؟" فإذا أكد لك أن هذا فعلاً اسمها الحقيقي رغم التطابق، اقبله وسجله دون أي اعتراض إضافي.
+   هذا الشرط ينطبق فقط عند التطابق المباشر بين اسم الأرض واسم المحصول الحالي؛ أما الأسماء التقليدية العامة، مثل أرض الغلة أو أرض النبع، فتُقبل مباشرة دون أي سؤال.
+
+3. التأكيد الإلزامي بملخص قبل الحفظ: عندما يذكر الفلاح الأربعة معلومات كاملة في حديثه (قد تكون في رسالة واحدة أو عدة رسائل متتالية)، لا تسجّل الأرض فوراً، بل اعرض ملخصاً تأكيدياً بلغة ودية ومنسقة:
 "تمام يا [اسم الفلاح أو يا حاج]، هتسجل لك الآتي:
-• اسم الأرض: [اسم الأرض]
-• نوع المحصول: [المحصول]
-• تاريخ الزراعة: [التاريخ المكتوب باللغة العربية الواضحة مثل 15 أبريل 2026]
-• المساحة: [المساحة بالوحدة التي ذكرها الفلاح]
+- اسم الأرض: [اسم الأرض]
+- نوع المحصول: [المحصول]
+- تاريخ الزراعة: [التاريخ بصيغة رقمية يوم/شهر/سنة، مثل 1-8-2026]
+- المساحة: [المساحة بالوحدة التي ذكرها الفلاح]
 ده صح يا حاج؟"
-احفظ عبر confirm_save فقط بعد موافقة وتأكيد الفلاح الصريح.
-3. تمييز الأراضي المتشابهة (اسم + محصول واحد): إذا سجل أرضاً بنفس الاسم والمحصول، اسأله عن فرق الصفة (مثل قبلي/بحري)، وسجل الاسم المميز بصيغة "اسم الأرض + الصفة" عبر أداة manage_farmer_field بكود action="disambiguate".
-4. ثبات الاسم والمساحة، وتغيير المحصول: اسم الأرض والمساحة ثابتان. المحصول وتاريخ الزراعة يتبدلان عند الموسم الجديد.
-5. تغيير المحصول في أرض موجودة (تأكيدان إجباريان):
+سجّل الأرض عبر action="register_field" فقط بعد موافقة وتأكيد الفلاح الصريح.
+
+4. منع الادعاء الكاذب بالحفظ (قاعدة إلزامية): يُمنع منعاً باتاً أن يذكر النموذج في رده أنه سجّل أو حدّث أي بيانات، إلا بعد استدعاء الأداة فعلياً لنفس هذه البيانات تحديداً في نفس الرد. إذا نجح الحفظ لأرض واحدة فقط من بين عدة أراضٍ مذكورة، يجب أن يوضح الرد ذلك بدقة تامة، ولا يدّعي حفظ ما لم يُحفظ فعلياً.
+
+5. تمييز الأراضي المتشابهة (اسم + محصول واحد): إذا سجل أرضاً بنفس الاسم والمحصول، اسأله عن فرق الصفة (مثل قبلي/بحري)، وسجل الاسم المميز بصيغة "اسم الأرض + الصفة" عبر أداة manage_farmer_field بكود action="disambiguate".
+
+6. ثبات الاسم والمساحة، وتغيير المحصول: اسم الأرض والمساحة ثابتان. المحصول وتاريخ الزراعة يتبدلان عند الموسم الجديد.
+
+7. تغيير المحصول في أرض موجودة (تأكيدان إجباريان):
    - التأكيد الأول: "يعني خلصت حصاد [المحصول القديم] في [اسم الأرض]؟"
-   - إذا قال "أه"، التأكيد الثاني: "تمام يا حاج، هنسجل [المحصول الجديد] وهننسى بيانات [المحصول القديم] عشان نركز معاك في الجديد، تمام كده؟"
+   - إذا قال "أه"، التأكيد الثاني: "تمام يا حاج، هنسجل [المحصول الجديد] وهننسى بيانات [المحصول القديم] لكي نركز معاك في الجديد، تمام؟"
    - بعد التأكيد الثاني فقط، استخدم أداة manage_farmer_field بكود action="change_crop" لتسجيل المحصول الجديد وأرشفة القديم تلقائياً.
-6. تعديل أي بيانات مسجلة (اسم/مساحة): اعرض القيمة الحالية مقابل الجديدة، واطلب تأكيداً صريحاً قبل إجراء التعديل عبر أداة manage_farmer_field بكود action="update_field".
-7. التحقق من البيانات: يمنع منعاً باتاً تسجيل تاريخ زراعة في المستقبل (أرفضه فوراً: "التاريخ ده لسه في المستقبل، مينفعش."). أرفض المساحة الصفرية أو السالبة.
-8. عدد الأراضي:
+
+8. تعديل أي بيانات مسجلة (اسم/مساحة): اعرض القيمة الحالية مقابل الجديدة، واطلب تأكيداً صريحاً قبل إجراء التعديل عبر أداة manage_farmer_field بكود action="update_field".
+
+9. التحقق من البيانات: يمنع منعاً باتاً تسجيل تاريخ زراعة في المستقبل (أرفضه فوراً: "التاريخ ده لسه في المستقبل، مينفعش."). أرفض المساحة الصفرية أو السالبة. كذلك، استخدم تقديرك الزراعي كخبير لتقييم منطقية تاريخ الزراعة المذكور بالنسبة لدورة نمو المحصول المحدد. فإذا ذكر الفلاح تاريخ زراعة قديماً بشكل غير منطقي مقارنة بالموسم الطبيعي لهذا المحصول ومدة نموه المعتادة، لا تقبل التاريخ مباشرة، بل استفسر منه بلطف عن دقة التاريخ المذكور قبل حفظه.
+
+10. عدد الأراضي:
    - إذا كان لدى الفلاح أرض واحدة مسجلة فقط: افترضها تلقائياً واذكر اسمها في ردك.
    - إذا كان لديه أكثر من أرض ولم يحدد: اسأله "قصدك أنهي أرض يا حاج؟" وعين له الأراضي المسجلة.
-9. أول محادثة لفلاح بدون أي أرض: بادر بنفسك بسؤال ودود لجمع الأربعة معلومات: "منور يا حاج! قولنا زرعت إيه الموسم ده وأرضك كام فدان؟".
-10. الأسئلة العامة: إذا سأل سؤالاً عاماً، أجب إجابة مفيدة أولاً، ثم اقترح عليه التسجيل في نهاية الرد.
-11. المسودة الناقصة والتخلي عنها: إذا كان لديه مسودة ناقصة وبدأ يسجل أرضاً باِسم مختلف، اسأله أولاً: "لسه بنكمل بيانات مسودة [اسم الأرض القديم] ولا ده تسجيل جديد؟". إذا أكد التخلي عنها، أرسل confirm_abandon_draft = true مع أداة manage_farmer_field بكود action="collect_draft".
-12. تحويل وحدات المساحة: أي وحدة يذكرها الفلاح (قيراط أو متر) سيتم تحويلها داخلياً للفدان، ولكن اذكر له ووحدته الأصلية في الرد.
+
+11. أول محادثة لفلاح بدون أي أرض: بادر بنفسك بسؤال ودود لجمع الأربعة معلومات: "منور يا حاج! قولنا زرعت إيه الموسم ده وأرضك كام فدان؟".
+
+12. الأسئلة العامة: إذا سأل سؤالاً عاماً، أجب إجابة مفيدة أولاً، ثم اقترح عليه التسجيل في نهاية الرد.
+
+13. تحويل وحدات المساحة: أي وحدة يذكرها الفلاح (قيراط أو متر) سيتم تحويلها داخلياً للفدان، ولكن اذكر له وحدته الأصلية في الرد.
+
+14. قاعدة إلزامية — الرد النصي بعد الأداة: في كل مرة تستدعي فيها أي أداة (manage_farmer_field أو update_farm_profile)، يجب أن يحتوي ردك دائماً على نص كلام موجه للفلاح في نفس الرد. يُمنع منعاً باتاً الاكتفاء باستدعاء أداة دون إرفاق نص. بعد تنفيذ الأداة، تكلم الفلاح مباشرةً بكلام طبيعي ودود يناسب الموقف.
 `;
 
     // Build Gemini contents array
@@ -513,7 +512,10 @@ ${draftFieldContext}
             tools: [farmProfileToolDeclaration],
             generationConfig: {
                 temperature: 0.7,
-                maxOutputTokens: 1024,
+                maxOutputTokens: 5000,
+                thinkingConfig: keyData.thinking_level ? {
+                    thinkingBudget: keyData.thinking_level?.toUpperCase() === 'HIGH' ? 5000 : 0
+                } : undefined,
             },
         };
 
@@ -567,242 +569,161 @@ ${draftFieldContext}
         const candidates = data.candidates?.[0];
         const candidateParts: GeminiPart[] = candidates?.content?.parts ?? [];
 
-        const functionCallPart = candidateParts.find((p) => p.functionCall);
+        const functionCallParts = candidateParts.filter((p) => p.functionCall);
 
-        if (functionCallPart && functionCallPart.functionCall) {
-            const { name, args } = functionCallPart.functionCall;
-            console.log(`[crop-chat] Gemini called tool ${name} with args:`, args);
+        if (functionCallParts.length > 0) {
+            const functionResponseParts: GeminiPart[] = [];
 
-            if (name === "update_farm_profile") {
-                const { target_scope, properties_to_update } = args;
-                const cleanedData = Object.fromEntries(
-                    Object.entries(properties_to_update || {}).filter(
-                        ([_, v]) => v !== undefined && v !== null && v !== ""
-                    )
-                );
+            for (const callPart of functionCallParts) {
+                const { name, args } = callPart.functionCall!;
+                console.log(`[crop-chat] Gemini called tool ${name} with args:`, args);
 
-                if (Object.keys(cleanedData).length > 0) {
-                    const { error: rpcError } = await (supabaseAdmin as any).rpc("merge_farm_profile", {
-                        farmer_id: userId,
-                        target_scope: target_scope || "general",
-                        new_data: cleanedData,
-                    });
+                if (name === "update_farm_profile") {
+                    const { target_scope, properties_to_update } = args;
+                    const cleanedData = Object.fromEntries(
+                        Object.entries(properties_to_update || {}).filter(
+                            ([_, v]) => v !== undefined && v !== null && v !== ""
+                        )
+                    );
 
-                    if (rpcError) {
-                        console.error("[crop-chat] RPC merge_farm_profile failed:", rpcError);
-                    } else {
-                        console.log(`[crop-chat] Successfully merged farm profile for farmer ${userId}`);
-                    }
-                }
-            } else if (name === "manage_farmer_field") {
-                const {
-                    action,
-                    confirm_abandon_draft,
-                    field_id,
-                    field_name,
-                    crop_type,
-                    planting_date,
-                    area_value,
-                    area_unit,
-                    soil_type,
-                    irrigation_type,
-                    disambiguating_attribute
-                } = args;
-
-                if (action === "collect_draft") {
-                    if (draftField) {
-                        const draftName = draftField.field_name?.trim().toLowerCase() || "";
-                        const incomingName = field_name?.trim().toLowerCase() || "";
-                        const namesMatch = !incomingName || !draftName || incomingName === draftName;
-
-                        if (!namesMatch) {
-                            if (confirm_abandon_draft !== true) {
-                                console.log("[crop-chat] Draft name mismatch without explicit confirmation. Asking user first.");
-                            } else {
-                                await (supabaseAdmin as any)
-                                    .from("farmer_fields")
-                                    .update({ registration_status: "abandoned", is_active: false, updated_at: new Date().toISOString() })
-                                    .eq("id", draftField.id);
-                                console.log(`[crop-chat] Soft-deleted previous draft field ${draftField.id}`);
-
-                                const newCollected: Record<string, boolean> = {
-                                    field_name: !!field_name,
-                                    crop_type: !!crop_type,
-                                    planting_date: !!planting_date,
-                                    area: !!area_value,
-                                };
-                                await (supabaseAdmin as any).from("farmer_fields").insert({
-                                    farmer_id: userId,
-                                    field_name: field_name || null,
-                                    crop_type: crop_type || null,
-                                    planting_date: planting_date || null,
-                                    area_feddan: area_value ? toFeddan(Number(area_value), area_unit || "فدان") : null,
-                                    area_unit: area_unit || "فدان",
-                                    soil_type: soil_type || null,
-                                    irrigation_type: irrigation_type || null,
-                                    registration_status: "draft",
-                                    is_active: false,
-                                    draft_collected_fields: newCollected,
-                                });
-                            }
-                        } else {
-                            const existingCollected = (draftField.draft_collected_fields as Record<string, boolean>) || {};
-                            const updatedCollected: Record<string, boolean> = {
-                                ...existingCollected,
-                                ...(field_name && { field_name: true }),
-                                ...(crop_type && { crop_type: true }),
-                                ...(planting_date && { planting_date: true }),
-                                ...(area_value && { area: true }),
-                            };
-
-                            await (supabaseAdmin as any).from("farmer_fields").update({
-                                field_name: field_name || draftField.field_name,
-                                crop_type: crop_type || draftField.crop_type,
-                                planting_date: planting_date || draftField.planting_date,
-                                area_feddan: area_value ? toFeddan(Number(area_value), area_unit || draftField.area_unit || "فدان") : draftField.area_feddan,
-                                area_unit: area_unit || draftField.area_unit || "فدان",
-                                soil_type: soil_type || draftField.soil_type,
-                                irrigation_type: irrigation_type || draftField.irrigation_type,
-                                draft_collected_fields: updatedCollected,
-                                updated_at: new Date().toISOString(),
-                            }).eq("id", draftField.id);
-                            console.log(`[crop-chat] Updated existing draft field ${draftField.id}`);
-                        }
-                    } else {
-                        const initialCollected: Record<string, boolean> = {
-                            field_name: !!field_name,
-                            crop_type: !!crop_type,
-                            planting_date: !!planting_date,
-                            area: !!area_value,
-                        };
-                        await (supabaseAdmin as any).from("farmer_fields").insert({
+                    if (Object.keys(cleanedData).length > 0) {
+                        const { error: rpcError } = await (supabaseAdmin as any).rpc("merge_farm_profile", {
                             farmer_id: userId,
-                            field_name: field_name || null,
-                            crop_type: crop_type || null,
-                            planting_date: planting_date || null,
-                            area_feddan: area_value ? toFeddan(Number(area_value), area_unit || "فدان") : null,
-                            area_unit: area_unit || "فدان",
-                            soil_type: soil_type || null,
-                            irrigation_type: irrigation_type || null,
-                            registration_status: "draft",
-                            is_active: false,
-                            draft_collected_fields: initialCollected,
+                            target_scope: target_scope || "general",
+                            new_data: cleanedData,
                         });
-                        console.log(`[crop-chat] Created initial draft field for farmer ${userId}`);
-                    }
-                } else if (action === "confirm_save") {
-                    if (draftField) {
-                        const final_field_name = field_name ?? draftField.field_name;
-                        const final_crop_type = crop_type ?? draftField.crop_type;
-                        const final_planting_date = planting_date ?? draftField.planting_date;
-                        const final_area_feddan = area_value != null
-                            ? toFeddan(Number(area_value), area_unit || draftField.area_unit || "فدان")
-                            : draftField.area_feddan;
-                        const final_area_unit = area_unit ?? draftField.area_unit ?? "فدان";
 
-                        const today = new Date(); today.setHours(0,0,0,0);
-                        if (final_planting_date && new Date(final_planting_date) > today) {
-                            console.warn("[crop-chat] Validation error: planting_date in future");
-                        } else if (final_area_feddan != null && final_area_feddan <= 0) {
-                            console.warn("[crop-chat] Validation error: area_feddan <= 0");
+                        if (rpcError) {
+                            console.error("[crop-chat] RPC merge_farm_profile failed:", rpcError);
                         } else {
-                            const missing: string[] = [];
-                            if (!final_field_name) missing.push("field_name");
-                            if (!final_crop_type) missing.push("crop_type");
-                            if (!final_planting_date) missing.push("planting_date");
-                            if (final_area_feddan == null) missing.push("area");
-
-                            if (missing.length === 0) {
-                                await (supabaseAdmin as any).from("farmer_fields").update({
-                                    registration_status: "active",
-                                    is_active: true,
-                                    draft_collected_fields: null,
-                                    field_name: final_field_name,
-                                    crop_type: final_crop_type,
-                                    planting_date: final_planting_date,
-                                    area_feddan: final_area_feddan,
-                                    area_unit: final_area_unit,
-                                    updated_at: new Date().toISOString(),
-                                }).eq("id", draftField.id);
-                                console.log(`[crop-chat] Confirmed and activated field ${draftField.id}`);
-                            } else {
-                                console.warn(`[crop-chat] Incomplete draft confirmation, missing: ${missing.join(", ")}`);
-                            }
+                            console.log(`[crop-chat] Successfully merged farm profile for farmer ${userId}`);
                         }
                     }
-                } else if (action === "change_crop") {
-                    const today = new Date(); today.setHours(0,0,0,0);
-                    if (planting_date && new Date(planting_date) > today) {
-                        console.warn("[crop-chat] Validation error: planting_date in future for change_crop");
-                    } else if (field_id && crop_type && planting_date) {
-                        const { data: fieldOwner } = await (supabaseAdmin as any)
-                            .from("farmer_fields")
-                            .select("id")
-                            .eq("id", field_id)
-                            .eq("farmer_id", userId)
-                            .maybeSingle();
+                } else if (name === "manage_farmer_field") {
+                    const {
+                        action,
+                        field_id,
+                        field_name,
+                        crop_type,
+                        planting_date,
+                        area_value,
+                        area_unit,
+                        soil_type,
+                        irrigation_type,
+                        disambiguating_attribute
+                    } = args;
 
-                        if (fieldOwner) {
-                            const { error: rpcErr } = await (supabaseAdmin as any).rpc("archive_and_change_crop", {
-                                p_field_id: field_id,
-                                p_farmer_id: userId,
-                                p_new_crop: crop_type,
-                                p_new_planting: planting_date,
-                            });
-                            if (rpcErr) {
-                                console.error("[crop-chat] archive_and_change_crop RPC failed:", rpcErr);
-                            } else {
-                                console.log(`[crop-chat] Archived and changed crop for field ${field_id} to ${crop_type}`);
-                            }
-                        } else {
-                            console.warn(`[crop-chat] Field ${field_id} not found or not owned by farmer ${userId}`);
-                        }
-                    }
-                } else if (action === "update_field") {
-                    if (field_id) {
-                        const { data: owned } = await (supabaseAdmin as any)
-                            .from("farmer_fields")
-                            .select("id")
-                            .eq("id", field_id)
-                            .eq("farmer_id", userId)
-                            .maybeSingle();
+                    if (action === "register_field") {
+                        // تسجيل مباشر — الأربع معلومات مكتملة وتم تأكيد الفلاح
+                        const today = new Date(); today.setHours(0, 0, 0, 0);
+                        const area_feddan_val = area_value ? toFeddan(Number(area_value), area_unit || "فدان") : null;
 
-                        if (owned) {
-                            const updates: Record<string, any> = { updated_at: new Date().toISOString() };
-                            if (field_name) updates.field_name = field_name;
-                            if (area_value != null && Number(area_value) > 0) {
-                                updates.area_feddan = toFeddan(Number(area_value), area_unit || "فدان");
-                                updates.area_unit = area_unit || "فدان";
-                            }
-                            await (supabaseAdmin as any).from("farmer_fields").update(updates).eq("id", field_id);
-                            console.log(`[crop-chat] Updated field ${field_id} details`);
-                        }
-                    }
-                } else if (action === "disambiguate") {
-                    const today = new Date(); today.setHours(0,0,0,0);
-                    if (planting_date && new Date(planting_date) > today) {
-                        console.warn("[crop-chat] Validation error in disambiguate: future planting_date");
-                    } else if (area_value != null && Number(area_value) <= 0) {
-                        console.warn("[crop-chat] Validation error in disambiguate: area <= 0");
-                    } else {
-                        const fullName = `${field_name || ''} ${disambiguating_attribute || ''}`.trim();
-                        if (fullName && crop_type && planting_date) {
+                        if (planting_date && new Date(planting_date) > today) {
+                            console.warn("[crop-chat] Validation error: planting_date in future for register_field");
+                        } else if (area_feddan_val != null && area_feddan_val <= 0) {
+                            console.warn("[crop-chat] Validation error: area_feddan <= 0 for register_field");
+                        } else if (field_name && crop_type && planting_date && area_feddan_val != null) {
                             await (supabaseAdmin as any).from("farmer_fields").insert({
                                 farmer_id: userId,
-                                field_name: fullName,
+                                field_name,
                                 crop_type,
                                 planting_date,
-                                area_feddan: area_value ? toFeddan(Number(area_value), area_unit || "فدان") : 1,
+                                area_feddan: area_feddan_val,
                                 area_unit: area_unit || "فدان",
                                 soil_type: soil_type || null,
                                 irrigation_type: irrigation_type || null,
-                                registration_status: "active",
                                 is_active: true,
                             });
-                            console.log(`[crop-chat] Created disambiguated field '${fullName}' for farmer ${userId}`);
+                            console.log(`[crop-chat] Registered new field '${field_name}' for farmer ${userId}`);
+                        } else {
+                            console.warn(`[crop-chat] register_field called with incomplete data: field_name=${field_name}, crop_type=${crop_type}, planting_date=${planting_date}, area_value=${area_value}`);
+                        }
+                    } else if (action === "change_crop") {
+                        const today = new Date(); today.setHours(0, 0, 0, 0);
+                        if (planting_date && new Date(planting_date) > today) {
+                            console.warn("[crop-chat] Validation error: planting_date in future for change_crop");
+                        } else if (field_id && crop_type && planting_date) {
+                            const { data: fieldOwner } = await (supabaseAdmin as any)
+                                .from("farmer_fields")
+                                .select("id")
+                                .eq("id", field_id)
+                                .eq("farmer_id", userId)
+                                .maybeSingle();
+
+                            if (fieldOwner) {
+                                const { error: rpcErr } = await (supabaseAdmin as any).rpc("archive_and_change_crop", {
+                                    p_field_id: field_id,
+                                    p_farmer_id: userId,
+                                    p_new_crop: crop_type,
+                                    p_new_planting: planting_date,
+                                });
+                                if (rpcErr) {
+                                    console.error("[crop-chat] archive_and_change_crop RPC failed:", rpcErr);
+                                } else {
+                                    console.log(`[crop-chat] Archived and changed crop for field ${field_id} to ${crop_type}`);
+                                }
+                            } else {
+                                console.warn(`[crop-chat] Field ${field_id} not found or not owned by farmer ${userId}`);
+                            }
+                        }
+                    } else if (action === "update_field") {
+                        if (field_id) {
+                            const { data: owned } = await (supabaseAdmin as any)
+                                .from("farmer_fields")
+                                .select("id")
+                                .eq("id", field_id)
+                                .eq("farmer_id", userId)
+                                .maybeSingle();
+
+                            if (owned) {
+                                const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+                                if (field_name) updates.field_name = field_name;
+                                if (area_value != null && Number(area_value) > 0) {
+                                    updates.area_feddan = toFeddan(Number(area_value), area_unit || "فدان");
+                                    updates.area_unit = area_unit || "فدان";
+                                }
+                                await (supabaseAdmin as any).from("farmer_fields").update(updates).eq("id", field_id);
+                                console.log(`[crop-chat] Updated field ${field_id} details`);
+                            }
+                        }
+                    } else if (action === "disambiguate") {
+                        const today = new Date(); today.setHours(0, 0, 0, 0);
+                        if (planting_date && new Date(planting_date) > today) {
+                            console.warn("[crop-chat] Validation error in disambiguate: future planting_date");
+                        } else if (area_value != null && Number(area_value) <= 0) {
+                            console.warn("[crop-chat] Validation error in disambiguate: area <= 0");
+                        } else {
+                            const fullName = `${field_name || ''} ${disambiguating_attribute || ''}`.trim();
+                            if (fullName && crop_type && planting_date) {
+                                await (supabaseAdmin as any).from("farmer_fields").insert({
+                                    farmer_id: userId,
+                                    field_name: fullName,
+                                    crop_type,
+                                    planting_date,
+                                    area_feddan: area_value ? toFeddan(Number(area_value), area_unit || "فدان") : 1,
+                                    area_unit: area_unit || "فدان",
+                                    soil_type: soil_type || null,
+                                    irrigation_type: irrigation_type || null,
+                                    is_active: true,
+                                });
+                                console.log(`[crop-chat] Created disambiguated field '${fullName}' for farmer ${userId}`);
+                            }
                         }
                     }
                 }
+
+                functionResponseParts.push({
+                    functionResponse: {
+                        name,
+                        response: {
+                            name,
+                            content: {
+                                status: "success",
+                                message: "تم تنفيذ العملية بنجاح."
+                            }
+                        }
+                    }
+                });
             }
 
             const updatedContents: ChatMessage[] = [
@@ -813,31 +734,27 @@ ${draftFieldContext}
                 },
                 {
                     role: "function",
-                    parts: [
-                        {
-                            functionResponse: {
-                                name: functionCallPart.functionCall!.name,
-                                response: {
-                                    name: functionCallPart.functionCall!.name,
-                                    content: {
-                                        status: "success",
-                                        message: "تم تنفيذ العملية بنجاح."
-                                    }
-                                }
-                            }
-                        }
-                    ]
+                    parts: functionResponseParts,
                 }
             ];
 
+            // ── Follow-up: force text-only response with tool_config mode=NONE ──────────
             const followUpPayload = {
                 contents: updatedContents,
                 systemInstruction: {
                     parts: [{ text: systemPrompt }],
                 },
+                tools: [farmProfileToolDeclaration],
+                // Prevent model from calling tools again — force text response
+                tool_config: {
+                    function_calling_config: { mode: "NONE" }
+                },
                 generationConfig: {
                     temperature: 0.7,
-                    maxOutputTokens: 1024,
+                    maxOutputTokens: 5000,
+                    thinkingConfig: keyData.thinking_level ? {
+                        thinkingBudget: keyData.thinking_level?.toUpperCase() === 'HIGH' ? 5000 : 0
+                    } : undefined,
                 },
             };
 
@@ -850,13 +767,14 @@ ${draftFieldContext}
 
                 if (followUpRes.ok) {
                     const followUpData = await followUpRes.json();
-                    const followUpParts = followUpData.candidates?.[0]?.content?.parts ?? [];
+                    const followUpParts: GeminiPart[] = followUpData.candidates?.[0]?.content?.parts ?? [];
                     const finalFollowUpText = followUpParts
                         .filter((p: any) => !p.thought && p.text)
                         .map((p: any) => p.text)
                         .join("\n");
 
                     if (finalFollowUpText) {
+                        console.log("[crop-chat] Follow-up got text response ✅");
                         const { cleanText, recommendedProduct } = processResponseText(finalFollowUpText);
                         return NextResponse.json({
                             success: true,
@@ -864,10 +782,22 @@ ${draftFieldContext}
                             recommendedProduct,
                         });
                     }
+
+                    console.warn("[crop-chat] Follow-up returned no text even with mode=NONE, parts:", JSON.stringify(followUpParts).slice(0, 300));
+                } else {
+                    const errBody = await followUpRes.text();
+                    console.error(`[crop-chat] Follow-up HTTP error ${followUpRes.status}:`, errBody.slice(0, 200));
                 }
             } catch (followUpErr) {
-                console.error("[crop-chat] Follow up request failed after tool execution:", followUpErr);
+                console.error("[crop-chat] Follow-up request failed:", followUpErr);
             }
+
+            // Fallback: tool was executed successfully but model failed to return text
+            console.warn("[crop-chat] Returning generic success after tool execution (no text from model)");
+            return NextResponse.json({
+                success: true,
+                text: "تم تنفيذ العملية بنجاح.",
+            });
         }
 
         const resultText = candidateParts

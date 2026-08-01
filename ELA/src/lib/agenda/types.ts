@@ -99,14 +99,12 @@ export interface FarmerField {
   id: string;
   farmer_id: string;
   field_name: string | null;
-  crop_type: string | null;
-  planting_date: string | null; // ISO date or null for drafts
+  crop_type: string;
+  planting_date: string; // ISO date
   latitude: number | null;
   longitude: number | null;
   area_feddan: number | null;
   area_unit?: string | null;
-  registration_status?: 'draft' | 'active' | 'abandoned';
-  draft_collected_fields?: Record<string, boolean> | null;
   is_active: boolean;
   notifications_enabled: boolean;
   created_at: string;

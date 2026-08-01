@@ -30,12 +30,11 @@ export async function POST(req: Request) {
     const todayCairo = getCairoDateString();
     const nowIso = new Date().toISOString();
 
-    // 1. Fetch all active farmer fields (with registration_status = 'active')
+    // 1. Fetch all active farmer fields
     const { data: fields, error: fieldsErr } = await (supabase as any)
       .from('farmer_fields')
       .select('*')
-      .eq('is_active', true)
-      .eq('registration_status', 'active');
+      .eq('is_active', true);
 
     if (fieldsErr || !fields) {
       return NextResponse.json({ error: 'Failed to fetch farmer fields', details: fieldsErr }, { status: 500 });

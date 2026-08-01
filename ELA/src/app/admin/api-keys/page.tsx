@@ -25,6 +25,11 @@ const THINKING_MODELS: Record<string, { levels: string[]; label: string; color: 
     label: "Gemini Flash Lite",
     color: "blue",
   },
+  "gemini-3.5-flash-lite": {
+    levels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"],
+    label: "Gemini 3.5 Flash Lite",
+    color: "blue",
+  },
   "gemma-4-31b-it": {
     levels: ["MINIMAL", "HIGH"],
     label: "Gemma 4 31B",
