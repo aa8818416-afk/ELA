@@ -22,6 +22,7 @@ type DistributorWithProfile = {
   wallet_balance: number;
   pending_commission: number;
   village: string | null;
+  email?: string | null;
   governorate: string | null;
   center: string | null;
   landmark: string | null;
@@ -31,12 +32,25 @@ type DistributorWithProfile = {
   supervised_villages: string[] | null;
   total_acres: number | null;
   status: DistributorStatus;
-  profiles: {
-    full_name: string | null;
-    phone: string | null;
-    email?: string | null;
-  };
+  profiles:
+    | {
+        full_name: string | null;
+        phone: string | null;
+        email?: string | null;
+      }
+    | {
+        full_name: string | null;
+        phone: string | null;
+        email?: string | null;
+      }[]
+    | null;
 };
+
+function getProfile(dist?: DistributorWithProfile | null) {
+  if (!dist || !dist.profiles) return null;
+  if (Array.isArray(dist.profiles)) return dist.profiles[0] || null;
+  return dist.profiles;
+}
 
 type OrderItem = {
   id: string;
@@ -146,8 +160,9 @@ function DistributorDetailsModal({
           {/* بيانات شخصية */}
           <section className="space-y-2">
             <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">البيانات الشخصية</h4>
-            <InfoRow label="الاسم الكامل" value={dist.profiles?.full_name} />
-            <InfoRow label="الهاتف" value={dist.profiles?.phone} dir="ltr" />
+            <InfoRow label="الاسم الكامل" value={getProfile(dist)?.full_name} />
+            <InfoRow label="الهاتف" value={getProfile(dist)?.phone} dir="ltr" />
+            <InfoRow label="البريد الإلكتروني" value={dist.email || getProfile(dist)?.email} dir="ltr" />
           </section>
 
           {/* بيانات العنوان */}
@@ -287,7 +302,7 @@ function ResetPasswordModal({
 
         <div className="p-6 space-y-4">
           <p className="text-slate-600 text-sm">
-            الموزع: <span className="font-bold text-slate-800">{dist.profiles?.full_name}</span>
+            الموزع: <span className="font-bold text-slate-800">{getProfile(dist)?.full_name || "غير محدد"}</span>
           </p>
 
           {!newPassword ? (
@@ -394,7 +409,7 @@ function SettleSalesModal({
               تحصيل المبيعات غير المستلمة
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              الموزع: <span className="font-bold text-slate-700">{dist.profiles?.full_name}</span>
+              الموزع: <span className="font-bold text-slate-700">{getProfile(dist)?.full_name || "غير محدد"}</span>
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
@@ -539,7 +554,7 @@ function DistributorLedgerModal({
             <div>
               <h3 className="text-lg font-bold">كشف حساب الموزع التفصيلي</h3>
               <p className="text-xs text-slate-400">
-                {dist.profiles?.full_name} ({dist.profiles?.phone || "—"})
+                {getProfile(dist)?.full_name || "غير محدد"} ({getProfile(dist)?.phone || "—"})
               </p>
             </div>
           </div>
@@ -681,11 +696,14 @@ export default function DistributorsPage() {
         profile_id, active_status, wallet_balance, pending_commission, village,
         governorate, center, landmark, main_road,
         latitude, longitude, supervised_villages, total_acres, status,
-        profiles(full_name, phone, email)
+        profiles(full_name, phone)
       `)
       .order("status", { ascending: true });
 
-    if (!distErr && distData) setDistributors(distData);
+    if (distErr) {
+      console.error("Error fetching distributors:", distErr);
+    }
+    if (distData) setDistributors(distData);
 
     // Fetch delivered orders for metrics
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -793,9 +811,10 @@ export default function DistributorsPage() {
     if (searchTerm.trim() !== "") {
       const query = searchTerm.toLowerCase().trim();
       list = list.filter((d) => {
-        const name = (d.profiles?.full_name || "").toLowerCase();
-        const phone = (d.profiles?.phone || "").toLowerCase();
-        const email = (d.profiles?.email || "").toLowerCase();
+        const prof = getProfile(d);
+        const name = (prof?.full_name || "").toLowerCase();
+        const phone = (prof?.phone || "").toLowerCase();
+        const email = (d.email || prof?.email || "").toLowerCase();
         const gov = (d.governorate || "").toLowerCase();
         const center = (d.center || "").toLowerCase();
         const village = (d.village || "").toLowerCase();
@@ -836,8 +855,8 @@ export default function DistributorsPage() {
         case "commission_desc":
           return (Number(b.pending_commission) || 0) - (Number(a.pending_commission) || 0);
         case "name_asc": {
-          const nameA = a.profiles?.full_name || "";
-          const nameB = b.profiles?.full_name || "";
+          const nameA = getProfile(a)?.full_name || "";
+          const nameB = getProfile(b)?.full_name || "";
           return nameA.localeCompare(nameB, "ar");
         }
         case "default":
@@ -1169,10 +1188,10 @@ export default function DistributorsPage() {
                       {/* 1. الموزع */}
                       <td className="px-5 py-4">
                         <div className="font-semibold text-slate-900">
-                          {dist.profiles?.full_name || "—"}
+                          {getProfile(dist)?.full_name || "—"}
                         </div>
                         <div className="text-xs text-slate-500 font-mono" dir="ltr">
-                          {dist.profiles?.phone || "—"}
+                          {getProfile(dist)?.phone || "—"}
                         </div>
                       </td>
 
