@@ -214,12 +214,22 @@ export async function POST(request: Request) {
             })
             .join("\n") || "لا توجد منتجات متوفرة حالياً في المعرض.";
 
+    const extractAnswer = (rawText: string): string => {
+        const match = rawText.match(/<answer>([\s\S]*?)<\/answer>/i);
+        if (match) {
+            return match[1].trim();
+        }
+        return rawText.trim();
+    };
+
     const processResponseText = (rawText: string) => {
         if (!rawText) return { cleanText: "", recommendedProduct: null };
 
-        const match = rawText.match(/\[RECOMMEND_PRODUCT:\s*["']?([^\]"']+)["']?\s*\]/i);
+        const extractedAnswerText = extractAnswer(rawText);
+
+        const match = extractedAnswerText.match(/\[RECOMMEND_PRODUCT:\s*["']?([^\]"']+)["']?\s*\]/i);
         let recommendedProduct: any = null;
-        const cleanText = rawText.replace(/\[RECOMMEND_PRODUCT:\s*["']?[^\]"']+["']?\s*\]/gi, "").trim();
+        const cleanText = extractedAnswerText.replace(/\[RECOMMEND_PRODUCT:\s*["']?[^\]"']+["']?\s*\]/gi, "").trim();
 
         if (match) {
             const tagValue = match[1].trim().toLowerCase();
