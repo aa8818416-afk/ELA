@@ -275,10 +275,12 @@ export default function FarmerOrdersClient({ orders, distProfile }: FarmerOrders
 // ─── Order Card ───────────────────────────────────────────────────────────────
 function OrderCard({ order }: { order: FarmerOrder }) {
   const status = statusMap[order.status] || statusMap.pending;
-  const orderDate = new Date(order.created_at).toLocaleDateString("ar-EG", {
+  const orderDate = new Date(order.created_at).toLocaleString("ar-EG", {
     day: "numeric",
     month: "long",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
   const items = order.order_items || [];
   const isCompleted = order.status === "delivered" || order.status === "cancelled";

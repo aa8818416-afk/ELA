@@ -18,6 +18,9 @@ export default async function DeliveriesPage() {
     .from("orders")
     .select(`
       id,
+      created_at,
+      created_by_type,
+      is_seen,
       total_price,
       status,
       farmers (
@@ -61,6 +64,9 @@ export default async function DeliveriesPage() {
 
     return {
       id: order.id,
+      created_at: order.created_at || new Date().toISOString(),
+      created_by_type: order.created_by_type || "platform",
+      is_seen: order.is_seen ?? false,
       total_price: order.total_price,
       status: order.status,
       farmer_name: profileObj?.full_name || "اسم غير معروف",

@@ -118,6 +118,7 @@ export async function createFarmerOrderDirectly({
         total_price: totalPrice,
         status: "pending",
         payment_status: "unpaid",
+        created_by_type: "platform",
       })
       .select("id")
       .single();

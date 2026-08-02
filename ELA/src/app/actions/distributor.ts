@@ -149,6 +149,7 @@ export async function createOrder(formData: FormData) {
         total_price: totalPrice,
         status: "pending",
         payment_status: "unpaid",
+        created_by_type: "distributor",
       })
       .select("id")
       .single();
@@ -506,5 +507,33 @@ export async function markOrderDelivered(orderId: string) {
   } catch (error) {
     console.error("[markOrderDelivered] Unexpected Error:", error);
     return { error: "حدث خطأ غير متوقع أثناء تحديث الطلب" };
+  }
+}
+
+export async function markOrdersAsSeen(orderIds: string[]) {
+  if (!orderIds || orderIds.length === 0) return { success: true };
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return { error: "غير مصرح لك" };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from("orders")
+      .update({ is_seen: true })
+      .in("id", orderIds)
+      .eq("distributor_id", user.id);
+
+    if (error) {
+      console.error("[markOrdersAsSeen] Error:", error);
+      return { error: "فشل تحديث حالة القراءة" };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error("[markOrdersAsSeen] Exception:", err);
+    return { error: "حدث خطأ غير متوقع" };
   }
 }
