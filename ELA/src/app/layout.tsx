@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import NetworkGuard from "@/components/NetworkGuard";
 
 export const metadata: Metadata = {
   title: "منصة ELA | منصة الزراعة الاجتماعية",
@@ -21,7 +22,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <NetworkGuard />
+        {children}
+      </body>
     </html>
   );
 }

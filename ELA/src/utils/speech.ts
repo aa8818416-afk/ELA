@@ -133,17 +133,32 @@ export function useAudioRecorder() {
 
 // Global active audio to ensure only one audio plays at a time
 let globalTtsAudio: HTMLAudioElement | null = null;
+// Abort controller for any in-flight TTS fetch — cancelled when stopSpeaking() is called
+let globalTtsAbortController: AbortController | null = null;
 
 /**
  * Text-to-Speech: Converts text to Egyptian Neural voice (ar-EG-SalmaNeural)
  * using ELA's Edge-TTS Next.js API endpoint (/api/text-to-speech).
  */
-export async function speakArabic(text: string, onStart?: () => void, onEnd?: () => void, voice?: string): Promise<void> {
+export async function speakArabic(
+  text: string,
+  onLoading?: () => void,
+  onStart?: () => void,
+  onEnd?: () => void,
+  voice?: string
+): Promise<void> {
   if (typeof window === "undefined") return;
 
   try {
+    // Cancel any previous in-flight fetch + stop any playing audio
     stopSpeaking();
-    onStart?.();
+
+    // Create a new abort controller for this request
+    const abortController = new AbortController();
+    globalTtsAbortController = abortController;
+
+    // Signal: loading has started (fetching audio from server)
+    onLoading?.();
 
     const response = await fetch("/api/text-to-speech", {
       method: "POST",
@@ -152,6 +167,7 @@ export async function speakArabic(text: string, onStart?: () => void, onEnd?: ()
         text,
         ...(voice ? { voice } : {}),
       }),
+      signal: abortController.signal,
     });
 
     if (!response.ok) {
@@ -164,6 +180,17 @@ export async function speakArabic(text: string, onStart?: () => void, onEnd?: ()
     const audio = new Audio(audioUrl);
     globalTtsAudio = audio;
 
+    let hasStarted = false;
+    const handleStart = () => {
+      if (!hasStarted) {
+        hasStarted = true;
+        onStart?.();
+      }
+    };
+
+    audio.onplay = handleStart;
+    audio.onplaying = handleStart;
+
     audio.onended = () => {
       onEnd?.();
       URL.revokeObjectURL(audioUrl);
@@ -174,14 +201,31 @@ export async function speakArabic(text: string, onStart?: () => void, onEnd?: ()
       URL.revokeObjectURL(audioUrl);
     };
 
-    await audio.play();
+    // Some browsers (especially mobile) throw on autoplay even if audio plays
+    await audio.play().catch(() => {
+      // Only signal failure if audio is truly not playing
+      if (audio.paused) {
+        onEnd?.();
+      }
+      // If audio is not paused, it's playing — let onplay/onplaying/onended handle state
+    });
   } catch (error) {
+    // AbortError = intentionally cancelled by stopSpeaking() — not a real error
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return;
+    }
     console.error("[tts] speakArabic failed:", error);
     onEnd?.();
   }
 }
 
 export function stopSpeaking(): void {
+  // Cancel any in-flight TTS fetch first
+  if (globalTtsAbortController) {
+    globalTtsAbortController.abort();
+    globalTtsAbortController = null;
+  }
+  // Stop any currently playing audio
   if (globalTtsAudio) {
     try {
       globalTtsAudio.pause();

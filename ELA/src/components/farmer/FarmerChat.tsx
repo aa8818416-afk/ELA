@@ -16,6 +16,7 @@ import {
     FolderOpen,
     X,
     RotateCcw,
+    WifiOff,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -57,6 +58,7 @@ export default function FarmerChat() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [activeSpeechId, setActiveSpeechId] = useState<string | null>(null);
+    const [loadingSpeechId, setLoadingSpeechId] = useState<string | null>(null);
     const [ttsSupported, setTtsSupported] = useState(false);
 
     // Image attachment state
@@ -154,7 +156,10 @@ export default function FarmerChat() {
 
             const data = await res.json();
 
-            if (!res.ok || data.error) {
+            if (res.status === 401) {
+                setError("انتهت جلستك، يرجى تسجيل الدخول مجدداً.");
+                setFailedPayload(null);
+            } else if (!res.ok || data.error) {
                 setError(data.error || "عذراً، حدث خطأ في معالجة طلبك.");
                 setFailedPayload(payload);
             } else if (data.success && data.text) {
@@ -173,8 +178,20 @@ export default function FarmerChat() {
                 }
             }
         } catch (err) {
-            console.error("[chat] error sending message:", err);
-            setError("تعذر الاتصال بالخادم، تأكد من اتصال الإنترنت وحاول مرة أخرى.");
+            // Only treat genuine network failures (fetch couldn't reach server)
+            // as a network error — not JSON parse failures or AbortError
+            const isNetworkError =
+                err instanceof TypeError &&
+                (err.message.toLowerCase().includes("fetch") ||
+                    err.message.toLowerCase().includes("network") ||
+                    err.message.toLowerCase().includes("failed to fetch"));
+
+            if (isNetworkError) {
+                setError("__network__");
+            } else {
+                console.error("[chat] error sending message:", err);
+                setError("عذراً، حدث خطأ غير متوقع. حاول مرة أخرى.");
+            }
             setFailedPayload(payload);
         } finally {
             setIsLoading(false);
@@ -247,17 +264,37 @@ export default function FarmerChat() {
     };
 
     const handleSpeak = (text: string, msgId: string) => {
-        if (activeSpeechId === msgId) {
+        // If already loading or playing this message → stop it
+        if (activeSpeechId === msgId || loadingSpeechId === msgId) {
             stopSpeaking();
             setActiveSpeechId(null);
-        } else {
-            setActiveSpeechId(msgId);
-            speakArabic(
-                text,
-                () => setActiveSpeechId(msgId),
-                () => setActiveSpeechId(null)
-            );
+            setLoadingSpeechId(null);
+            return;
         }
+
+        // Stop any other audio that may be playing/loading first
+        stopSpeaking();
+        setActiveSpeechId(null);
+        setLoadingSpeechId(null);
+
+        // Start loading
+        setLoadingSpeechId(msgId);
+
+        speakArabic(
+            text,
+            // onLoading: already set above, nothing extra needed
+            () => {},
+            // onStart: audio is now actually playing
+            () => {
+                setLoadingSpeechId(null);
+                setActiveSpeechId(msgId);
+            },
+            // onEnd: audio finished or errored
+            () => {
+                setActiveSpeechId(null);
+                setLoadingSpeechId(null);
+            }
+        );
     };
 
     return (
@@ -328,14 +365,24 @@ export default function FarmerChat() {
                                 {/* TTS Speaker icon for model replies */}
                                 {msg.role === "model" && ttsSupported && (
                                     <button
+                                        type="button"
                                         onClick={() => handleSpeak(msg.content, msg.id)}
-                                        className={`absolute -bottom-3 -left-3 p-1.5 rounded-full border shadow-md transition-colors ${activeSpeechId === msg.id
-                                                ? "bg-emerald-500 text-white border-emerald-400"
+                                        className={`absolute -bottom-3 -left-3 p-1.5 rounded-full border shadow-md transition-colors ${
+                                            loadingSpeechId === msg.id || activeSpeechId === msg.id
+                                                ? "bg-emerald-500 text-white border-emerald-400 hover:bg-emerald-600"
                                                 : "bg-slate-800 text-slate-400 hover:text-white border-slate-700 hover:bg-slate-700"
-                                            }`}
-                                        title={activeSpeechId === msg.id ? "إيقاف الصوت" : "قراءة الرسالة بصوت عالي"}
+                                        }`}
+                                        title={
+                                            loadingSpeechId === msg.id
+                                                ? "جاري تحميل الصوت... (إيقاف)"
+                                                : activeSpeechId === msg.id
+                                                ? "إيقاف الصوت"
+                                                : "قراءة الرسالة بصوت عالي"
+                                        }
                                     >
-                                        {activeSpeechId === msg.id ? (
+                                        {loadingSpeechId === msg.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : activeSpeechId === msg.id ? (
                                             <VolumeX className="w-4 h-4" />
                                         ) : (
                                             <Volume2 className="w-4 h-4" />
@@ -386,10 +433,18 @@ export default function FarmerChat() {
             {(error || recorderError) && (
                 <div className="mx-4 p-3 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col items-center gap-2.5 text-red-400 text-xs">
                     <div className="flex items-start gap-2.5 w-full">
-                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                        <p className="leading-relaxed flex-1">{error || recorderError}</p>
+                        {error === "__network__" ? (
+                            <WifiOff className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                        ) : (
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        )}
+                        <p className="leading-relaxed flex-1">
+                            {error === "__network__"
+                                ? "⚠️ هناك مشكلة في الشبكة، تحقق من الاتصال وحاول مرة أخرى"
+                                : (error || recorderError)}
+                        </p>
                     </div>
-                    {failedPayload && (
+                    {failedPayload && error !== "انتهت جلستك، يرجى تسجيل الدخول مجدداً." && (
                         <button
                             onClick={handleRetry}
                             className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 px-4 py-2 rounded-xl transition-colors self-center"

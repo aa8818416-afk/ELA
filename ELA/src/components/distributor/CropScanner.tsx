@@ -243,6 +243,7 @@ export default function CropScanner() {
       speakArabic(
         text,
         () => setActiveSpeechId(msgId),
+        () => setActiveSpeechId(msgId),
         () => setActiveSpeechId(null)
       );
     }

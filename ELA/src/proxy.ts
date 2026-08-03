@@ -1,5 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
+import type { CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+
+type CookieWithOptions = { name: string; value: string; options: CookieOptions };
 
 type UserRole = "admin" | "distributor" | "farmer";
 
@@ -29,15 +32,15 @@ export async function proxy(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieWithOptions[]) {
           // Apply cookies to the request
-          cookiesToSet.forEach(({ name, value }) =>
+          cookiesToSet.forEach(({ name, value }: { name: string; value: string }) =>
             request.cookies.set(name, value)
           );
           // Rebuild the response with the updated request cookies
           supabaseResponse = NextResponse.next({ request });
           // Apply cookies to the response
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value, options }: CookieWithOptions) =>
             supabaseResponse.cookies.set(name, value, options)
           );
         },
@@ -46,9 +49,18 @@ export async function proxy(request: NextRequest) {
   );
 
   // getUser() contacts the Supabase Auth server to verify the token
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error && error.message?.toLowerCase().includes("fetch")) {
+      console.error("[Middleware] Supabase auth fetch error:", error.message);
+      return redirectTo("/offline");
+    }
+    user = data?.user || null;
+  } catch (e) {
+    console.error("[Middleware] Supabase auth connection error:", e);
+    return redirectTo("/offline");
+  }
 
   // 2. Determine route context
   const isLoginPage = pathname === "/login";
@@ -79,22 +91,41 @@ export async function proxy(request: NextRequest) {
 
   // 4. Authenticated user — fetch their role from the profiles table
   if (user) {
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    let profile: { role: string } | null = null;
+    let profileError: { message: string } | null = null;
 
-    if (error || !profile) {
-      console.error("[Middleware] Profile fetch error:", error?.message);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      profile = data;
+      profileError = error;
+    } catch (e) {
+      // Network/connection failure reaching Supabase from the server
+      console.error("[Middleware] Supabase connection error:", e);
+      return redirectTo("/offline");
+    }
+
+    // Supabase responded but returned an error (connection issue, not missing profile)
+    if (profileError && !profile) {
+      console.error("[Middleware] Profile fetch error:", profileError.message);
+      return redirectTo("/offline");
+    }
+
+    // Supabase connected fine but this user has no profile row → login
+    if (!profile) {
+      console.error("[Middleware] No profile found for user:", user.id);
       return redirectTo("/login");
     }
 
     const role = profile.role as UserRole;
     const ownDashboard = ROLE_DASHBOARDS[role];
 
-    // 4a. Authenticated user on /login → redirect to their dashboard
-    if (isLoginPage) {
+    // 4a. Authenticated user on /login or /offline → redirect to their dashboard
+    if (isLoginPage || pathname === "/offline") {
       return redirectTo(ownDashboard);
     }
 

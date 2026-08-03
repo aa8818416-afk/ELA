@@ -226,6 +226,7 @@ export default function FarmerCropScanner() {
       speakArabic(
         text,
         () => setActiveSpeechId(msgId),
+        () => setActiveSpeechId(msgId),
         () => setActiveSpeechId(null)
       );
     }
