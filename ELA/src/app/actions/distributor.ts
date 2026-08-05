@@ -311,7 +311,7 @@ Return a JSON object strictly matching this format without markdown code blocks 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let query = (supabaseAdmin as any)
         .from("api_key_models")
-        .select("id, model_name, daily_usage, daily_limit, status, api_keys!inner(id, api_key, status, project_name)")
+        .select("id, model_name, daily_usage, daily_limit, status, thinking_level, api_keys!inner(id, api_key, status, project_name)")
         .eq("status", "active")
         .eq("api_keys.status", "active")
         .order("daily_usage", { ascending: true });

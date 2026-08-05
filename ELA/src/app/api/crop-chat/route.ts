@@ -644,7 +644,7 @@ ${activeFieldsContext}
 
         let query = (supabaseAdmin as any)
             .from("api_key_models")
-            .select("id, model_name, daily_usage, daily_limit, status, api_keys!inner(id, api_key, status, project_name)")
+            .select("id, model_name, daily_usage, daily_limit, status, thinking_level, api_keys!inner(id, api_key, status, project_name)")
             .eq("status", "active")
             .eq("api_keys.status", "active")
             .eq("api_keys.project_name", "gemini")
@@ -744,7 +744,6 @@ ${activeFieldsContext}
         const data = await response.json();
         const candidates = data.candidates?.[0];
         const candidateParts: GeminiPart[] = candidates?.content?.parts ?? [];
-
 
         const functionCallParts = candidateParts.filter((p) => p.functionCall);
 
