@@ -148,6 +148,7 @@ const farmProfileToolDeclaration = {
                     },
                     activity_date: { type: "STRING", description: "تاريخ النشاط YYYY-MM-DD إن ذُكر" },
                     notes: { type: "STRING", description: "ملاحظات إضافية" },
+                    unit_price: { type: "NUMBER", description: "تكلفة أو أجر الفرد في العمالة أو سعر الوحدة في الحصاد والمعاملات" },
                     // treatment
                     category: { type: "STRING", enum: ["مبيد", "سماد"], description: "نوع المعاملة" },
                     product_id: { type: "STRING", description: "معرف المنتج من قائمة المنتجات" },
@@ -155,8 +156,14 @@ const farmProfileToolDeclaration = {
                     dosage: { type: "NUMBER", description: "الجرعة" },
                     dosage_unit: { type: "STRING", description: "وحدة الجرعة" },
                     sprayer_count: { type: "INTEGER", description: "عدد الرشاشات المستخدمة بالجرعة المذكورة" },
-                    // irrigation
+                    pest_disease_id: { type: "STRING", description: "معرف الآفة أو المرض" },
+                    symptom_description: { type: "STRING", description: "وصف الأعراض" },
+                    photo_url: { type: "STRING", description: "رابط الصورة" },
+                    // irrigation & harvest
                     description: { type: "STRING", description: "وصف عملية الري أو الحصاد" },
+                    // harvest
+                    quantity: { type: "NUMBER", description: "الكمية المحصودة" },
+                    quantity_unit: { type: "STRING", description: "وحدة الكمية المحصودة (كيلو، طن، قفص...)" },
                     // labor
                     worker_count: { type: "INTEGER", description: "عدد العمال" },
                     contractor_name: { type: "STRING", description: "اسم المقاول أو المسؤول" },
@@ -174,6 +181,7 @@ const farmProfileToolDeclaration = {
                     activity_type: { type: "STRING", enum: ["treatment", "irrigation", "harvest", "labor"] },
                     activity_date: { type: "STRING", description: "التاريخ لو تم توضيحه YYYY-MM-DD" },
                     notes: { type: "STRING" },
+                    unit_price: { type: "NUMBER", description: "تكلفة أو أجر الفرد أو سعر الوحدة" },
                     mark_completed: { type: "BOOLEAN", description: "حوّل status إلى completed لو اكتملت البيانات الأساسية" },
                     // treatment
                     category: { type: "STRING", enum: ["مبيد", "سماد"] },
@@ -182,9 +190,15 @@ const farmProfileToolDeclaration = {
                     dosage: { type: "NUMBER" },
                     dosage_unit: { type: "STRING" },
                     sprayer_count: { type: "INTEGER" },
-                    outcome_rating: { type: "STRING", enum: ["ممتاز", "متوسط", "فاشل"], description: "نتيجة الرشة فقط (لو تطوع الفلاح بذكرها في treatment)" },
+                    pest_disease_id: { type: "STRING" },
+                    symptom_description: { type: "STRING" },
+                    photo_url: { type: "STRING" },
+                    outcome_rating: { type: "STRING", enum: ["ممتاز", "متوسط", "فاشل"], description: "نتيجة الرشة أو النشاط" },
                     // irrigation / harvest
                     description: { type: "STRING" },
+                    // harvest
+                    quantity: { type: "NUMBER" },
+                    quantity_unit: { type: "STRING" },
                     // labor
                     worker_count: { type: "INTEGER" },
                     contractor_name: { type: "STRING" },
@@ -203,13 +217,32 @@ const FIELD_PRIORITY: Record<string, string[]> = {
     labor: ["activity_date", "worker_count", "contractor_name"],
 };
 
-// يرجع كل الحقول الناقصة دفعة واحدة (بدون حد)
+function isOlderThanDays(days: number, dateStr?: string | null, createdAtStr?: string | null): boolean {
+    const refStr = dateStr || createdAtStr;
+    if (!refStr) return false;
+    const refDate = new Date(refStr).getTime();
+    if (isNaN(refDate)) return false;
+    const now = Date.now();
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    return (now - refDate) >= (days * MS_PER_DAY);
+}
+
+function isOlderThan5Days(dateStr?: string | null, createdAtStr?: string | null): boolean {
+    return isOlderThanDays(5, dateStr, createdAtStr);
+}
+
+// يرجع كل الحقول الناقصة حالياً لسؤال المزارع عنها
 function getTopMissingFields(row: any, activityType: string): string[] {
     const priorityList = FIELD_PRIORITY[activityType] ?? [];
     const missing: string[] = [];
     for (const field of priorityList) {
         if (field === "product") {
             if (!row.product_id && !row.product_name_text) missing.push("اسم المنتج");
+        } else if (field === "outcome_rating") {
+            // outcome_rating لا يظهر في الحقول الناقصة المعلقة إلا بعد مرور يومين (48 ساعة) على الأقل من تاريخ النشاط
+            if ((row.outcome_rating === null || row.outcome_rating === undefined) && isOlderThanDays(2, row.activity_date, row.created_at)) {
+                missing.push(field);
+            }
         } else if (row[field] === null || row[field] === undefined) {
             missing.push(field);
         }
@@ -217,18 +250,17 @@ function getTopMissingFields(row: any, activityType: string): string[] {
     return missing;
 }
 
+// تتحقق مما إذا كانت جميع حقول النشاط (بما فيها outcome_rating) مكتملة كلياً
 function isActivityFullyCompleted(row: any, activityType: string): boolean {
-    return getTopMissingFields(row, activityType).length === 0;
-}
-
-function isOlderThan5Days(dateStr?: string | null, createdAtStr?: string | null): boolean {
-    const refStr = dateStr || createdAtStr;
-    if (!refStr) return false;
-    const refDate = new Date(refStr).getTime();
-    if (isNaN(refDate)) return false;
-    const now = Date.now();
-    const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
-    return (now - refDate) >= FIVE_DAYS_MS;
+    const priorityList = FIELD_PRIORITY[activityType] ?? [];
+    for (const field of priorityList) {
+        if (field === "product") {
+            if (!row.product_id && !row.product_name_text) return false;
+        } else if (row[field] === null || row[field] === undefined) {
+            return false;
+        }
+    }
+    return true;
 }
 
 async function fetchPendingActivities(
@@ -298,6 +330,10 @@ async function fetchPendingActivities(
                 }
 
                 const openFields = getTopMissingFields(row, activityType);
+                if (openFields.length === 0) {
+                    // لا توجد حقول مطلوب السؤال عنها الآن (مثلاً: البيانات الأساسية مكتملة وفي انتظار مرور 24-48 ساعة لتقييم النتيجة)
+                    continue;
+                }
 
                 if (activityType === "treatment") {
                     const productLabel = row.product_name_text || row.product_id || "غير محدد";
@@ -482,8 +518,12 @@ export async function POST(request: Request) {
         // Sanitize any raw tool call leaks like <call:...> or <call:default_api:...> and internal thinking blocks <thinking>...</thinking>
         const sanitizedText = extractedAnswerText
             .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+            // Strip leaked tool calls in any format: <call:...\.{...}> spanning multiple lines
+            .replace(/<call:[^>]*\{[\s\S]*?\}>/gi, "")
             .replace(/<call:[\s\S]*?>/gi, "")
-            .replace(/<call:[^>]+>/gi, "")
+            .replace(/<call:[^\n>]+>/gi, "")
+            // Strip any leftover JSON-like blocks that look like tool args
+            .replace(/```[\s\S]*?```/g, "")
             .trim();
 
         const match = sanitizedText.match(/\[RECOMMEND_PRODUCT:\s*["']?([^\]"']+)["']?\s*\]/i);
@@ -899,6 +939,8 @@ ${pendingActivitiesContext}
 يُمنع منعاً باتاً سؤال الفلاح "هل رشتك كانت مبيد أم سماد؟" أو فتح حوار استفساري لمجرد تحديد التصنيف؛ استنتج التصنيف فوراً واستدِ أداة log_field_activity في نفس الرد بلا أي تردد. باقي أنواع الأنشطة (ري، حصاد، عمالة) لا تحتاج هذا الشرط، سجّلها فوراً بلا قيد.
 
 قبل الاستدعاء، إذا كان لدى الفلاح أكثر من أرض ولم يحدد أيها يقصد، طبّق أولاً منطق <field_attribute_resolution> لتحديد field_id الصحيح قبل التسجيل. لا تسجل النشاط على أرض خاطئة بسبب التخمين.
+
+يُمنع منعاً باتاً أن تذكر في ردك النصي أنك سجّلت أو وثّقت أي نشاط، إلا بعد استدعاء أداة log_field_activity فعلياً لنفس هذا النشاط في نفس الرد. إذا كنت لا تزال بحاجة لتوضيح أي تفصيل قبل الاستدعاء (مثل تحديد الأرض عند وجود أكثر من أرض مطابقة)، اطرح سؤال التوضيح فقط في هذا الرد دون أي ادعاء بالتسجيل، واستدعِ الأداة في الرد التالي فور استلام الإجابة.
 </golden_rule_log_immediately>
 
 <matching_reference_lists>
@@ -909,10 +951,10 @@ ${pestsDiseasesContext}
 </matching_reference_lists>
 
 <handling_pending_activities>
-قد تجد في بداية هذا القسم قائمة أنشطة معلقة تحت وسم pending_activities. كل نشاط فيها مرفق معه بالضبط أهم عمودين ناقصين منه فقط (وليس كل الأعمدة الناقصة)، مرتبين بالأهمية. هذان العمودان فقط هما ما يجب أن تسأل عنهما لهذا النشاط، ولا تسأل عن أي عمود آخر غير مذكور صراحة معه.
+قد تجد في بداية هذا القسم قائمة أنشطة معلقة تحت وسم pending_activities. كل نشاط فيها مرفق معه كل الأعمدة الناقصة منه، مرتبة بالأهمية. هذه الأعمدة فقط هي ما يجب أن تسأل عنها لهذا النشاط، ولا تسأل عن أي عمود آخر غير مذكور صراحة معها.
 
 <golden_rule_update_immediately>
-أي معلومة جديدة يذكرها الفلاح تنطبق على نشاط معلق — سواء كانت من العمودين المطلوبين أو أي تفصيل إضافي تطوع بذكره من نفسه — استدعِ أداة update_field_activity فوراً بالـ activity_id المذكور، وأدخل المعلومة في حقلها المخصص. لا تدّعِ في ردك النصي أنك سجلت أو حدّثت شيئاً إلا بعد استدعاء الأداة فعلياً في نفس الرد، ولا تنشئ نشاطاً جديداً بالخطأ بدلاً من التحديث.
+أي معلومة جديدة يذكرها الفلاح تنطبق على نشاط معلق — سواء كانت من الأعمدة المطلوبة أو أي تفصيل إضافي تطوع بذكره من نفسه — استدعِ أداة update_field_activity فوراً بالـ activity_id المذكور، وأدخل المعلومة في حقلها المخصص. لا تدّعِ في ردك النصي أنك سجلت أو حدّثت شيئاً إلا بعد استدعاء الأداة فعلياً في نفس الرد، ولا تنشئ نشاطاً جديداً بالخطأ بدلاً من التحديث.
 </golden_rule_update_immediately>
 
 <pending_vs_new_activity_rules>
@@ -920,9 +962,9 @@ ${pestsDiseasesContext}
 
 1. أرض مختلفة: إذا كان النشاط المذكور يخص أرضاً غير الأرض المسجلة في النشاط المعلق، استدعِ أداة log_field_activity فوراً وإنشاء نشاط جديد بدون أي سؤال إطلاقاً، فاختلاف الأرض يعني حتماً أنه نشاط مستقل.
 
-2. نفس الأرض ولكن بفارق أكثر من 5 أيام: إذا كان النشاط لنفس الأرض المسجلة في النشاط المعلق، ولكن بفارق زمني يزيد عن 5 أيام من تاريخ التسجيل المعلق، استدعِ أداة log_field_activity فوراً وإنشاء نشاط جديد بدون أي سؤال، فمرور هذه المدة يعني منطقياً أنها رشة أو معاملة زراعية جديدة.
+2. نفس الأرض ولكن بفارق أكثر من 5 أيام (بناءً على activity_date): إذا كان النشاط لنفس الأرض المسجلة في النشاط المعلق، ولكن بفارق زمني يزيد عن 5 أيام من activity_date الخاص بالنشاط المعلق، استدعِ أداة log_field_activity فوراً وإنشاء نشاط جديد بدون أي سؤال، فمرور هذه المدة يعني منطقياً أنها رشة أو معاملة زراعية جديدة.
 
-3. نفس الأرض وفي نفس اليوم أو خلال 5 أيام: هنا فقط (نفس الأرض + فارق زمني 5 أيام أو أقل):
+3. نفس الأرض وفي نفس اليوم أو خلال 5 أيام (بناءً على activity_date): هنا فقط (نفس الأرض + فارق زمني 5 أيام أو أقل حسب activity_date):
    - إذا صرّح الفلاح بتفاصيل مكملة لنفس الرشة المعلقة (مثل ذكر عدد الرشاشات أو تأكيد تنفيذ نفس المنتج): استدعِ update_field_activity فوراً بالـ activity_id لتحديث الصف المعلق.
    - إذا كان الكلام مبهماً ومحتملاً، استفسر بلطف قبل أي استدعاء: "يا حاج، هل دي نفس رشة [اسم المنتج المعلق] اللي اتكلمنا عليها في [اسم الأرض]، ولا دي رشة جديدة؟" لأن المنطقي أن الفلاح لا يكرر رش نفس المحصول مرتين خلال أقل من 5 أيام.
 
@@ -939,11 +981,13 @@ ${pestsDiseasesContext}
 </answer>
 </pending_vs_new_activity_rules>
 
-طريقة السؤال: لا تسأل عن الأنشطة المعلقة كجزء من صلب حديثك مع الفلاح. أجب أولاً على سؤاله أو استكمل الحديث الطبيعي بشكل كامل ومستقل، ثم في نهاية ردك فقط، إذا وجدت نشاطاً معلقاً واحداً مرتبطاً بسياق منطقي مع المحادثة (أو حتى لو لم يكن مرتبطاً، بأسلوب "على فكرة")، اسأل عن عموديه الناقصين معاً في جملة واحدة عابرة وودودة، مثل: "على فكرة يا حاج، قولتلي إنك رشيت كذا يوم كذا، بس ميهمناش الرشة كانت يوم قد إيه بالظبط وفي أنهي وقت من اليوم، الصبح بدري ولا قبل الظهر ولا بعد العصر؟". لا تسأل عن أكثر من نشاط معلق واحد في نفس الرد.
+طريقة السؤال: لا تسأل عن الأنشطة المعلقة كجزء من صلب حديثك مع الفلاح. أجب أولاً على سؤاله أو استكمل الحديث الطبيعي بشكل كامل ومستقل، ثم في نهاية ردك فقط، إذا وجدت نشاطاً معلقاً واحداً مرتبطاً بسياق منطقي مع المحادثة (أو حتى لو لم يكن مرتبطاً، بأسلوب "على فكرة")، اسأل عن كل أعمدته الناقصة معاً في جملة واحدة عابرة وودودة، مثل: "على فكرة يا حاج، قولتلي إنك رشيت كذا يوم كذا، بس ميهمناش الرشة كانت يوم قد إيه بالظبط وفي أنهي وقت من اليوم، الصبح بدري ولا قبل الظهر ولا بعد العصر؟". لا تسأل عن أكثر من نشاط معلق واحد في نفس الرد، مهما كان عدد الأعمدة الناقصة فيه.
+
+قد يظهر outcome_rating (نتيجة النشاط) ضمن الأعمدة المطلوبة لبعض الأنشطة، وهذا لا يحدث إلا بعد مرور مدة كافية على تنفيذ النشاط الفعلي. في هذه الحالة تحديداً، اسأل عنه بشكل طبيعي كأي عمود ناقص آخر ضمن نفس جملة "على فكرة". أما قبل ظهوره ضمن الأعمدة المطلوبة صراحة، فلا تسأل الفلاح عن نتيجة رشته أو ريّه بشكل استباقي مطلقاً، واكتفِ بتسجيلها فقط إذا تطوع بذكرها من نفسه.
 
 إذا قال الفلاح صراحة إنه لا يريد الإجابة الآن أو ليس وقتها المناسب، لا تسأله عن هذا النشاط مرة أخرى إطلاقاً طوال باقي هذه المحادثة، حتى لا يشعر بالإلحاح أو الضغط عليه.
 
-لا تحوّل mark_completed إلى صحيح إلا إذا ذكر الفلاح أيضاً نتيجة النشاط (outcome_rating) بنفسه. لا تسأله عن النتيجة بشكل استباقي في هذه المرحلة، اكتفِ بتسجيلها فقط إذا تطوع بذكرها من نفسه.
+لا تحوّل mark_completed إلى صحيح إلا إذا ذكر الفلاح أيضاً نتيجة النشاط (outcome_rating) بنفسه. لا تسأله عن النتيجة بشكل استباقي في هذه المرحلة إلا إذا ظهرت ضمن الأعمدة المطلوبة صراحة كما هو موضح أعلاه.
 </handling_pending_activities>
 
 <examples>
@@ -952,7 +996,7 @@ ${pestsDiseasesContext}
 <thinking>
 1. نشاط فعلي وقع بالفعل.
 2. أرض محددة بالاسم صراحة.
-3. النوع treatment، وكلمة "مبيد" واضحة صراحة في كلامه. أستنتج category=مبيد مباشرة دون سؤال، وأستدعي log_field_activity فوراً بهذا التصنيف.
+3. النوع treatment، وكلمة "مبيد" واضحة صراحة في كلامه. أستنتج category=مبيد مباشرة دون سؤال، وأستدعي log_field_activity فوراً بهذا التصنيف في نفس هذا الرد.
 </thinking>
 <answer>
 تمام يا حاج، رشيت بإيه بالظبط؟ [استكمال الرد الطبيعي]
@@ -962,21 +1006,40 @@ ${pestsDiseasesContext}
 الفلاح: "عملت حاجة في أرض النبع النهاردة"
 <thinking>
 1. نشاط فعلي، لكن لا يوجد أي فعل أو كلمة تدل على مبيد أو سماد أو حتى نوع النشاط أصلاً (رش أم تسميد أم غيره).
-2. لا يمكن الاستنتاج بثقة معقولة هنا، فأسأل مباشرة.
+2. لا يمكن الاستنتاج بثقة معقولة هنا، فأسأل مباشرة دون أي ادعاء بالتسجيل قبل استلام إجابته.
 </thinking>
 <answer>
 تمام يا حاج، عملت إيه بالظبط، رشيت مبيد ولا وضعت سماد؟
 </answer>
 
+مثال 1ج (توضيح أرض قبل التسجيل — لا يُدّعى التسجيل إلا بعد الاستدعاء الفعلي):
+بيانات الفلاح: أرضان مختلفتان بمحصول "أرز": "أرض خضر" و"أرض النبع".
+الفلاح: "كان عندي النهاردة 7 أنفار من عند عم وليد، أجر الواحد 200 جنيه، في أرض بتاعة الأرز"
+<thinking>
+1. نشاط عمالة فعلي، لا يحتاج شرط category.
+2. الفلاح ذكر صفة عامة ("أرض بتاعة الأرز") وليس اسماً محدداً، وهذا يطابق محصولياً أكثر من أرض مسجلة ("أرض خضر" و"أرض النبع"). عدد الأراضي المطابقة أكثر من واحدة، فيجب التوقف والسؤال أولاً طبقاً لـ field_attribute_resolution.
+3. لا أستدعي log_field_activity في هذا الرد إطلاقاً، ولا أذكر أي كلمة توحي بأنني سجلت شيئاً، لأن التفاصيل غير مكتملة بعد.
+</thinking>
+<answer>
+يا حاج، عندك أرضين مزروعين أرز، "أرض خضر" و"أرض النبع". قصدك أنهي واحدة فيهم اللي اشتغلوا فيها النهاردة؟
+</answer>
+[الفلاح يجاوب "أرض خضر" في رسالة تالية]
+<thinking>
+الآن تحددت الأرض بوضوح ("أرض خضر"). لدي كل التفاصيل الأساسية (التاريخ: اليوم، عدد العمال: 7، اسم المقاول: عم وليد، السعر: 200 جنيه للفرد). أستدعي log_field_activity فوراً في هذا الرد بكل هذه البيانات.
+</thinking>
+<answer>
+تمام يا حاج، تم تسجيل عمال أرض خضر اليوم. بارك الله في رزقك وفي جهدهم، ويسر لك كل أمورك.
+</answer>
+
 مثال 2 (سؤال نهاية الرسالة عن نشاط معلق):
-سياق pending_activities: نشاط treatment في "أرض خضر"، الأعمدة الناقصة المرسلة: [activity_date, sprayer_count]، id: xyz.
+سياق pending_activities: نشاط treatment في "أرض خضر"، الأعمدة الناقصة المرسلة: [activity_date, sprayer_count, product]، id: xyz.
 الفلاح: "الأرض دي فيها دودة، أعمل إيه؟"
 <thinking>
 1. أجيب على سؤاله عن الدودة بشكل كامل ومستقل أولاً.
-2. في نهاية الرد فقط، أسأل عن العمودين المطلوبين لنشاط xyz معاً: التاريخ وعدد الرشاشات.
+2. في نهاية الرد فقط، أسأل عن كل الأعمدة الناقصة لنشاط xyz معاً: التاريخ وعدد الرشاشات واسم المنتج.
 </thinking>
 <answer>
-[إجابة كاملة عن الدودة والعلاج المناسب]... وعلى فكرة يا حاج، الرشة اللي قولتلي عليها في أرض خضر، كانت يوم قد إيه بالظبط، وكام رشاشة رشيتها؟
+[إجابة كاملة عن الدودة والعلاج المناسب]... وعلى فكرة يا حاج، الرشة اللي قولتلي عليها في أرض خضر، رشيتها بإيه بالظبط، وكانت يوم قد إيه، وكام رشاشة رشيتها؟
 </answer>
 
 مثال 3 (الفلاح يرفض الإجابة — لا يُسأل مرة أخرى):
@@ -1076,6 +1139,9 @@ ${pestsDiseasesContext}
                 parts: [{ text: systemPrompt }],
             },
             tools: [farmProfileToolDeclaration],
+            tool_config: {
+                function_calling_config: { mode: "AUTO" },
+            },
             generationConfig: {
                 temperature: 0.7,
                 maxOutputTokens: 5000,
@@ -1563,6 +1629,9 @@ ${pestsDiseasesContext}
                     parts: [{ text: systemPrompt }],
                 },
                 tools: [farmProfileToolDeclaration],
+                tool_config: {
+                    function_calling_config: { mode: "AUTO" },
+                },
                 generationConfig: {
                     temperature: 0.7,
                     maxOutputTokens: 5000,
