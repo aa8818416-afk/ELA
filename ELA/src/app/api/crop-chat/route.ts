@@ -148,7 +148,6 @@ const farmProfileToolDeclaration = {
                     },
                     activity_date: { type: "STRING", description: "تاريخ النشاط YYYY-MM-DD إن ذُكر" },
                     notes: { type: "STRING", description: "ملاحظات إضافية" },
-                    unit_price: { type: "NUMBER", description: "السعر بالجنيه" },
                     // treatment
                     category: { type: "STRING", enum: ["مبيد", "سماد"], description: "نوع المعاملة" },
                     product_id: { type: "STRING", description: "معرف المنتج من قائمة المنتجات" },
@@ -156,14 +155,8 @@ const farmProfileToolDeclaration = {
                     dosage: { type: "NUMBER", description: "الجرعة" },
                     dosage_unit: { type: "STRING", description: "وحدة الجرعة" },
                     sprayer_count: { type: "INTEGER", description: "عدد الرشاشات المستخدمة بالجرعة المذكورة" },
-                    pest_disease_id: { type: "STRING", description: "معرف الآفة أو المرض من قائمة pests_diseases" },
-                    symptom_description: { type: "STRING", description: "وصف الأعراض التي دفعت للرش" },
-                    photo_url: { type: "STRING", description: "رابط الصورة إن وُجدت" },
                     // irrigation
-                    description: { type: "STRING", description: "وصف عملية الري (روى شبع، ري خفيف...)" },
-                    // harvest
-                    quantity: { type: "NUMBER", description: "الكمية المحصودة" },
-                    quantity_unit: { type: "STRING", description: "كيلو / طن / شوال" },
+                    description: { type: "STRING", description: "وصف عملية الري أو الحصاد" },
                     // labor
                     worker_count: { type: "INTEGER", description: "عدد العمال" },
                     contractor_name: { type: "STRING", description: "اسم المقاول أو المسؤول" },
@@ -181,8 +174,6 @@ const farmProfileToolDeclaration = {
                     activity_type: { type: "STRING", enum: ["treatment", "irrigation", "harvest", "labor"] },
                     activity_date: { type: "STRING", description: "التاريخ لو تم توضيحه YYYY-MM-DD" },
                     notes: { type: "STRING" },
-                    unit_price: { type: "NUMBER" },
-                    outcome_rating: { type: "STRING", enum: ["ممتاز", "متوسط", "فاشل"], description: "نتيجة النشاط لو ذكرها الفلاح" },
                     mark_completed: { type: "BOOLEAN", description: "حوّل status إلى completed لو اكتملت البيانات الأساسية" },
                     // treatment
                     category: { type: "STRING", enum: ["مبيد", "سماد"] },
@@ -191,14 +182,9 @@ const farmProfileToolDeclaration = {
                     dosage: { type: "NUMBER" },
                     dosage_unit: { type: "STRING" },
                     sprayer_count: { type: "INTEGER" },
-                    pest_disease_id: { type: "STRING" },
-                    symptom_description: { type: "STRING" },
-                    photo_url: { type: "STRING" },
-                    // irrigation
+                    outcome_rating: { type: "STRING", enum: ["ممتاز", "متوسط", "فاشل"], description: "نتيجة الرشة فقط (لو تطوع الفلاح بذكرها في treatment)" },
+                    // irrigation / harvest
                     description: { type: "STRING" },
-                    // harvest
-                    quantity: { type: "NUMBER" },
-                    quantity_unit: { type: "STRING" },
                     // labor
                     worker_count: { type: "INTEGER" },
                     contractor_name: { type: "STRING" },
@@ -209,14 +195,16 @@ const farmProfileToolDeclaration = {
     ]
 };
 
+// الأعمدة الجوهرية فقط لكل نوع نشاط — هي المرجع الوحيد للباندنج والأسئلة المعلقة
 const FIELD_PRIORITY: Record<string, string[]> = {
-    treatment: ["activity_date", "product", "dosage", "dosage_unit", "sprayer_count", "symptom_description", "pest_disease_id", "unit_price", "notes", "photo_url"],
+    treatment: ["activity_date", "product", "dosage", "dosage_unit", "sprayer_count", "outcome_rating"],
     irrigation: ["activity_date", "description"],
-    harvest: ["activity_date", "quantity", "quantity_unit", "unit_price", "description"],
-    labor: ["activity_date", "worker_count", "contractor_name", "unit_price"],
+    harvest: ["activity_date", "description"],
+    labor: ["activity_date", "worker_count", "contractor_name"],
 };
 
-function getTopMissingFields(row: any, activityType: string, max = 2): string[] {
+// يرجع كل الحقول الناقصة دفعة واحدة (بدون حد)
+function getTopMissingFields(row: any, activityType: string): string[] {
     const priorityList = FIELD_PRIORITY[activityType] ?? [];
     const missing: string[] = [];
     for (const field of priorityList) {
@@ -225,9 +213,22 @@ function getTopMissingFields(row: any, activityType: string, max = 2): string[] 
         } else if (row[field] === null || row[field] === undefined) {
             missing.push(field);
         }
-        if (missing.length >= max) break;
     }
     return missing;
+}
+
+function isActivityFullyCompleted(row: any, activityType: string): boolean {
+    return getTopMissingFields(row, activityType).length === 0;
+}
+
+function isOlderThan5Days(dateStr?: string | null, createdAtStr?: string | null): boolean {
+    const refStr = dateStr || createdAtStr;
+    if (!refStr) return false;
+    const refDate = new Date(refStr).getTime();
+    if (isNaN(refDate)) return false;
+    const now = Date.now();
+    const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
+    return (now - refDate) >= FIVE_DAYS_MS;
 }
 
 async function fetchPendingActivities(
@@ -277,50 +278,61 @@ async function fetchPendingActivities(
 
         const lines: string[] = [];
 
-        for (const row of (treatments.data as any[]) || []) {
-            const fname = fieldNameMap[row.field_id] || row.field_id;
-            const openFields = getTopMissingFields(row, "treatment", 2);
+        // Helper to process pending rows, auto-completing expired (>= 5 days) or fully filled rows
+        const processPendingGroup = (rows: any[], activityType: string, tableName: string) => {
+            for (const row of rows || []) {
+                const fname = fieldNameMap[row.field_id] || row.field_id;
+                const expired = isOlderThan5Days(row.activity_date, row.created_at);
+                const complete = isActivityFullyCompleted(row, activityType);
 
-            const productLabel = row.product_name_text || row.product_id || "غير محدد";
-            const symptom = row.symptom_description ? ` | السبب: ${row.symptom_description}` : "";
-            lines.push(
-                `- [رش/تسميد] activity_id:${row.id} | أرض: ${fname} | المنتج: ${productLabel}${symptom}` +
-                ` | مسجل في: ${row.created_at}` +
-                ` | الحقول القابلة للتحديث: ${openFields.length ? openFields.join("، ") : "جميع الحقول الأساسية مكتملة — فقط outcome_rating مفقود"}`
-            );
-        }
+                if (expired || complete) {
+                    console.log(`[crop-chat] 🧹 [Auto-Complete] Marking ${tableName} row ${row.id} as completed (expired=${expired}, complete=${complete})`);
+                    supabaseAdmin
+                        .from(tableName)
+                        .update({ status: "completed" })
+                        .eq("id", row.id)
+                        .then(({ error }: any) => {
+                            if (error) console.error(`[crop-chat] Failed to auto-complete ${tableName} ${row.id}:`, error);
+                        });
+                    continue;
+                }
 
-        for (const row of (irrigations.data as any[]) || []) {
-            const fname = fieldNameMap[row.field_id] || row.field_id;
-            const openFields = getTopMissingFields(row, "irrigation", 2);
-            lines.push(
-                `- [ري] activity_id:${row.id} | أرض: ${fname} | وصف: ${row.description || "غير محدد"}` +
-                ` | مسجل في: ${row.created_at}` +
-                ` | الحقول القابلة للتحديث: ${openFields.length ? openFields.join("، ") : "جميع الحقول الأساسية مكتملة — فقط outcome_rating مفقود"}`
-            );
-        }
+                const openFields = getTopMissingFields(row, activityType);
 
-        for (const row of (harvests.data as any[]) || []) {
-            const fname = fieldNameMap[row.field_id] || row.field_id;
-            const openFields = getTopMissingFields(row, "harvest", 2);
-            lines.push(
-                `- [حصاد] activity_id:${row.id} | أرض: ${fname}` +
-                ` | الكمية: ${row.quantity ?? "غير محددة"} ${row.quantity_unit ?? ""}` +
-                ` | مسجل في: ${row.created_at}` +
-                ` | الحقول القابلة للتحديث: ${openFields.length ? openFields.join("، ") : "جميع الحقول الأساسية مكتملة — فقط outcome_rating مفقود"}`
-            );
-        }
+                if (activityType === "treatment") {
+                    const productLabel = row.product_name_text || row.product_id || "غير محدد";
+                    lines.push(
+                        `- [رش/تسميد] activity_id:${row.id} | أرض: ${fname} | المنتج: ${productLabel}` +
+                        ` | مسجل في: ${row.created_at}` +
+                        ` | الحقول الناقصة: ${openFields.join("، ")}`
+                    );
+                } else if (activityType === "irrigation") {
+                    lines.push(
+                        `- [ري] activity_id:${row.id} | أرض: ${fname} | وصف: ${row.description || "غير محدد"}` +
+                        ` | مسجل في: ${row.created_at}` +
+                        ` | الحقول الناقصة: ${openFields.join("، ")}`
+                    );
+                } else if (activityType === "harvest") {
+                    lines.push(
+                        `- [حصاد] activity_id:${row.id} | أرض: ${fname} | وصف: ${row.description || "غير محدد"}` +
+                        ` | مسجل في: ${row.created_at}` +
+                        ` | الحقول الناقصة: ${openFields.join("، ")}`
+                    );
+                } else if (activityType === "labor") {
+                    lines.push(
+                        `- [عمالة] activity_id:${row.id} | أرض: ${fname}` +
+                        ` | العمال: ${row.worker_count ?? "غير محدد"} | المقاول: ${row.contractor_name || "غير محدد"}` +
+                        ` | مسجل في: ${row.created_at}` +
+                        ` | الحقول الناقصة: ${openFields.join("، ")}`
+                    );
+                }
+            }
+        };
 
-        for (const row of (labors.data as any[]) || []) {
-            const fname = fieldNameMap[row.field_id] || row.field_id;
-            const openFields = getTopMissingFields(row, "labor", 2);
-            lines.push(
-                `- [عمالة] activity_id:${row.id} | أرض: ${fname}` +
-                ` | العمال: ${row.worker_count ?? "غير محدد"}` +
-                ` | مسجل في: ${row.created_at}` +
-                ` | الحقول القابلة للتحديث: ${openFields.length ? openFields.join("، ") : "جميع الحقول الأساسية مكتملة — فقط outcome_rating مفقود"}`
-            );
-        }
+        processPendingGroup((treatments.data as any[]) || [], "treatment", "field_treatments");
+        processPendingGroup((irrigations.data as any[]) || [], "irrigation", "field_irrigation_logs");
+        processPendingGroup((harvests.data as any[]) || [], "harvest", "field_harvest_records");
+        processPendingGroup((labors.data as any[]) || [], "labor", "field_labor_logs");
 
         if (lines.length === 0) {
             console.log(`[crop-chat] ℹ️ [fetchPendingActivities] No pending_outcome rows found for farmer ${farmerId}.`);
@@ -745,7 +757,7 @@ export async function POST(request: Request) {
 </symptom_clarity_and_photo_request>
 
 <response_variety>
-أنت لست آلة تكرر نفس الجمل، بل مهندس زراعي بشري يتحدث بتلقائية. في كل رد فيه ترشيح منتج، ضمّن دائماً العناصر التالية إلزامياً، بينما تكون حراً تماماً في ترتيبها وصياغتها وأسلوب عرضها من رد لآخر:
+أنت لست آلة تكرر نفس الجمل، بل مهندس زراعي بشري يتحدث بتلقائية. في كل رد فيه ترشيح منتج، ضمّن دائماً العناصر التالية إلزامياً، بينما تكون حراً تماماً في ترتيبها وصياغتها وأسلوب عرضها من رد للآخر:
   - شرح مبسط ومرئي للمرض أو المشكلة.
   - اسم المنتج المناسب وشركته المصنعة (إن وجدت في البيانات).
   - تأكيد أن المنتج أصلي ومضمون 100% من المنصة.
@@ -1051,9 +1063,10 @@ ${pestsDiseasesContext}
             );
         }
 
-        const keyData = validKeys[0];
-        const modelName = keyData.model_name || "gemini-2.0-flash";
-        const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_keys.api_key}`;
+        let currentKeyIndex = 0;
+        let keyData = validKeys[currentKeyIndex];
+        let modelName = keyData.model_name || "gemini-2.0-flash";
+        let geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_keys.api_key}`;
 
         console.log(`[crop-chat] Attempt ${attemptCount + 1}: Using model ${modelName} on key ${keyData.api_keys.id.slice(0, 6)}...`);
 
@@ -1119,12 +1132,16 @@ ${pestsDiseasesContext}
         await (supabaseAdmin as any).from("api_key_models").update({ daily_usage: keyData.daily_usage + 1 }).eq("id", keyData.id);
 
         const data = await response.json();
+        if (data.usageMetadata) {
+            console.log(`[crop-chat] 📊 Usage Metadata:`, data.usageMetadata);
+        }
         const candidates = data.candidates?.[0];
         let currentParts: GeminiPart[] = candidates?.content?.parts ?? [];
 
         // ── Agentic loop: handle chained tool calls (max 5 rounds) ───────────────
         let agentContents: ChatMessage[] = [...contents];
         let loopCount = 0;
+        let executedToolsCount = 0;
         const MAX_TOOL_ROUNDS = 5;
 
         while (loopCount < MAX_TOOL_ROUNDS) {
@@ -1132,6 +1149,8 @@ ${pestsDiseasesContext}
             const functionCallParts = currentParts.filter((p) => p.functionCall);
 
             if (functionCallParts.length === 0) break; // no more tool calls → exit loop
+
+            executedToolsCount += functionCallParts.length;
 
             console.log(`[crop-chat] 🛠️ [Round ${loopCount}] Model requested ${functionCallParts.length} function call(s):`, functionCallParts.map(p => p.functionCall?.name));
             const functionResponseParts: GeminiPart[] = [];
@@ -1378,6 +1397,12 @@ ${pestsDiseasesContext}
                                 if (contractor_name) payload.contractor_name = contractor_name;
                             }
 
+                            if (isActivityFullyCompleted(payload, activity_type)) {
+                                payload.status = "completed";
+                            } else {
+                                payload.status = "pending_outcome";
+                            }
+
                             const { data: inserted, error: insertErr } = await (supabaseAdmin as any)
                                 .from(targetTable)
                                 .insert(payload)
@@ -1391,7 +1416,7 @@ ${pestsDiseasesContext}
                                     message: `فشل الإدخال في قاعدة البيانات: ${insertErr.message}`
                                 };
                             } else {
-                                console.log(`[crop-chat] ✅ [log_field_activity] SUCCESS -> Inserted row ID ${inserted?.id} into ${targetTable} (status: pending_outcome)`);
+                                console.log(`[crop-chat] ✅ [log_field_activity] SUCCESS -> Inserted row ID ${inserted?.id} into ${targetTable} (status: ${payload.status})`);
                             }
                         }
                     } else {
@@ -1415,6 +1440,7 @@ ${pestsDiseasesContext}
                         product_name_text,
                         dosage,
                         dosage_unit,
+                        sprayer_count,
                         pest_disease_id,
                         symptom_description,
                         photo_url,
@@ -1439,7 +1465,6 @@ ${pestsDiseasesContext}
                         if (notes) updates.notes = notes;
                         if (unit_price != null) updates.unit_price = Number(unit_price);
                         if (outcome_rating) updates.outcome_rating = outcome_rating;
-                        if (mark_completed === true) updates.status = "completed";
 
                         if (activity_type === "treatment") {
                             if (category) updates.category = category;
@@ -1447,6 +1472,7 @@ ${pestsDiseasesContext}
                             if (product_name_text) updates.product_name_text = product_name_text;
                             if (dosage != null) updates.dosage = Number(dosage);
                             if (dosage_unit) updates.dosage_unit = dosage_unit;
+                            if (sprayer_count != null) updates.sprayer_count = Number(sprayer_count);
                             if (pest_disease_id) updates.pest_disease_id = pest_disease_id;
                             if (symptom_description) updates.symptom_description = symptom_description;
                             if (photo_url) updates.photo_url = photo_url;
@@ -1461,19 +1487,47 @@ ${pestsDiseasesContext}
                             if (contractor_name) updates.contractor_name = contractor_name;
                         }
 
-                        if (Object.keys(updates).length > 0) {
-                            const { error: updateErr } = await (supabaseAdmin as any)
-                                .from(targetTable)
-                                .update(updates)
-                                .eq("id", activity_id);
+                        // Fetch existing row to evaluate completeness and expiration
+                        const { data: existingRow } = await (supabaseAdmin as any)
+                            .from(targetTable)
+                            .select("*")
+                            .eq("id", activity_id)
+                            .maybeSingle();
 
-                            if (updateErr) {
-                                console.error(`[crop-chat] ❌ [update_field_activity] FAILED to update ${targetTable} (${activity_id}):`, updateErr);
-                            } else {
-                                console.log(`[crop-chat] ✅ [update_field_activity] SUCCESS -> Updated activity ${activity_id} in ${targetTable}`);
-                            }
+                        const mergedRow = { ...(existingRow || {}), ...updates };
+                        const missingFields = getTopMissingFields(mergedRow, activity_type);
+                        const isComplete = missingFields.length === 0;
+                        const isExpired = isOlderThan5Days(mergedRow.activity_date, mergedRow.created_at);
+
+                        if (mark_completed === true && !isComplete && !isExpired) {
+                            console.warn(`[crop-chat] ⚠️ [update_field_activity] Rejected mark_completed for activity ${activity_id} - Missing required fields:`, missingFields);
+                            toolResult = {
+                                status: "error",
+                                message: `لا يمكن إغلاق النشاط (mark_completed) لأن الأعمدة التالية ما زالت مفقودة: ${missingFields.join("، ")}. يُرجى استكمال هذه البيانات أولاً من الفلاح.`
+                            };
                         } else {
-                            console.log(`[crop-chat] ℹ️ [update_field_activity] No fields provided to update for activity ${activity_id}`);
+                            if (isComplete || isExpired || mark_completed === true) {
+                                updates.status = "completed";
+                            }
+
+                            if (Object.keys(updates).length > 0) {
+                                const { error: updateErr } = await (supabaseAdmin as any)
+                                    .from(targetTable)
+                                    .update(updates)
+                                    .eq("id", activity_id);
+
+                                if (updateErr) {
+                                    console.error(`[crop-chat] ❌ [update_field_activity] FAILED to update ${targetTable} (${activity_id}):`, updateErr);
+                                    toolResult = {
+                                        status: "error",
+                                        message: `فشل التحديث في قاعدة البيانات: ${updateErr.message}`
+                                    };
+                                } else {
+                                    console.log(`[crop-chat] ✅ [update_field_activity] SUCCESS -> Updated activity ${activity_id} in ${targetTable} (status: ${updates.status || existingRow?.status})`);
+                                }
+                            } else {
+                                console.log(`[crop-chat] ℹ️ [update_field_activity] No fields provided to update for activity ${activity_id}`);
+                            }
                         }
                     } else {
                         console.warn(`[crop-chat] ⚠️ [update_field_activity] Missing required activity_id or activity_type`);
@@ -1483,18 +1537,18 @@ ${pestsDiseasesContext}
                 functionResponseParts.push({
                     functionResponse: {
                         name,
-                        response: {
-                            name,
-                            content: toolResult
-                        }
+                        response: toolResult
                     }
                 });
             } // end for callPart
 
+            // Clean internal thought parts from historical model turn before appending to history
+            const cleanModelParts = currentParts.filter((p: any) => !p.thought);
+
             // Append this round's model turn + function responses to the conversation
             agentContents = [
                 ...agentContents,
-                { role: "model", parts: currentParts },
+                { role: "model", parts: cleanModelParts.length > 0 ? cleanModelParts : currentParts },
                 { role: "user", parts: functionResponseParts },  // Gemini API requires "user" role for functionResponse turns
             ];
 
@@ -1519,8 +1573,13 @@ ${pestsDiseasesContext}
             };
 
             let followUpOk = false;
-            for (let retry = 0; retry < 2; retry++) {
+            for (let retry = 0; retry < 3; retry++) {
                 try {
+                    // Update followUpPayload with current key's thinking_level in case key rotated
+                    followUpPayload.generationConfig.thinkingConfig = keyData.thinking_level ? {
+                        thinkingLevel: keyData.thinking_level.toUpperCase()
+                    } : undefined;
+
                     const followUpController = new AbortController();
                     const followUpTimeout = setTimeout(() => followUpController.abort(), 60_000);
                     const followUpRes = await fetch(geminiEndpoint, {
@@ -1532,12 +1591,32 @@ ${pestsDiseasesContext}
 
                     if (followUpRes.ok) {
                         const followUpData = await followUpRes.json();
+                        if (followUpData.usageMetadata) {
+                            console.log(`[crop-chat] 📊 Follow-up Usage Metadata (Round ${loopCount}):`, followUpData.usageMetadata);
+                        }
                         currentParts = followUpData.candidates?.[0]?.content?.parts ?? [];
                         followUpOk = true;
                         break;
                     } else {
                         const errBody = await followUpRes.text();
                         console.error(`[crop-chat] Follow-up HTTP error ${followUpRes.status} (retry ${retry}):`, errBody.slice(0, 200));
+
+                        if (followUpRes.status === 429) {
+                            await (supabaseAdmin as any).from("api_key_models").update({ status: "rate_limited" }).eq("id", keyData.id);
+
+                            // Rotate to next available key if present
+                            if (currentKeyIndex + 1 < validKeys.length) {
+                                currentKeyIndex++;
+                                keyData = validKeys[currentKeyIndex];
+                                modelName = keyData.model_name || "gemini-2.0-flash";
+                                geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_keys.api_key}`;
+                                console.log(`[crop-chat] Follow-up rotated to key ${keyData.api_keys.id.slice(0, 6)} (${modelName})`);
+                            }
+                            // Exponential backoff delay for rate limit resets (1.5s, 3s...)
+                            await new Promise((r) => setTimeout(r, 1500 * (retry + 1)));
+                        } else if (followUpRes.status === 503) {
+                            await new Promise((r) => setTimeout(r, 2000 * (retry + 1)));
+                        }
                     }
                 } catch (followUpErr) {
                     console.error(`[crop-chat] Follow-up request failed (retry ${retry}):`, followUpErr);
