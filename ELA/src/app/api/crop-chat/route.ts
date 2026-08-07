@@ -6,10 +6,12 @@ import { toFeddan, displayArea } from "@/utils/areaConverter";
 
 interface GeminiPart {
     text?: string;
+    thought?: boolean;           // thinking model: marks this part as internal thought
     inline_data?: { mime_type: string; data: string };
     functionCall?: {
         name: string;
         args: Record<string, any>;
+        thoughtSignature?: string; // opaque token required for multi-turn tool use
     };
     functionResponse?: {
         name: string;
@@ -18,7 +20,7 @@ interface GeminiPart {
 }
 
 interface ChatMessage {
-    role: "user" | "model" | "function";
+    role: "user" | "model";
     parts: GeminiPart[];
 }
 
@@ -114,9 +116,231 @@ const farmProfileToolDeclaration = {
                 },
                 required: ["action"]
             }
+        },
+        {
+            name: "log_farmer_memory",
+            description: "استخدم هذه الأداة لتسجيل حقيقة أو ملحوظة سلوكية عن الفلاح (مثل تفضيلاته، قدرته المالية، أسلوب تواصله). اختر دائماً تصنيفاً مناسباً من القائمة.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    category: {
+                        type: "STRING",
+                        enum: ["budget_level", "risk_tolerance", "communication_style", "crop_preference", "trusted_source"],
+                        description: "تصنيف الحقيقة السلوكية"
+                    },
+                    fact: { type: "STRING", description: "الحقيقة أو الملحوظة بصيغة نصية قصيرة وواضحة" },
+                    confidence: { type: "STRING", enum: ["low", "medium", "high"], description: "درجة الثقة في هذه المعلومة" }
+                },
+                required: ["category", "fact"]
+            }
+        },
+        {
+            name: "log_field_activity",
+            description: "سجّل نشاطاً جديداً في أرض الفلاح فور ذكره (رش/تسميد، ري، حصاد، عمالة). الصف يُنشأ بكل ما هو متاح — لا تنتظر اكتمال البيانات.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    field_id: { type: "STRING", description: "معرف الأرض (uuid) — مطلوب" },
+                    activity_type: {
+                        type: "STRING",
+                        enum: ["treatment", "irrigation", "harvest", "labor"],
+                        description: "نوع النشاط"
+                    },
+                    activity_date: { type: "STRING", description: "تاريخ النشاط YYYY-MM-DD إن ذُكر" },
+                    notes: { type: "STRING", description: "ملاحظات إضافية" },
+                    unit_price: { type: "NUMBER", description: "السعر بالجنيه" },
+                    // treatment
+                    category: { type: "STRING", enum: ["مبيد", "سماد"], description: "نوع المعاملة" },
+                    product_id: { type: "STRING", description: "معرف المنتج من قائمة المنتجات" },
+                    product_name_text: { type: "STRING", description: "اسم المنتج لو مش في القائمة" },
+                    dosage: { type: "NUMBER", description: "الجرعة" },
+                    dosage_unit: { type: "STRING", description: "وحدة الجرعة" },
+                    sprayer_count: { type: "INTEGER", description: "عدد الرشاشات المستخدمة بالجرعة المذكورة" },
+                    pest_disease_id: { type: "STRING", description: "معرف الآفة أو المرض من قائمة pests_diseases" },
+                    symptom_description: { type: "STRING", description: "وصف الأعراض التي دفعت للرش" },
+                    photo_url: { type: "STRING", description: "رابط الصورة إن وُجدت" },
+                    // irrigation
+                    description: { type: "STRING", description: "وصف عملية الري (روى شبع، ري خفيف...)" },
+                    // harvest
+                    quantity: { type: "NUMBER", description: "الكمية المحصودة" },
+                    quantity_unit: { type: "STRING", description: "كيلو / طن / شوال" },
+                    // labor
+                    worker_count: { type: "INTEGER", description: "عدد العمال" },
+                    contractor_name: { type: "STRING", description: "اسم المقاول أو المسؤول" },
+                },
+                required: ["field_id", "activity_type"]
+            }
+        },
+        {
+            name: "update_field_activity",
+            description: "حدّث بيانات نشاط موجود مسبقاً (pending). استخدمها لو الفلاح ذكر تفاصيل مكملة لنشاط في قائمة الأنشطة المعلقة. استخدم الـ id المذكور في الـ context.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    activity_id: { type: "STRING", description: "معرف الصف (uuid) — مطلوب" },
+                    activity_type: { type: "STRING", enum: ["treatment", "irrigation", "harvest", "labor"] },
+                    activity_date: { type: "STRING", description: "التاريخ لو تم توضيحه YYYY-MM-DD" },
+                    notes: { type: "STRING" },
+                    unit_price: { type: "NUMBER" },
+                    outcome_rating: { type: "STRING", enum: ["ممتاز", "متوسط", "فاشل"], description: "نتيجة النشاط لو ذكرها الفلاح" },
+                    mark_completed: { type: "BOOLEAN", description: "حوّل status إلى completed لو اكتملت البيانات الأساسية" },
+                    // treatment
+                    category: { type: "STRING", enum: ["مبيد", "سماد"] },
+                    product_id: { type: "STRING" },
+                    product_name_text: { type: "STRING" },
+                    dosage: { type: "NUMBER" },
+                    dosage_unit: { type: "STRING" },
+                    sprayer_count: { type: "INTEGER" },
+                    pest_disease_id: { type: "STRING" },
+                    symptom_description: { type: "STRING" },
+                    photo_url: { type: "STRING" },
+                    // irrigation
+                    description: { type: "STRING" },
+                    // harvest
+                    quantity: { type: "NUMBER" },
+                    quantity_unit: { type: "STRING" },
+                    // labor
+                    worker_count: { type: "INTEGER" },
+                    contractor_name: { type: "STRING" },
+                },
+                required: ["activity_id", "activity_type"]
+            }
         }
     ]
 };
+
+const FIELD_PRIORITY: Record<string, string[]> = {
+    treatment: ["activity_date", "product", "dosage", "dosage_unit", "sprayer_count", "symptom_description", "pest_disease_id", "unit_price", "notes", "photo_url"],
+    irrigation: ["activity_date", "description"],
+    harvest: ["activity_date", "quantity", "quantity_unit", "unit_price", "description"],
+    labor: ["activity_date", "worker_count", "contractor_name", "unit_price"],
+};
+
+function getTopMissingFields(row: any, activityType: string, max = 2): string[] {
+    const priorityList = FIELD_PRIORITY[activityType] ?? [];
+    const missing: string[] = [];
+    for (const field of priorityList) {
+        if (field === "product") {
+            if (!row.product_id && !row.product_name_text) missing.push("اسم المنتج");
+        } else if (row[field] === null || row[field] === undefined) {
+            missing.push(field);
+        }
+        if (missing.length >= max) break;
+    }
+    return missing;
+}
+
+async function fetchPendingActivities(
+    supabaseAdmin: any,
+    farmerId: string
+): Promise<string> {
+    try {
+        console.log(`[crop-chat] 🔍 [fetchPendingActivities] Fetching pending activity logs for farmer ${farmerId}...`);
+        const { data: fields } = await supabaseAdmin
+            .from("farmer_fields")
+            .select("id, field_name")
+            .eq("farmer_id", farmerId)
+            .eq("is_active", true);
+
+        if (!fields || fields.length === 0) {
+            console.log(`[crop-chat] ℹ️ [fetchPendingActivities] No active fields found for farmer ${farmerId}.`);
+            return "";
+        }
+
+        const fieldIds = (fields as any[]).map((f) => f.id);
+        const fieldNameMap: Record<string, string> = Object.fromEntries(
+            (fields as any[]).map((f) => [f.id, f.field_name || "بدون اسم"])
+        );
+
+        const [treatments, irrigations, harvests, labors] = await Promise.all([
+            supabaseAdmin
+                .from("field_treatments")
+                .select("*")
+                .in("field_id", fieldIds)
+                .eq("status", "pending_outcome"),
+            supabaseAdmin
+                .from("field_irrigation_logs")
+                .select("*")
+                .in("field_id", fieldIds)
+                .eq("status", "pending_outcome"),
+            supabaseAdmin
+                .from("field_harvest_records")
+                .select("*")
+                .in("field_id", fieldIds)
+                .eq("status", "pending_outcome"),
+            supabaseAdmin
+                .from("field_labor_logs")
+                .select("*")
+                .in("field_id", fieldIds)
+                .eq("status", "pending_outcome"),
+        ]);
+
+        const lines: string[] = [];
+
+        for (const row of (treatments.data as any[]) || []) {
+            const fname = fieldNameMap[row.field_id] || row.field_id;
+            const openFields = getTopMissingFields(row, "treatment", 2);
+
+            const productLabel = row.product_name_text || row.product_id || "غير محدد";
+            const symptom = row.symptom_description ? ` | السبب: ${row.symptom_description}` : "";
+            lines.push(
+                `- [رش/تسميد] activity_id:${row.id} | أرض: ${fname} | المنتج: ${productLabel}${symptom}` +
+                ` | مسجل في: ${row.created_at}` +
+                ` | الحقول القابلة للتحديث: ${openFields.length ? openFields.join("، ") : "جميع الحقول الأساسية مكتملة — فقط outcome_rating مفقود"}`
+            );
+        }
+
+        for (const row of (irrigations.data as any[]) || []) {
+            const fname = fieldNameMap[row.field_id] || row.field_id;
+            const openFields = getTopMissingFields(row, "irrigation", 2);
+            lines.push(
+                `- [ري] activity_id:${row.id} | أرض: ${fname} | وصف: ${row.description || "غير محدد"}` +
+                ` | مسجل في: ${row.created_at}` +
+                ` | الحقول القابلة للتحديث: ${openFields.length ? openFields.join("، ") : "جميع الحقول الأساسية مكتملة — فقط outcome_rating مفقود"}`
+            );
+        }
+
+        for (const row of (harvests.data as any[]) || []) {
+            const fname = fieldNameMap[row.field_id] || row.field_id;
+            const openFields = getTopMissingFields(row, "harvest", 2);
+            lines.push(
+                `- [حصاد] activity_id:${row.id} | أرض: ${fname}` +
+                ` | الكمية: ${row.quantity ?? "غير محددة"} ${row.quantity_unit ?? ""}` +
+                ` | مسجل في: ${row.created_at}` +
+                ` | الحقول القابلة للتحديث: ${openFields.length ? openFields.join("، ") : "جميع الحقول الأساسية مكتملة — فقط outcome_rating مفقود"}`
+            );
+        }
+
+        for (const row of (labors.data as any[]) || []) {
+            const fname = fieldNameMap[row.field_id] || row.field_id;
+            const openFields = getTopMissingFields(row, "labor", 2);
+            lines.push(
+                `- [عمالة] activity_id:${row.id} | أرض: ${fname}` +
+                ` | العمال: ${row.worker_count ?? "غير محدد"}` +
+                ` | مسجل في: ${row.created_at}` +
+                ` | الحقول القابلة للتحديث: ${openFields.length ? openFields.join("، ") : "جميع الحقول الأساسية مكتملة — فقط outcome_rating مفقود"}`
+            );
+        }
+
+        if (lines.length === 0) {
+            console.log(`[crop-chat] ℹ️ [fetchPendingActivities] No pending_outcome rows found for farmer ${farmerId}.`);
+            return "";
+        }
+
+        console.log(`[crop-chat] 📋 [fetchPendingActivities] Found ${lines.length} pending activity items for farmer ${farmerId}:\n${lines.join("\n")}`);
+
+        return [
+            "\n\n<pending_activities>",
+            "فيه أنشطة مسجلة لسه معلقة وناقصة بيانات أو نتيجة متابعة:",
+            ...lines,
+            "إذا ذكر الفلاح أي معلومة مكملة، استخدم أداة update_field_activity لتحديث الصف بالـ id المذكور.",
+            "</pending_activities>",
+        ].join("\n");
+    } catch (err) {
+        console.error("[crop-chat] ❌ Error in fetchPendingActivities:", err);
+        return "";
+    }
+}
 
 /**
  * POST /api/crop-chat
@@ -190,6 +414,9 @@ export async function POST(request: Request) {
         ).join("\n")
         : "لا توجد أراضٍ مسجلة حالياً للفلاح.";
 
+    // Fetch pending activities for context injection
+    const pendingActivitiesContext = await fetchPendingActivities(supabaseAdmin, userId);
+
     // 3. Fetch products
     const { data: products } = await (supabaseAdmin as any)
         .from("products")
@@ -214,6 +441,19 @@ export async function POST(request: Request) {
             })
             .join("\n") || "لا توجد منتجات متوفرة حالياً في المعرض.";
 
+    // 4. Fetch pests and diseases
+    const { data: pestsDiseases } = await (supabaseAdmin as any)
+        .from("pests_diseases")
+        .select("id, name_ar, category, common_crops");
+
+    const pestsDiseasesContext =
+        pestsDiseases
+            ?.map((p: any) => {
+                const crops = Array.isArray(p.common_crops) ? p.common_crops.join("، ") : (p.common_crops || "جميع المحاصيل");
+                return `- المعرف: ${p.id} | الاسم: ${p.name_ar} | الفئة: ${p.category || "غير محددة"} | المحاصيل الشائعة: ${crops}`;
+            })
+            .join("\n") || "لا توجد آفات أو أمراض مسجلة حالياً.";
+
     const extractAnswer = (rawText: string): string => {
         const match = rawText.match(/<answer>([\s\S]*?)<\/answer>/i);
         if (match) {
@@ -227,9 +467,16 @@ export async function POST(request: Request) {
 
         const extractedAnswerText = extractAnswer(rawText);
 
-        const match = extractedAnswerText.match(/\[RECOMMEND_PRODUCT:\s*["']?([^\]"']+)["']?\s*\]/i);
+        // Sanitize any raw tool call leaks like <call:...> or <call:default_api:...> and internal thinking blocks <thinking>...</thinking>
+        const sanitizedText = extractedAnswerText
+            .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+            .replace(/<call:[\s\S]*?>/gi, "")
+            .replace(/<call:[^>]+>/gi, "")
+            .trim();
+
+        const match = sanitizedText.match(/\[RECOMMEND_PRODUCT:\s*["']?([^\]"']+)["']?\s*\]/i);
         let recommendedProduct: any = null;
-        const cleanText = extractedAnswerText.replace(/\[RECOMMEND_PRODUCT:\s*["']?[^\]"']+["']?\s*\]/gi, "").trim();
+        const cleanText = sanitizedText.replace(/\[RECOMMEND_PRODUCT:\s*["']?[^\]"']+["']?\s*\]/gi, "").trim();
 
         if (match) {
             const tagValue = match[1].trim().toLowerCase();
@@ -295,7 +542,7 @@ export async function POST(request: Request) {
 
 2. الترحيب: رحب بالمزارع (مثل: "أهلاً بك يا أخي" أو "أهلاً بك يا حاج") في بداية المحادثة فقط، إذا كان هذا هو السؤال الأول في الشات ولا يوجد سجل محادثة سابق. في الرسائل التالية، اجب مباشرة وبشكل طبيعي دون تكرار عبارات الترحيب.
 
-3. الكلمات الممنوعة تماماً وبدائلها الإلزامية (استخدم البديل دائماً بدلاً منها):
+3. الكلمات الممنوعة تماماً وبدائلها الإلجباري (استخدم البديل دائماً بدلاً منها):
    - "عشان" أو "علشان" -> استخدم "لأن" أو "لكي" أو "من أجل"
    - "هبسطهالك" -> استخدم "سأوضحها لك ببساطة" أو "سأشرحها لك بتبسيط"
    - "كدة" أو "كده" -> استخدم "كذلك" أو "بهذه الطريقة"
@@ -516,6 +763,7 @@ export async function POST(request: Request) {
 <field_management required="true">
 بيانات الأراضي المسجلة حالياً للفلاح:
 ${activeFieldsContext}
+${pendingActivitiesContext}
 
 قواعد إدارة وتسجيل الأراضي (اقرأها واتبعها بالضبط):
 
@@ -600,6 +848,135 @@ ${activeFieldsContext}
 
 14. أرفق دائماً نص كلام موجه للفلاح في نفس الرد الذي تستدعي فيه أي أداة (manage_farmer_field أو update_farm_profile)؛ تكلم الفلاح مباشرةً بكلام طبيعي ودود يناسب الموقف بعد تنفيذ الأداة. يُمنع منعاً باتاً الاكتفاء باستدعاء أداة دون إرفاق نص.
 </field_management>
+
+<farmer_memory_logging>
+بجانب بيانات الأرض التقنية، منصتنا تبني ملفاً سلوكياً تراكمياً عن كل فلاح (مستوى ميزانيته، أسلوب تواصله المفضل، مدى تقبله للتجربة، محاصيله المفضلة، ومصادر ثقته). هذا الملف يساعدك مستقبلاً على تخصيص كل نصيحة تقدمها له بدقة أكبر، لذلك اعتبر ملاحظة أي حقيقة سلوكية ثابتة عن الفلاح جزءاً أصيلاً من مهمتك، وليس عبئاً إضافياً.
+
+<memory_categories>
+سجّل فقط الحقائق التي تندرج بوضوح تحت واحد من هذه التصنيفات الخمسة، ولا تخترع تصنيفاً سادساً مهما بدت المعلومة مهمة:
+  - budget_level: قدرته المالية وميله للحلول الاقتصادية أو المرتفعة الثمن (قيمة واحدة تمثل حالته الحالية).
+  - risk_tolerance: مدى استعداده لتجربة منتجات أو طرق جديدة مقابل التمسك بالمجرب والمضمون (قيمة واحدة).
+  - communication_style: طريقته المفضلة في تلقي المعلومة (تفاصيل مطولة، إجابات مختصرة، أمثلة عملية...).
+  - crop_preference: المحاصيل التي يفضل زراعتها (قد يكون له أكثر من محصول مفضل في وقت واحد).
+  - trusted_source: الجهات أو الأشخاص الذين يثق برأيهم الزراعي (قد يذكر أكثر من مصدر).
+
+إذا لم تنطبق الحقيقة بوضوح على أي تصنيف من الخمسة، لا تسجلها إطلاقاً، ولا تجبر معلومة عابرة على الدخول في تصنيف لا يناسبها.
+</memory_categories>
+
+<how_to_log>
+استخدم أداة log_farmer_memory فوراً وفي الخلفية، بنفس أسلوب <stealth_profile_update> تماماً: لا تخبر الفلاح أبداً أنك سجلت أو لاحظت شيئاً عنه، ولا تستخدم أي مصطلح تقني، واستمر في حديثك الطبيعي.
+
+فرّق دائماً بين نوعين من التصنيفات:
+  - تصنيفات القيمة الواحدة (budget_level, risk_tolerance, communication_style): إذا قال الفلاح ما يناقض حقيقة مسجلة سابقاً عن نفس التصنيف (مثل: كان مسجلاً أنه يفضل الاقتصادي، ثم صرّح الآن برغبته في منتج أغلى بثقة)، سجّل الحقيقة الجديدة وستحل تلقائياً محل القديمة.
+  - تصنيفات القيم المتعددة (crop_preference, trusted_source): كل ذكر جديد يُضاف عادة كحقيقة مستقلة، ولا يُفترض أنه يلغي ما قبله إلا إذا صرّح الفلاح صراحة بالتراجع عنه (مثل: "بطلت أزرع كذا").
+
+لا تسجل ملاحظة عابرة أو افتراضية أو مبنية على تخمين، سجّل فقط ما صرّح به الفلاح فعلياً أو ما استنتجته بثقة عالية من سياق واضح ومتكرر.
+</how_to_log>
+</farmer_memory_logging>
+
+<field_activity_logging>
+بجانب بيانات الأرض الثابتة، نسجل أيضاً كل نشاط زراعي فعلي يذكره الفلاح (رش أو تسميد، ري، حصاد، عمالة) كحدث منفصل موثّق بتاريخه، لأن هذا السجل هو ما يمكّننا مستقبلاً من ربط كل نصيحة بنتيجتها الفعلية على أرضه.
+
+<golden_rule_log_immediately>
+بمجرد أن يذكر الفلاح أنه قام فعلياً بنشاط زراعي (وليس نية أو خطة مستقبلية)، استدعِ أداة log_field_activity فوراً بكل ما ذكره. لا تنتظر اكتمال كل التفاصيل قبل التسجيل، ولا تؤجل الاستدعاء لآخر الرد.
+
+عند تحديد activity_type=treatment (رش/تسميد)، استنتج دائماً وقبل الاستدعاء تصنيف category مباشرة من كلام وسياق الفلاح دون سؤاله إطلاقاً:
+- فعل "رشيت" أو ذكر رش أي مادة أو دواء أو مبيد أو علاج لآفة ⬅️ اختر category="مبيد" فوراً.
+- فعل "سمّدت" أو ذكر وضع سماد أو الكيماوي أو تغذية ⬅️ اختر category="سماد" فوراً.
+- إذا ذكر الفلاح اسم منتج محدد موجود في productsContext، استخدم تصنيف المنتج المذكور هناك مباشرة.
+يُمنع منعاً باتاً سؤال الفلاح "هل رشتك كانت مبيد أم سماد؟" أو فتح حوار استفساري لمجرد تحديد التصنيف؛ استنتج التصنيف فوراً واستدِ أداة log_field_activity في نفس الرد بلا أي تردد. باقي أنواع الأنشطة (ري، حصاد، عمالة) لا تحتاج هذا الشرط، سجّلها فوراً بلا قيد.
+
+قبل الاستدعاء، إذا كان لدى الفلاح أكثر من أرض ولم يحدد أيها يقصد، طبّق أولاً منطق <field_attribute_resolution> لتحديد field_id الصحيح قبل التسجيل. لا تسجل النشاط على أرض خاطئة بسبب التخمين.
+</golden_rule_log_immediately>
+
+<matching_reference_lists>
+عند تسجيل اسم منتج أو تحديد سبب الرش (آفة أو مرض)، حاول دائماً مطابقة كلام الفلاح مع قائمة المنتجات المتوفرة في productsContext وقائمة الآفات والأمراض المسجلة لدينا:
+${pestsDiseasesContext}
+
+واستخدم المعرف (id) المطابق إذا وجدت تطابقاً واضحاً وموثوقاً. إذا لم تجد تطابقاً واضحاً، لا تخترع معرفاً، واكتفِ بتسجيل النص كما قاله الفلاح حرفياً في الحقل النصي المخصص لذلك.
+</matching_reference_lists>
+
+<handling_pending_activities>
+قد تجد في بداية هذا القسم قائمة أنشطة معلقة تحت وسم pending_activities. كل نشاط فيها مرفق معه بالضبط أهم عمودين ناقصين منه فقط (وليس كل الأعمدة الناقصة)، مرتبين بالأهمية. هذان العمودان فقط هما ما يجب أن تسأل عنهما لهذا النشاط، ولا تسأل عن أي عمود آخر غير مذكور صراحة معه.
+
+<golden_rule_update_immediately>
+أي معلومة جديدة يذكرها الفلاح تنطبق على نشاط معلق — سواء كانت من العمودين المطلوبين أو أي تفصيل إضافي تطوع بذكره من نفسه — استدعِ أداة update_field_activity فوراً بالـ activity_id المذكور، وأدخل المعلومة في حقلها المخصص. لا تدّعِ في ردك النصي أنك سجلت أو حدّثت شيئاً إلا بعد استدعاء الأداة فعلياً في نفس الرد، ولا تنشئ نشاطاً جديداً بالخطأ بدلاً من التحديث.
+</golden_rule_update_immediately>
+
+<pending_vs_new_activity_rules>
+عندما يذكر الفلاح أنه قام بنشاط زراعي فعلي (رش/تسميد، ري، حصاد)، وقبل تحديد هل تستدعي log_field_activity (إنشاء جديد) أم update_field_activity (تحديث معلق)، قارن بين أرض النشاط وتاريخه وبين قائمة الأنشطة المعلقة (pending_activities) طبقاً للقواعد الثلاث التالية:
+
+1. أرض مختلفة: إذا كان النشاط المذكور يخص أرضاً غير الأرض المسجلة في النشاط المعلق، استدعِ أداة log_field_activity فوراً وإنشاء نشاط جديد بدون أي سؤال إطلاقاً، فاختلاف الأرض يعني حتماً أنه نشاط مستقل.
+
+2. نفس الأرض ولكن بفارق أكثر من 5 أيام: إذا كان النشاط لنفس الأرض المسجلة في النشاط المعلق، ولكن بفارق زمني يزيد عن 5 أيام من تاريخ التسجيل المعلق، استدعِ أداة log_field_activity فوراً وإنشاء نشاط جديد بدون أي سؤال، فمرور هذه المدة يعني منطقياً أنها رشة أو معاملة زراعية جديدة.
+
+3. نفس الأرض وفي نفس اليوم أو خلال 5 أيام: هنا فقط (نفس الأرض + فارق زمني 5 أيام أو أقل):
+   - إذا صرّح الفلاح بتفاصيل مكملة لنفس الرشة المعلقة (مثل ذكر عدد الرشاشات أو تأكيد تنفيذ نفس المنتج): استدعِ update_field_activity فوراً بالـ activity_id لتحديث الصف المعلق.
+   - إذا كان الكلام مبهماً ومحتملاً، استفسر بلطف قبل أي استدعاء: "يا حاج، هل دي نفس رشة [اسم المنتج المعلق] اللي اتكلمنا عليها في [اسم الأرض]، ولا دي رشة جديدة؟" لأن المنطقي أن الفلاح لا يكرر رش نفس المحصول مرتين خلال أقل من 5 أيام.
+
+مثال توضيحي (أرض مختلفة — يُسجَّل فوراً بدون سؤال):
+بيانات المعلق: نشاط رش معلق لمنتج "كيمازد" في "أرض خضر" مسجل أمس.
+الفلاح: "رشيت أرض النبع النهاردة"
+<thinking>
+1. أرض النشاط المذكور ("أرض النبع") مختلفة عن أرض النشاط المعلق ("أرض خضر").
+2. طبقاً للقاعدة 1: اختلاف الأرض يعني نشاط جديد مستقل حتماً.
+3. القرار: استدعاء log_field_activity فوراً لأرض النبع بدون أي سؤال عن النشاط المعلق.
+</thinking>
+<answer>
+تمام يا حاج، رشيت بإيه في أرض النبع وكم رشاشة رشيتها؟
+</answer>
+</pending_vs_new_activity_rules>
+
+طريقة السؤال: لا تسأل عن الأنشطة المعلقة كجزء من صلب حديثك مع الفلاح. أجب أولاً على سؤاله أو استكمل الحديث الطبيعي بشكل كامل ومستقل، ثم في نهاية ردك فقط، إذا وجدت نشاطاً معلقاً واحداً مرتبطاً بسياق منطقي مع المحادثة (أو حتى لو لم يكن مرتبطاً، بأسلوب "على فكرة")، اسأل عن عموديه الناقصين معاً في جملة واحدة عابرة وودودة، مثل: "على فكرة يا حاج، قولتلي إنك رشيت كذا يوم كذا، بس ميهمناش الرشة كانت يوم قد إيه بالظبط وفي أنهي وقت من اليوم، الصبح بدري ولا قبل الظهر ولا بعد العصر؟". لا تسأل عن أكثر من نشاط معلق واحد في نفس الرد.
+
+إذا قال الفلاح صراحة إنه لا يريد الإجابة الآن أو ليس وقتها المناسب، لا تسأله عن هذا النشاط مرة أخرى إطلاقاً طوال باقي هذه المحادثة، حتى لا يشعر بالإلحاح أو الضغط عليه.
+
+لا تحوّل mark_completed إلى صحيح إلا إذا ذكر الفلاح أيضاً نتيجة النشاط (outcome_rating) بنفسه. لا تسأله عن النتيجة بشكل استباقي في هذه المرحلة، اكتفِ بتسجيلها فقط إذا تطوع بذكرها من نفسه.
+</handling_pending_activities>
+
+<examples>
+مثال 1 (استنتاج تلقائي للتصنيف من غير سؤال):
+الفلاح: "رشيت مبيد على أرض النبع النهاردة"
+<thinking>
+1. نشاط فعلي وقع بالفعل.
+2. أرض محددة بالاسم صراحة.
+3. النوع treatment، وكلمة "مبيد" واضحة صراحة في كلامه. أستنتج category=مبيد مباشرة دون سؤال، وأستدعي log_field_activity فوراً بهذا التصنيف.
+</thinking>
+<answer>
+تمام يا حاج، رشيت بإيه بالظبط؟ [استكمال الرد الطبيعي]
+</answer>
+
+مثال 1ب (الحالة النادرة — غموض حقيقي يستوجب السؤال):
+الفلاح: "عملت حاجة في أرض النبع النهاردة"
+<thinking>
+1. نشاط فعلي، لكن لا يوجد أي فعل أو كلمة تدل على مبيد أو سماد أو حتى نوع النشاط أصلاً (رش أم تسميد أم غيره).
+2. لا يمكن الاستنتاج بثقة معقولة هنا، فأسأل مباشرة.
+</thinking>
+<answer>
+تمام يا حاج، عملت إيه بالظبط، رشيت مبيد ولا وضعت سماد؟
+</answer>
+
+مثال 2 (سؤال نهاية الرسالة عن نشاط معلق):
+سياق pending_activities: نشاط treatment في "أرض خضر"، الأعمدة الناقصة المرسلة: [activity_date, sprayer_count]، id: xyz.
+الفلاح: "الأرض دي فيها دودة، أعمل إيه؟"
+<thinking>
+1. أجيب على سؤاله عن الدودة بشكل كامل ومستقل أولاً.
+2. في نهاية الرد فقط، أسأل عن العمودين المطلوبين لنشاط xyz معاً: التاريخ وعدد الرشاشات.
+</thinking>
+<answer>
+[إجابة كاملة عن الدودة والعلاج المناسب]... وعلى فكرة يا حاج، الرشة اللي قولتلي عليها في أرض خضر، كانت يوم قد إيه بالظبط، وكام رشاشة رشيتها؟
+</answer>
+
+مثال 3 (الفلاح يرفض الإجابة — لا يُسأل مرة أخرى):
+الفلاح سبق وقال: "معلش سيبني منها دلوقتي" عن نفس النشاط xyz في رسالة سابقة بنفس المحادثة.
+<thinking>
+الفلاح رفض الإجابة عن نشاط xyz صراحة من قبل في هذه المحادثة. لا أسأل عنه مرة أخرى إطلاقاً طوال باقي هذا الشات.
+</thinking>
+<answer>
+[الرد على أي موضوع آخر دون أي إشارة لنشاط xyz]
+</answer>
+</examples>
+</field_activity_logging>
 `;
 
     // Build Gemini contents array
@@ -743,16 +1120,30 @@ ${activeFieldsContext}
 
         const data = await response.json();
         const candidates = data.candidates?.[0];
-        const candidateParts: GeminiPart[] = candidates?.content?.parts ?? [];
+        let currentParts: GeminiPart[] = candidates?.content?.parts ?? [];
 
-        const functionCallParts = candidateParts.filter((p) => p.functionCall);
+        // ── Agentic loop: handle chained tool calls (max 5 rounds) ───────────────
+        let agentContents: ChatMessage[] = [...contents];
+        let loopCount = 0;
+        const MAX_TOOL_ROUNDS = 5;
 
-        if (functionCallParts.length > 0) {
+        while (loopCount < MAX_TOOL_ROUNDS) {
+            loopCount++;
+            const functionCallParts = currentParts.filter((p) => p.functionCall);
+
+            if (functionCallParts.length === 0) break; // no more tool calls → exit loop
+
+            console.log(`[crop-chat] 🛠️ [Round ${loopCount}] Model requested ${functionCallParts.length} function call(s):`, functionCallParts.map(p => p.functionCall?.name));
             const functionResponseParts: GeminiPart[] = [];
 
             for (const callPart of functionCallParts) {
                 const { name, args } = callPart.functionCall!;
                 console.log(`[crop-chat] Gemini called tool ${name} with args:`, args);
+
+                let toolResult: Record<string, any> = {
+                    status: "success",
+                    message: "تم تنفيذ العملية بنجاح."
+                };
 
                 if (name === "update_farm_profile") {
                     const { target_scope, properties_to_update } = args;
@@ -882,9 +1273,210 @@ ${activeFieldsContext}
                                     irrigation_type: irrigation_type || null,
                                     is_active: true,
                                 });
-                                console.log(`[crop-chat] Created disambiguated field '${fullName}' for farmer ${userId}`);
                             }
                         }
+                    }
+                } else if (name === "log_farmer_memory") {
+                    const { category, fact, confidence } = args;
+                    console.log(`[crop-chat] 🧠 [log_farmer_memory] CALL: farmer=${userId} | category=${category} | fact="${fact}" | confidence=${confidence || 'null'}`);
+                    if (category && fact) {
+                        const { error: deactivateErr } = await (supabaseAdmin as any)
+                            .from("farmer_memory")
+                            .update({ is_active: false })
+                            .eq("farmer_id", userId)
+                            .eq("category", category)
+                            .eq("is_active", true);
+
+                        if (deactivateErr) {
+                            console.error(`[crop-chat] ⚠️ [log_farmer_memory] Soft-replace deactivation error:`, deactivateErr);
+                        }
+
+                        const { data: insertedMemory, error: insertMemErr } = await (supabaseAdmin as any)
+                            .from("farmer_memory")
+                            .insert({
+                                farmer_id: userId,
+                                category,
+                                fact,
+                                source: "conversation",
+                                confidence: confidence || null,
+                                is_active: true,
+                            })
+                            .select("id")
+                            .single();
+
+                        if (insertMemErr) {
+                            console.error(`[crop-chat] ❌ [log_farmer_memory] FAILED:`, insertMemErr);
+                        } else {
+                            console.log(`[crop-chat] ✅ [log_farmer_memory] SUCCESS: inserted memory ID ${insertedMemory?.id}`);
+                        }
+                    }
+                } else if (name === "log_field_activity") {
+                    const {
+                        field_id,
+                        activity_type,
+                        activity_date,
+                        notes,
+                        unit_price,
+                        category,
+                        product_id,
+                        product_name_text,
+                        dosage,
+                        dosage_unit,
+                        sprayer_count,
+                        pest_disease_id,
+                        symptom_description,
+                        photo_url,
+                        description,
+                        quantity,
+                        quantity_unit,
+                        worker_count,
+                        contractor_name,
+                    } = args;
+
+                    console.log(`[crop-chat] 🚜 [log_field_activity] CALL: field_id=${field_id} | activity_type=${activity_type} | args:`, args);
+
+                    if (field_id && activity_type) {
+                        if (activity_type === "treatment" && !category) {
+                            console.warn(`[crop-chat] ⚠️ [log_field_activity] Rejected: category is required to log a treatment activity`);
+                            toolResult = {
+                                status: "error",
+                                message: "category is required to log a treatment activity"
+                            };
+                        } else {
+                            const targetTable =
+                                activity_type === "treatment" ? "field_treatments" :
+                                    activity_type === "irrigation" ? "field_irrigation_logs" :
+                                        activity_type === "harvest" ? "field_harvest_records" : "field_labor_logs";
+
+                            const payload: Record<string, any> = {
+                                field_id,
+                                status: "pending_outcome",
+                            };
+
+                            if (activity_date) payload.activity_date = new Date(activity_date).toISOString();
+                            if (notes) payload.notes = notes;
+                            if (unit_price != null) payload.unit_price = Number(unit_price);
+
+                            if (activity_type === "treatment") {
+                                if (category) payload.category = category;
+                                if (product_id) payload.product_id = product_id;
+                                if (product_name_text) payload.product_name_text = product_name_text;
+                                if (dosage != null) payload.dosage = Number(dosage);
+                                if (dosage_unit) payload.dosage_unit = dosage_unit;
+                                if (sprayer_count != null) payload.sprayer_count = Number(sprayer_count);
+                                if (pest_disease_id) payload.pest_disease_id = pest_disease_id;
+                                if (symptom_description) payload.symptom_description = symptom_description;
+                                if (photo_url) payload.photo_url = photo_url;
+                            } else if (activity_type === "irrigation") {
+                                if (description) payload.description = description;
+                            } else if (activity_type === "harvest") {
+                                if (quantity != null) payload.quantity = Number(quantity);
+                                if (quantity_unit) payload.quantity_unit = quantity_unit;
+                                if (description) payload.description = description;
+                            } else if (activity_type === "labor") {
+                                if (worker_count != null) payload.worker_count = Number(worker_count);
+                                if (contractor_name) payload.contractor_name = contractor_name;
+                            }
+
+                            const { data: inserted, error: insertErr } = await (supabaseAdmin as any)
+                                .from(targetTable)
+                                .insert(payload)
+                                .select("id")
+                                .single();
+
+                            if (insertErr) {
+                                console.error(`[crop-chat] ❌ [log_field_activity] FAILED to insert into ${targetTable}:`, insertErr);
+                                toolResult = {
+                                    status: "error",
+                                    message: `فشل الإدخال في قاعدة البيانات: ${insertErr.message}`
+                                };
+                            } else {
+                                console.log(`[crop-chat] ✅ [log_field_activity] SUCCESS -> Inserted row ID ${inserted?.id} into ${targetTable} (status: pending_outcome)`);
+                            }
+                        }
+                    } else {
+                        console.warn(`[crop-chat] ⚠️ [log_field_activity] Missing required field_id or activity_type`);
+                        toolResult = {
+                            status: "error",
+                            message: "Missing required field_id or activity_type"
+                        };
+                    }
+                } else if (name === "update_field_activity") {
+                    const {
+                        activity_id,
+                        activity_type,
+                        activity_date,
+                        notes,
+                        unit_price,
+                        outcome_rating,
+                        mark_completed,
+                        category,
+                        product_id,
+                        product_name_text,
+                        dosage,
+                        dosage_unit,
+                        pest_disease_id,
+                        symptom_description,
+                        photo_url,
+                        description,
+                        quantity,
+                        quantity_unit,
+                        worker_count,
+                        contractor_name,
+                    } = args;
+
+                    console.log(`[crop-chat] 🔄 [update_field_activity] CALL: activity_id=${activity_id} | activity_type=${activity_type} | mark_completed=${mark_completed} | args:`, args);
+
+                    if (activity_id && activity_type) {
+                        const targetTable =
+                            activity_type === "treatment" ? "field_treatments" :
+                                activity_type === "irrigation" ? "field_irrigation_logs" :
+                                    activity_type === "harvest" ? "field_harvest_records" : "field_labor_logs";
+
+                        const updates: Record<string, any> = {};
+
+                        if (activity_date) updates.activity_date = new Date(activity_date).toISOString();
+                        if (notes) updates.notes = notes;
+                        if (unit_price != null) updates.unit_price = Number(unit_price);
+                        if (outcome_rating) updates.outcome_rating = outcome_rating;
+                        if (mark_completed === true) updates.status = "completed";
+
+                        if (activity_type === "treatment") {
+                            if (category) updates.category = category;
+                            if (product_id) updates.product_id = product_id;
+                            if (product_name_text) updates.product_name_text = product_name_text;
+                            if (dosage != null) updates.dosage = Number(dosage);
+                            if (dosage_unit) updates.dosage_unit = dosage_unit;
+                            if (pest_disease_id) updates.pest_disease_id = pest_disease_id;
+                            if (symptom_description) updates.symptom_description = symptom_description;
+                            if (photo_url) updates.photo_url = photo_url;
+                        } else if (activity_type === "irrigation") {
+                            if (description) updates.description = description;
+                        } else if (activity_type === "harvest") {
+                            if (quantity != null) updates.quantity = Number(quantity);
+                            if (quantity_unit) updates.quantity_unit = quantity_unit;
+                            if (description) updates.description = description;
+                        } else if (activity_type === "labor") {
+                            if (worker_count != null) updates.worker_count = Number(worker_count);
+                            if (contractor_name) updates.contractor_name = contractor_name;
+                        }
+
+                        if (Object.keys(updates).length > 0) {
+                            const { error: updateErr } = await (supabaseAdmin as any)
+                                .from(targetTable)
+                                .update(updates)
+                                .eq("id", activity_id);
+
+                            if (updateErr) {
+                                console.error(`[crop-chat] ❌ [update_field_activity] FAILED to update ${targetTable} (${activity_id}):`, updateErr);
+                            } else {
+                                console.log(`[crop-chat] ✅ [update_field_activity] SUCCESS -> Updated activity ${activity_id} in ${targetTable}`);
+                            }
+                        } else {
+                            console.log(`[crop-chat] ℹ️ [update_field_activity] No fields provided to update for activity ${activity_id}`);
+                        }
+                    } else {
+                        console.warn(`[crop-chat] ⚠️ [update_field_activity] Missing required activity_id or activity_type`);
                     }
                 }
 
@@ -893,38 +1485,30 @@ ${activeFieldsContext}
                         name,
                         response: {
                             name,
-                            content: {
-                                status: "success",
-                                message: "تم تنفيذ العملية بنجاح."
-                            }
+                            content: toolResult
                         }
                     }
                 });
-            }
+            } // end for callPart
 
-            const updatedContents: ChatMessage[] = [
-                ...contents,
-                {
-                    role: "model",
-                    parts: candidateParts,
-                },
-                {
-                    role: "function",
-                    parts: functionResponseParts,
-                }
+            // Append this round's model turn + function responses to the conversation
+            agentContents = [
+                ...agentContents,
+                { role: "model", parts: currentParts },
+                { role: "user", parts: functionResponseParts },  // Gemini API requires "user" role for functionResponse turns
             ];
 
-            // ── Follow-up: force text-only response with tool_config mode=NONE ──────────
+            // ── Follow-up: send functionResponses back and allow more tool calls ─────
+            // NOTE: we do NOT send `tools` here with mode=NONE because some Gemini
+            // model versions return an empty/OTHER response when tools are present
+            // alongside mode=NONE. Instead we allow the model to call tools freely
+            // until it returns text, then we stop.
             const followUpPayload = {
-                contents: updatedContents,
+                contents: agentContents,
                 systemInstruction: {
                     parts: [{ text: systemPrompt }],
                 },
                 tools: [farmProfileToolDeclaration],
-                // Prevent model from calling tools again — force text response
-                tool_config: {
-                    function_calling_config: { mode: "NONE" }
-                },
                 generationConfig: {
                     temperature: 0.7,
                     maxOutputTokens: 5000,
@@ -934,49 +1518,80 @@ ${activeFieldsContext}
                 },
             };
 
-            try {
-                const followUpRes = await fetch(geminiEndpoint, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(followUpPayload),
-                });
+            let followUpOk = false;
+            for (let retry = 0; retry < 2; retry++) {
+                try {
+                    const followUpController = new AbortController();
+                    const followUpTimeout = setTimeout(() => followUpController.abort(), 60_000);
+                    const followUpRes = await fetch(geminiEndpoint, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(followUpPayload),
+                        signal: followUpController.signal,
+                    }).finally(() => clearTimeout(followUpTimeout));
 
-                if (followUpRes.ok) {
-                    const followUpData = await followUpRes.json();
-                    const followUpParts: GeminiPart[] = followUpData.candidates?.[0]?.content?.parts ?? [];
-                    const finalFollowUpText = followUpParts
-                        .filter((p: any) => !p.thought && p.text)
-                        .map((p: any) => p.text)
-                        .join("\n");
-
-                    if (finalFollowUpText) {
-                        console.log("[crop-chat] Follow-up got text response ✅");
-                        const { cleanText, recommendedProduct } = processResponseText(finalFollowUpText);
-                        return NextResponse.json({
-                            success: true,
-                            text: cleanText,
-                            recommendedProduct,
-                        });
+                    if (followUpRes.ok) {
+                        const followUpData = await followUpRes.json();
+                        currentParts = followUpData.candidates?.[0]?.content?.parts ?? [];
+                        followUpOk = true;
+                        break;
+                    } else {
+                        const errBody = await followUpRes.text();
+                        console.error(`[crop-chat] Follow-up HTTP error ${followUpRes.status} (retry ${retry}):`, errBody.slice(0, 200));
                     }
-
-                    console.warn("[crop-chat] Follow-up returned no text even with mode=NONE, parts:", JSON.stringify(followUpParts).slice(0, 300));
-                } else {
-                    const errBody = await followUpRes.text();
-                    console.error(`[crop-chat] Follow-up HTTP error ${followUpRes.status}:`, errBody.slice(0, 200));
+                } catch (followUpErr) {
+                    console.error(`[crop-chat] Follow-up request failed (retry ${retry}):`, followUpErr);
                 }
-            } catch (followUpErr) {
-                console.error("[crop-chat] Follow-up request failed:", followUpErr);
             }
 
-            // Fallback: tool was executed successfully but model failed to return text
-            console.warn("[crop-chat] Returning generic success after tool execution (no text from model)");
-            return NextResponse.json({
-                success: true,
-                text: "تم تنفيذ العملية بنجاح.",
-            });
+            if (!followUpOk) {
+                console.warn("[crop-chat] All follow-up retries failed after tool execution.");
+                return NextResponse.json({
+                    success: true,
+                    text: "تم تنفيذ العملية بنجاح.",
+                });
+            }
+
+            // Check if model returned text in this round (exit loop)
+            const roundText = currentParts
+                .filter((p: any) => !p.thought && p.text)
+                .map((p: any) => p.text)
+                .join("\n");
+
+            if (roundText) {
+                console.log(`[crop-chat] ✅ Got text response after ${loopCount} tool round(s).`);
+                const { cleanText, recommendedProduct } = processResponseText(roundText);
+                return NextResponse.json({
+                    success: true,
+                    text: cleanText,
+                    recommendedProduct,
+                });
+            }
+
+            // No text yet → loop continues to check for more function calls
+            console.log(`[crop-chat] 🔄 Round ${loopCount} returned no text, checking for more tool calls...`);
+        } // end while agentic loop
+
+        // ── If we exit the loop without text (e.g. max rounds reached) ────────────
+        const loopExitText = currentParts
+            .filter((p: any) => !p.thought && p.text)
+            .map((p: any) => p.text)
+            .join("\n");
+
+        if (loopExitText) {
+            const { cleanText, recommendedProduct } = processResponseText(loopExitText);
+            return NextResponse.json({ success: true, text: cleanText, recommendedProduct });
         }
 
-        const resultText = candidateParts
+        if (loopCount >= MAX_TOOL_ROUNDS) {
+            console.warn(`[crop-chat] Reached max tool rounds (${MAX_TOOL_ROUNDS}) without text response.`);
+            return NextResponse.json({ success: true, text: "تم تنفيذ العملية بنجاح." });
+        }
+
+        // ── No function calls were made at all — pure text response ───────────────
+        console.log(`[crop-chat] ✅ Model returned TEXT ONLY (No function calls executed).`);
+
+        const resultText = currentParts
             .filter((p: any) => !p.thought && p.text)
             .map((p: any) => p.text)
             .join("\n");
