@@ -158,3 +158,71 @@ export async function createFarmerOrderDirectly({
     return { error: "حدث خطأ غير متوقع أثناء تنفيذ الطلب." };
   }
 }
+
+/**
+ * Server Action: Create a pending field_treatments row after a product purchase.
+ * Only runs if a fieldId is provided — no fieldId = no row inserted.
+ */
+export async function createTreatmentFromPurchase({
+  productId,
+  fieldId,
+}: {
+  productId: string;
+  fieldId: string | null | undefined;
+}) {
+  // إذا لم يتم تحديد أرض، لا نسجل أي شيء
+  if (!fieldId) return { skipped: true };
+
+  try {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey) return { error: "إعداد الخادم غير مكتمل." };
+
+    const supabaseAdmin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceRoleKey
+    );
+
+    // 1. جلب بيانات المنتج (الاسم + النوع) من قاعدة البيانات
+    const { data: product, error: prodErr } = await supabaseAdmin
+      .from("products")
+      .select("id, name_ar, product_type")
+      .eq("id", productId)
+      .single();
+
+    if (prodErr || !product) {
+      console.warn("[createTreatmentFromPurchase] Product not found:", productId);
+      return { skipped: true };
+    }
+
+    // 2. تحديد الـ category من product_type (أول قيمة في المصفوفة أو null)
+    const productTypes: string[] = Array.isArray(product.product_type)
+      ? product.product_type
+      : [];
+    // نربط نوع المنتج بـ category في جدول الرش
+    let category: "مبيد" | "سماد" | null = null;
+    if (productTypes.includes("مبيدات")) category = "مبيد";
+    else if (productTypes.includes("أسمدة") || productTypes.includes("مغذيات")) category = "سماد";
+
+    // 3. إدراج صف نشاط جديد (رش/تسميد معلق)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: insertErr } = await (supabaseAdmin as any)
+      .from("field_treatments")
+      .insert({
+        field_id: fieldId,
+        product_id: product.id,
+        product_name_text: product.name_ar,
+        ...(category ? { category } : {}),
+        status: "pending_outcome",
+      });
+
+    if (insertErr) {
+      console.error("[createTreatmentFromPurchase] Insert error:", insertErr);
+      return { error: "فشل في تسجيل نشاط الرش." };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("[createTreatmentFromPurchase] Exception:", err);
+    return { error: "حدث خطأ غير متوقع." };
+  }
+}

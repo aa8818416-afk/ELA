@@ -81,7 +81,7 @@ export function calcVPD(tempC: number, rhPct: number): number {
 /**
  * Spray readiness indicator (مؤشر الرش)
  */
-export function calcSprayStatus(wind: number, precipProb: number, vpd: number): SprayStatus {
+export function calcSprayStatus(wind: number, precipProb: number, vpd: number, heatWarningActive = false): SprayStatus {
   if (wind > 20) {
     return { badge: 'red', message: 'تجنب الرش دلوقتي', reason: 'الرياح شديدة' };
   }
@@ -90,6 +90,10 @@ export function calcSprayStatus(wind: number, precipProb: number, vpd: number): 
   }
   if (wind >= 10) {
     return { badge: 'yellow', message: 'ممكن ترش، بس خد بالك من الرياح' };
+  }
+  // الجو مناسب للرش — لكن لو تحذير الحر نشط، نوضح التعارض في نفس الجملة
+  if (heatWarningActive) {
+    return { badge: 'green', message: 'دلوقتي وقت كويس للرش، ولكن تجنب الرش في ساعات الحر كما في التحذير أعلاه' };
   }
   return { badge: 'green', message: 'دلوقتي وقت كويس للرش' };
 }

@@ -156,6 +156,7 @@ const farmProfileToolDeclaration = {
                     dosage: { type: "NUMBER", description: "الجرعة" },
                     dosage_unit: { type: "STRING", description: "وحدة الجرعة" },
                     sprayer_count: { type: "INTEGER", description: "عدد الرشاشات المستخدمة بالجرعة المذكورة" },
+                    spray_time_of_day: { type: "STRING", description: "وقت الرش في اليوم: الصبح بكير / منتصف النهار / بعد العصر / المغرب" },
                     pest_disease_id: { type: "STRING", description: "معرف الآفة أو المرض" },
                     symptom_description: { type: "STRING", description: "وصف الأعراض" },
                     photo_url: { type: "STRING", description: "رابط الصورة" },
@@ -190,6 +191,7 @@ const farmProfileToolDeclaration = {
                     dosage: { type: "NUMBER" },
                     dosage_unit: { type: "STRING" },
                     sprayer_count: { type: "INTEGER" },
+                    spray_time_of_day: { type: "STRING", description: "وقت الرش في اليوم: الصبح بكير / منتصف النهار / بعد العصر / المغرب" },
                     pest_disease_id: { type: "STRING" },
                     symptom_description: { type: "STRING" },
                     photo_url: { type: "STRING" },
@@ -211,7 +213,7 @@ const farmProfileToolDeclaration = {
 
 // الأعمدة الجوهرية فقط لكل نوع نشاط — هي المرجع الوحيد للباندنج والأسئلة المعلقة
 const FIELD_PRIORITY: Record<string, string[]> = {
-    treatment: ["activity_date", "product", "dosage", "dosage_unit", "sprayer_count", "outcome_rating"],
+    treatment: ["activity_date", "product", "dosage", "dosage_unit", "sprayer_count", "spray_time_of_day", "outcome_rating"],
     irrigation: ["activity_date", "description"],
     harvest: ["activity_date", "description"],
     labor: ["activity_date", "worker_count", "contractor_name"],
@@ -1408,6 +1410,7 @@ ${pestsDiseasesContext}
                         dosage,
                         dosage_unit,
                         sprayer_count,
+                        spray_time_of_day,
                         pest_disease_id,
                         symptom_description,
                         photo_url,
@@ -1449,6 +1452,7 @@ ${pestsDiseasesContext}
                                 if (dosage != null) payload.dosage = Number(dosage);
                                 if (dosage_unit) payload.dosage_unit = dosage_unit;
                                 if (sprayer_count != null) payload.sprayer_count = Number(sprayer_count);
+                                if (spray_time_of_day) payload.spray_time_of_day = spray_time_of_day;
                                 if (pest_disease_id) payload.pest_disease_id = pest_disease_id;
                                 if (symptom_description) payload.symptom_description = symptom_description;
                                 if (photo_url) payload.photo_url = photo_url;
@@ -1507,6 +1511,7 @@ ${pestsDiseasesContext}
                         dosage,
                         dosage_unit,
                         sprayer_count,
+                        spray_time_of_day,
                         pest_disease_id,
                         symptom_description,
                         photo_url,
@@ -1539,6 +1544,7 @@ ${pestsDiseasesContext}
                             if (dosage != null) updates.dosage = Number(dosage);
                             if (dosage_unit) updates.dosage_unit = dosage_unit;
                             if (sprayer_count != null) updates.sprayer_count = Number(sprayer_count);
+                            if (spray_time_of_day) updates.spray_time_of_day = spray_time_of_day;
                             if (pest_disease_id) updates.pest_disease_id = pest_disease_id;
                             if (symptom_description) updates.symptom_description = symptom_description;
                             if (photo_url) updates.photo_url = photo_url;

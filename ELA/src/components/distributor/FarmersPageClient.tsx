@@ -35,6 +35,7 @@ function AddFarmerModal({
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [selectedVillage, setSelectedVillage] = useState("");
+  const [soilType, setSoilType] = useState<"طينية" | "رملية">("طينية");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedFarmer | null>(null);
@@ -45,6 +46,12 @@ function AddFarmerModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!soilType) {
+      setError("يرجى تحديد نوع التربة.");
+      return;
+    }
+
     setLoading(true);
 
     const village =
@@ -55,7 +62,7 @@ function AddFarmerModal({
     const res = await fetch("/api/distributor/farmers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ full_name: fullName, phone, village }),
+      body: JSON.stringify({ full_name: fullName, phone, village, soil_type: soilType }),
     });
 
     const data = await res.json();
@@ -85,6 +92,7 @@ function AddFarmerModal({
     setFullName("");
     setPhone("");
     setSelectedVillage("");
+    setSoilType("طينية");
     setError(null);
     setCreated(null);
   }
@@ -167,6 +175,29 @@ function AddFarmerModal({
                       </select>
                     </div>
                   )}
+
+                  {/* نوع التربة — إلزامي دائماً */}
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-300">
+                      نوع التربة <span className="text-red-400">*</span>
+                    </label>
+                    <div className="flex gap-3">
+                      {(["طينية", "رملية"] as const).map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setSoilType(type)}
+                          className={`flex-1 py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
+                            soilType === type
+                              ? "bg-green-600 border-green-500 text-white shadow-lg shadow-green-900/30"
+                              : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"
+                          }`}
+                        >
+                          {type === "طينية" ? "🏔️ طينية" : "🏜️ رملية"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
                   {error && (
                     <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-300 text-sm">

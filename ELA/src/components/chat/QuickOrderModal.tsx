@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { X, ShoppingBag, Plus, Minus, Loader2, CheckCircle2, AlertCircle, ArrowLeft } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, ShoppingBag, Plus, Minus, Loader2, CheckCircle2, AlertCircle, ArrowLeft, MapPin } from "lucide-react";
 import Link from "next/link";
-import { createFarmerOrderDirectly } from "@/app/actions/farmer";
+import { createClient } from "@/utils/supabase/client";
+import { createFarmerOrderDirectly, createTreatmentFromPurchase } from "@/app/actions/farmer";
 import { ZoomableImage } from "@/components/ui/ImageModal";
 
 export type RecommendedProduct = {
@@ -13,6 +14,12 @@ export type RecommendedProduct = {
   image_url?: string | null;
   active_ingredient?: string | null;
 };
+
+interface FarmerField {
+  id: string;
+  field_name: string | null;
+  crop_type: string;
+}
 
 interface QuickOrderModalProps {
   product: RecommendedProduct | null;
@@ -30,6 +37,35 @@ export default function QuickOrderModal({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // حالة اختيار الأرض
+  const [fields, setFields] = useState<FarmerField[]>([]);
+  const [fieldsLoading, setFieldsLoading] = useState(false);
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+
+  const supabase = createClient();
+
+  // جلب أراضي المزارع عند فتح المودال
+  useEffect(() => {
+    if (!isOpen || !product) return;
+
+    setFieldsLoading(true);
+    supabase
+      .from("farmer_fields")
+      .select("id, field_name, crop_type")
+      .eq("is_active", true)
+      .then(({ data }) => {
+        const activeFields: FarmerField[] = (data as FarmerField[] | null) ?? [];
+        setFields(activeFields);
+        // إذا كان للمزارع أرض واحدة فقط، يتم تحديدها تلقائياً
+        if (activeFields.length === 1) {
+          setSelectedFieldId(activeFields[0].id);
+        } else {
+          setSelectedFieldId(null);
+        }
+        setFieldsLoading(false);
+      });
+  }, [isOpen, product]);
+
   if (!isOpen || !product) return null;
 
   const totalPrice = product.price_to_farmer * quantity;
@@ -38,6 +74,7 @@ export default function QuickOrderModal({
     setLoading(true);
     setError(null);
     try {
+      // 1. إتمام الطلب
       const res = await createFarmerOrderDirectly({
         productId: product.id,
         quantity,
@@ -45,9 +82,19 @@ export default function QuickOrderModal({
 
       if (res.error) {
         setError(res.error);
-      } else {
-        setSuccess(true);
+        setLoading(false);
+        return;
       }
+
+      // 2. إنشاء صف نشاط رش فقط لو تم تحديد أرض — لو ما فيش أرض محددة لا نسجل أي شيء
+      if (selectedFieldId) {
+        await createTreatmentFromPurchase({
+          productId: product.id,
+          fieldId: selectedFieldId,
+        });
+      }
+
+      setSuccess(true);
     } catch {
       setError("حدث خطأ غير متوقع أثناء الاتصال بالخادم.");
     } finally {
@@ -59,6 +106,8 @@ export default function QuickOrderModal({
     setQuantity(1);
     setSuccess(false);
     setError(null);
+    setSelectedFieldId(null);
+    setFields([]);
     onClose();
   };
 
@@ -164,6 +213,47 @@ export default function QuickOrderModal({
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
+            </div>
+
+            {/* Field Selector */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                ربط المنتج بأرض (اختياري — يساعد المرشد يتابعك)
+              </label>
+
+              {fieldsLoading ? (
+                <div className="flex items-center gap-2 text-slate-400 text-xs py-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>جاري تحميل أراضيك...</span>
+                </div>
+              ) : fields.length === 0 ? (
+                <p className="text-slate-500 text-xs bg-slate-800/50 rounded-xl px-3 py-2">
+                  لا توجد أراضٍ مسجلة — سيتم إتمام الشراء بدون ربط بأرض
+                </p>
+              ) : fields.length === 1 ? (
+                <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2.5">
+                  <span className="text-emerald-400 text-sm">🌾</span>
+                  <span className="text-emerald-300 text-sm font-medium">
+                    {fields[0].field_name || fields[0].crop_type || "أرضي"}
+                  </span>
+                  <span className="text-emerald-500 text-xs mr-auto">تم التحديد تلقائياً</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedFieldId ?? ""}
+                  onChange={(e) => setSelectedFieldId(e.target.value || null)}
+                  disabled={loading}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all disabled:opacity-50"
+                >
+                  <option value="">— اختر الأرض (اختياري) —</option>
+                  {fields.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.field_name || f.crop_type || `أرض ${f.id.slice(0, 6)}`}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* Total Price Summary */}

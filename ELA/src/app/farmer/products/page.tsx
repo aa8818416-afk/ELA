@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { Image as ImageIcon, Filter, X } from "lucide-react";
+import { Image as ImageIcon, Filter, X, ShoppingBag } from "lucide-react";
 import { ZoomableImage } from "@/components/ui/ImageModal";
+import QuickOrderModal from "@/components/chat/QuickOrderModal";
+import type { RecommendedProduct } from "@/components/chat/QuickOrderModal";
 
 type Product = {
   id: string;
@@ -34,6 +36,10 @@ export default function FarmerProductsPage() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
   const [showFilter, setShowFilter] = useState(false);
+
+  // حالة مودال الشراء
+  const [orderProduct, setOrderProduct] = useState<RecommendedProduct | null>(null);
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
 
   const supabase = createClient();
 
@@ -69,6 +75,17 @@ export default function FarmerProductsPage() {
   });
 
   const activeFiltersCount = selectedTypes.length + selectedCrops.length;
+
+  function handleBuyClick(p: Product) {
+    setOrderProduct({
+      id: p.id,
+      name_ar: p.name_ar,
+      price_to_farmer: p.price_to_farmer,
+      image_url: p.image_url,
+      active_ingredient: p.active_ingredient,
+    });
+    setIsOrderModalOpen(true);
+  }
 
   return (
     <div className="space-y-5" dir="rtl">
@@ -196,63 +213,85 @@ export default function FarmerProductsPage() {
           {filteredProducts.map((p) => (
             <div
               key={p.id}
-              className="bg-slate-900/60 backdrop-blur-sm border border-slate-800/60 rounded-2xl p-4 flex gap-4 hover:border-emerald-500/30 transition-all"
+              className="bg-slate-900/60 backdrop-blur-sm border border-slate-800/60 rounded-2xl p-4 flex flex-col gap-3 hover:border-emerald-500/30 transition-all"
             >
-              {/* Image */}
-              <div className="shrink-0">
-                {p.image_url ? (
-                  <ZoomableImage
-                    src={p.image_url}
-                    alt={p.name_ar}
-                    className="w-16 h-16 rounded-xl object-cover border border-slate-700"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500">
-                    <ImageIcon className="w-7 h-7" />
-                  </div>
-                )}
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-bold text-white text-base leading-tight">{p.name_ar}</h3>
-                  <div className="text-right shrink-0">
-                    <span className="text-lg font-bold text-emerald-400">{p.price_to_farmer}</span>
-                    <span className="text-slate-500 text-xs mr-1">ج.م</span>
-                  </div>
-                </div>
-
-                {p.active_ingredient && (
-                  <p className="text-slate-400 text-xs mt-0.5">{p.active_ingredient}</p>
-                )}
-
-                {/* Tags */}
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {p.product_type?.map((t) => (
-                    <span
-                      key={t}
-                      className={`text-xs px-2 py-0.5 rounded-full border font-medium ${TYPE_COLORS[t] || "bg-slate-700 text-slate-300 border-slate-600"}`}
-                    >
-                      {t}
-                    </span>
-                  ))}
-                  {p.target_crops?.slice(0, 3).map((c) => (
-                    <span key={c} className="text-xs px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/20 font-medium">
-                      {c}
-                    </span>
-                  ))}
-                  {(p.target_crops?.length ?? 0) > 3 && (
-                    <span className="text-xs px-2 py-0.5 rounded-full border bg-slate-800 text-slate-400 border-slate-700">
-                      +{(p.target_crops?.length ?? 0) - 3}
-                    </span>
+              {/* Row: Image + Info */}
+              <div className="flex gap-4">
+                {/* Image */}
+                <div className="shrink-0">
+                  {p.image_url ? (
+                    <ZoomableImage
+                      src={p.image_url}
+                      alt={p.name_ar}
+                      className="w-16 h-16 rounded-xl object-cover border border-slate-700"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500">
+                      <ImageIcon className="w-7 h-7" />
+                    </div>
                   )}
                 </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-bold text-white text-base leading-tight">{p.name_ar}</h3>
+                    <div className="text-right shrink-0">
+                      <span className="text-lg font-bold text-emerald-400">{p.price_to_farmer}</span>
+                      <span className="text-slate-500 text-xs mr-1">ج.م</span>
+                    </div>
+                  </div>
+
+                  {p.active_ingredient && (
+                    <p className="text-slate-400 text-xs mt-0.5">{p.active_ingredient}</p>
+                  )}
+
+                  {/* Tags */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {p.product_type?.map((t) => (
+                      <span
+                        key={t}
+                        className={`text-xs px-2 py-0.5 rounded-full border font-medium ${TYPE_COLORS[t] || "bg-slate-700 text-slate-300 border-slate-600"}`}
+                      >
+                        {t}
+                      </span>
+                    ))}
+                    {p.target_crops?.slice(0, 3).map((c) => (
+                      <span key={c} className="text-xs px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/20 font-medium">
+                        {c}
+                      </span>
+                    ))}
+                    {(p.target_crops?.length ?? 0) > 3 && (
+                      <span className="text-xs px-2 py-0.5 rounded-full border bg-slate-800 text-slate-400 border-slate-700">
+                        +{(p.target_crops?.length ?? 0) - 3}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
+
+              {/* Buy Button */}
+              <button
+                onClick={() => handleBuyClick(p)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-900/20"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                شراء الآن
+              </button>
             </div>
           ))}
         </div>
       )}
+
+      {/* Quick Order Modal */}
+      <QuickOrderModal
+        product={orderProduct}
+        isOpen={isOrderModalOpen}
+        onClose={() => {
+          setIsOrderModalOpen(false);
+          setOrderProduct(null);
+        }}
+      />
     </div>
   );
 }

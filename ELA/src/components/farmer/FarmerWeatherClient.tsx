@@ -96,9 +96,9 @@ export default function FarmerWeatherClient({
   const todayForecast = dailyList[0];
   const precipProb24h = todayForecast ? todayForecast.precip_prob : 0;
   const vpd = temp !== null ? calcVPD(temp, rh) : 1.0;
-  const spray = calcSprayStatus(wind, precipProb24h, vpd);
-
   const heatWarn = calcHeatWarning(weather.hourly_today, weather.apparent_temperature);
+  const spray = calcSprayStatus(wind, precipProb24h, vpd, heatWarn.show);
+
   const irriAdvice = calcIrrigationAdvice(et0, precipProb24h);
   const frostWarn = calcFrostWarning(todayForecast ? todayForecast.temp_min : null, cropType);
 

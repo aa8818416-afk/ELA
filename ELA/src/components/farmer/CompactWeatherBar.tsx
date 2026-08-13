@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
-import { getWeatherDescription, calcSprayStatus, calcVPD } from '@/lib/weatherLogic';
+import { getWeatherDescription, calcSprayStatus, calcVPD, calcHeatWarning } from '@/lib/weatherLogic';
 
 interface CompactWeatherBarProps {
   weather: any;
@@ -25,7 +25,8 @@ export default function CompactWeatherBar({ weather }: CompactWeatherBarProps) {
   const todayForecast = weather.daily_forecast?.[0];
   const precipProb = todayForecast ? todayForecast.precip_prob : 0;
   const vpd = typeof temp === 'number' ? calcVPD(temp, rh) : 1.0;
-  const spray = calcSprayStatus(wind, precipProb, vpd);
+  const heatWarn = calcHeatWarning(weather.hourly_today || [], weather.apparent_temperature);
+  const spray = calcSprayStatus(wind, precipProb, vpd, heatWarn.show);
 
   return (
     <Link

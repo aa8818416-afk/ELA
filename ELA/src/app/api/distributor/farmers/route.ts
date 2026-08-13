@@ -30,16 +30,20 @@ export async function POST(req: NextRequest) {
   }
 
   // 3. قراءة بيانات الطلب
-  let body: { full_name?: string; phone?: string; village?: string };
+  let body: { full_name?: string; phone?: string; village?: string; soil_type?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "بيانات الطلب غير صحيحة." }, { status: 400 });
   }
 
-  const { full_name, phone, village: requestedVillage } = body;
+  const { full_name, phone, village: requestedVillage, soil_type } = body;
   if (!full_name?.trim() || !phone?.trim()) {
     return NextResponse.json({ error: "الاسم الكامل ورقم الهاتف مطلوبان." }, { status: 400 });
+  }
+
+  if (!soil_type || !["طينية", "رملية"].includes(soil_type)) {
+    return NextResponse.json({ error: "يرجى تحديد نوع التربة (طينية أو رملية)." }, { status: 400 });
   }
 
   const cleanPhone = phone.replace(/\D/g, "");
@@ -120,6 +124,7 @@ export async function POST(req: NextRequest) {
       governorate: (dist as { governorate?: string | null }).governorate ?? null,
       center: (dist as { center?: string | null }).center ?? null,
       village: inheritedVillage,
+      soil_type: soil_type ?? null,
     });
 
   if (farmerInsertError) {
@@ -130,6 +135,7 @@ export async function POST(req: NextRequest) {
         governorate: (dist as { governorate?: string | null }).governorate ?? null,
         center: (dist as { center?: string | null }).center ?? null,
         village: inheritedVillage,
+        soil_type: soil_type ?? null,
       }).eq("profile_id", farmerId);
     } else {
       console.error("[create farmer] insert farmers error:", farmerInsertError);

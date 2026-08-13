@@ -75,10 +75,11 @@ export default function WeatherWidget({ weather, cropType, latestAlert }: Weathe
 
   // VPD & Spray Status
   const vpd = temp !== null ? calcVPD(temp, rh) : 1.0;
-  const spray = calcSprayStatus(wind, precipProb24h, vpd);
-
   // Banners logic
   const heatWarn = calcHeatWarning(weather.hourly_today, weather.apparent_temperature);
+  const spray = calcSprayStatus(wind, precipProb24h, vpd, heatWarn.show);
+
+  // Other banners
   const irriAdvice = calcIrrigationAdvice(et0, precipProb24h);
   const frostWarn = calcFrostWarning(todayForecast ? todayForecast.temp_min : null, cropType);
 
