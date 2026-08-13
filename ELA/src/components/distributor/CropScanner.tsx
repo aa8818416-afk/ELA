@@ -14,6 +14,8 @@ import {
   Square,
   Volume2,
   VolumeX,
+  Globe,
+  ExternalLink,
 } from "lucide-react";
 import {
   useAudioRecorder,
@@ -31,6 +33,7 @@ type ChatMessage = {
   /** Image specifically attached to this message turn (already compressed base64) */
   chatImagePreview?: string;
   recommendedProduct?: RecommendedProduct;
+  sources?: Array<{ title: string; url: string }>;
 };
 
 type FailedPayload = {
@@ -156,7 +159,7 @@ export default function CropScanner() {
         const newMsgId = `m-${Date.now()}`;
         setChatMessages((prev) => [
           ...prev,
-          { id: newMsgId, role: "model", content: data.text, recommendedProduct: data.recommendedProduct || undefined },
+          { id: newMsgId, role: "model", content: data.text, recommendedProduct: data.recommendedProduct || undefined, sources: data.sources || undefined },
         ]);
 
         // Auto-play the AI response if TTS is supported
@@ -306,6 +309,31 @@ export default function CropScanner() {
                     {/* Product Recommendation Card */}
                     {msg.role === "model" && msg.recommendedProduct && (
                       <ProductRecommendationCard product={msg.recommendedProduct} userRole="distributor" />
+                    )}
+
+                    {/* Web Search Grounding Sources */}
+                    {msg.role === "model" && msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-slate-700/60 text-xs">
+                        <div className="flex items-center gap-1.5 text-emerald-400 font-medium mb-1.5">
+                          <Globe className="w-3.5 h-3.5 shrink-0" />
+                          <span>المصادر ومراجع البحث في الويب:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {msg.sources.map((source, idx) => (
+                            <a
+                              key={idx}
+                              href={source.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 bg-slate-900/80 hover:bg-slate-900 border border-slate-700/80 hover:border-emerald-500/50 text-slate-300 hover:text-emerald-400 text-[11px] px-2.5 py-1 rounded-lg transition-colors"
+                              title={source.url}
+                            >
+                              <span className="truncate max-w-[180px]">{source.title}</span>
+                              <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
                     )}
 
                     {/* TTS Speaker icon for model replies */}

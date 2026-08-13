@@ -17,6 +17,8 @@ import {
     X,
     RotateCcw,
     WifiOff,
+    Globe,
+    ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -36,6 +38,7 @@ interface Message {
     /** Image specifically attached to this message (base64 preview) */
     imagePreview?: string;
     recommendedProduct?: RecommendedProduct;
+    sources?: Array<{ title: string; url: string }>;
 }
 
 type FailedPayload = {
@@ -169,6 +172,7 @@ export default function FarmerChat() {
                     content: data.text,
                     timestamp: new Date(),
                     recommendedProduct: data.recommendedProduct || undefined,
+                    sources: data.sources || undefined,
                 };
                 setMessages((prev) => [...prev, modelMsg]);
 
@@ -360,6 +364,31 @@ export default function FarmerChat() {
                                 {/* Product Recommendation Card */}
                                 {msg.role === "model" && msg.recommendedProduct && (
                                     <ProductRecommendationCard product={msg.recommendedProduct} userRole="farmer" />
+                                )}
+
+                                {/* Web Search Grounding Sources */}
+                                {msg.role === "model" && msg.sources && msg.sources.length > 0 && (
+                                    <div className="mt-3 pt-2.5 border-t border-slate-800/80 text-xs">
+                                        <div className="flex items-center gap-1.5 text-emerald-400 font-medium mb-1.5">
+                                            <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                            <span>المصادر ومراجع البحث في الويب:</span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {msg.sources.map((source, idx) => (
+                                                <a
+                                                    key={idx}
+                                                    href={source.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-1 bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-emerald-500/50 text-slate-300 hover:text-emerald-400 text-[11px] px-2.5 py-1 rounded-lg transition-colors max-w-full truncate"
+                                                    title={source.url}
+                                                >
+                                                    <span className="truncate max-w-[180px]">{source.title}</span>
+                                                    <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
 
                                 {/* TTS Speaker icon for model replies */}

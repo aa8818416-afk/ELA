@@ -30,6 +30,199 @@ interface RequestHistoryItem {
     imageBase64?: string;
 }
 
+function extractGroundingSources(candidate: any): Array<{ title: string; url: string }> {
+    if (!candidate) return [];
+    const groundingMeta = candidate.groundingMetadata;
+    if (!groundingMeta) return [];
+
+    const chunks = groundingMeta.groundingChunks || [];
+    const sources: Array<{ title: string; url: string }> = [];
+    const seenUrls = new Set<string>();
+
+    for (const chunk of chunks) {
+        const uri = chunk.web?.uri || chunk.uri;
+        const title = chunk.web?.title || chunk.title || "مصدر خارجي";
+        if (uri && !seenUrls.has(uri)) {
+            seenUrls.add(uri);
+            sources.push({ title, url: uri });
+        }
+    }
+
+    return sources;
+}
+
+interface GemmaSearchResult {
+    success: boolean;
+    resultText: string;
+    sources: Array<{ title: string; url: string }>;
+}
+
+/**
+ * Sub-agent helper to invoke Gemma 4 (gemma-4-31b-it / gemma-4-26b-a4b-it)
+ * exclusively with google_search grounding tool to get up-to-date web answers & sources.
+ * Rotates automatically to the LEAST-USED active Gemma model and tracks daily_usage in DB.
+ */
+async function executeGemmaSearch(
+    query: string,
+    primaryApiKey: string,
+    keyModels?: any[],
+    supabaseAdmin?: any
+): Promise<GemmaSearchResult> {
+    try {
+        console.log(`[crop-chat] 🌐 [Gemma Sub-Agent] Initiating web search for query: "${query}"`);
+
+        let candidateGemmaKeys: any[] = [];
+
+        if (keyModels && keyModels.length > 0) {
+            candidateGemmaKeys = keyModels.filter(
+                (km: any) =>
+                    km.status === "active" &&
+                    km.daily_usage < km.daily_limit &&
+                    km.model_name &&
+                    km.model_name.toLowerCase().includes("gemma") &&
+                    km.api_keys?.api_key
+            );
+        }
+
+        // Sort candidates by daily_usage ascending -> LEAST USED Gemma model is picked FIRST
+        candidateGemmaKeys.sort((a, b) => (a.daily_usage || 0) - (b.daily_usage || 0));
+
+        // If no active candidate in memory keyModels, query DB for active Gemma models ordered by daily_usage asc
+        if (candidateGemmaKeys.length === 0 && supabaseAdmin) {
+            const { data: dbGemmaModels } = await (supabaseAdmin as any)
+                .from("api_key_models")
+                .select("id, model_name, daily_usage, daily_limit, status, api_keys!inner(id, api_key, status, project_name)")
+                .eq("status", "active")
+                .eq("api_keys.status", "active")
+                .ilike("model_name", "%gemma%")
+                .order("daily_usage", { ascending: true });
+
+            if (dbGemmaModels && dbGemmaModels.length > 0) {
+                candidateGemmaKeys = dbGemmaModels.filter(
+                    (km: any) => km.daily_usage < km.daily_limit && km.api_keys?.api_key
+                );
+            }
+        }
+
+        // Fallback: if no DB entry exists, use primary API key with default gemma-4-31b-it
+        if (candidateGemmaKeys.length === 0) {
+            candidateGemmaKeys = [
+                {
+                    id: null,
+                    model_name: "gemma-4-31b-it",
+                    daily_usage: 0,
+                    api_keys: { api_key: primaryApiKey },
+                },
+            ];
+        }
+
+        // Attempt search with the least-used available Gemma model (with failover loop)
+        for (const selectedKey of candidateGemmaKeys) {
+            const gemmaApiKey = selectedKey.api_keys?.api_key || primaryApiKey;
+            const gemmaModel = selectedKey.model_name || "gemma-4-31b-it";
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${gemmaModel}:generateContent?key=${gemmaApiKey}`;
+
+            console.log(`[crop-chat] 🌐 [Gemma Sub-Agent] Using LEAST-USED model "${gemmaModel}" (current usage: ${selectedKey.daily_usage ?? 0}/${selectedKey.daily_limit ?? "∞"})...`);
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            {
+                                text: `ابحث في الإنترنت عن الاستعلام التالي واستخرج المعلومات المحدثة والدقيقة:\n"${query}"`,
+                            },
+                        ],
+                    },
+                ],
+                systemInstruction: {
+                    parts: [
+                        {
+                            text: "أنت مساعد بحث زراعي دقيق. مهمتك استخدام أداة google_search المتاحة للبحث في الإنترنت واستخراج معلومات موثوقة ومحدثة والإجابة باختصار ووضوح.",
+                        },
+                    ],
+                },
+                tools: [{ google_search: {} }],
+                generationConfig: {
+                    temperature: 0.2,
+                    maxOutputTokens: 2000,
+                },
+            };
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 120_000); // 120s timeout
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal,
+                }).finally(() => clearTimeout(timeout));
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    console.error(`[crop-chat] ❌ Gemma sub-agent search failed HTTP ${res.status} for model ${gemmaModel}:`, errText);
+                    if (res.status === 429 && selectedKey.id && supabaseAdmin) {
+                        await (supabaseAdmin as any)
+                            .from("api_key_models")
+                            .update({ status: "rate_limited" })
+                            .eq("id", selectedKey.id);
+                    }
+                    continue; // Failover to next least-used Gemma model
+                }
+
+                const data = await res.json();
+                const candidate = data.candidates?.[0];
+
+                if (!candidate) {
+                    continue;
+                }
+
+                const parts: any[] = candidate.content?.parts ?? [];
+                const textParts = parts.filter((p: any) => !p.thought && p.text).map((p: any) => p.text);
+                const resultText = textParts.join("\n").trim() || "تم إجراء البحث بنجاح من المصادر المتاحة.";
+
+                const sources = extractGroundingSources(candidate);
+
+                // Increment daily_usage +1 in Supabase DB for this Gemma model
+                if (selectedKey.id && supabaseAdmin) {
+                    const updatedUsage = (selectedKey.daily_usage || 0) + 1;
+                    await (supabaseAdmin as any)
+                        .from("api_key_models")
+                        .update({ daily_usage: updatedUsage })
+                        .eq("id", selectedKey.id);
+                    console.log(`[crop-chat] 📈 Updated daily_usage for Gemma model "${gemmaModel}" (ID: ${selectedKey.id}) -> ${updatedUsage}`);
+                }
+
+                console.log(`[crop-chat] ✅ Gemma sub-agent search completed using ${gemmaModel}! Found ${sources.length} sources.`);
+
+                return {
+                    success: true,
+                    resultText,
+                    sources,
+                };
+            } catch (fetchErr: any) {
+                console.error(`[crop-chat] Fetch error calling Gemma model ${gemmaModel}:`, fetchErr);
+                continue;
+            }
+        }
+
+        return {
+            success: false,
+            resultText: "عذراً، تعذر إجراء البحث الحي حالياً بسبب مشكلة في الاتصال بمزودي البحث.",
+            sources: [],
+        };
+    } catch (err: any) {
+        console.error("[crop-chat] Error in executeGemmaSearch:", err);
+        return {
+            success: false,
+            resultText: `تعذر إكمال عملية البحث: ${err?.message || "خطأ غير متوقع"}`,
+            sources: [],
+        };
+    }
+}
+
 export const DEFAULT_FARM_DEFAULTS = {
     sprayer_capacity: "رشاشة ظهرية 20 لتر",
     land_area: "1 فدان",
@@ -207,6 +400,20 @@ const farmProfileToolDeclaration = {
                 },
                 required: ["activity_id", "activity_type"]
             }
+        },
+        {
+            name: "web_search",
+            description: "استخدم هذه الأداة للبحث في الإنترنت واستخراج معلومات حية ومحدثة (مثل: أسعار المحاصيل والمستلزمات في السوق اليوم، نشرة الجو، أخبار زراعية حية، أو معلومات غير متوفرة بقاعدة البيانات).",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    query: {
+                        type: "STRING",
+                        description: "نص استعلام البحث باللغة العربية الموجه للبحث عبر الإنترنت."
+                    }
+                },
+                required: ["query"]
+            }
         }
     ]
 };
@@ -308,6 +515,7 @@ function parseTextFunctionCalls(rawText: string): Array<{ name: string; args: Re
         "log_farmer_memory",
         "log_field_activity",
         "update_field_activity",
+        "web_search",
     ];
 
     const pattern = /(?:\[|<call:)(?:default_api:)?([a-zA-Z0-9_]+)\s*(?:[\{\(])([\s\S]*?)(?:[\}\)])(?:\]|>)/gi;
@@ -587,7 +795,7 @@ export async function POST(request: Request) {
             .replace(/<call:[\s\S]*?>/gi, "")
             .replace(/<call:[^\n>]+>/gi, "")
             // Strip text-based tool call strings like [default_api:...] or [log_field_activity{...}]
-            .replace(/\[(?:default_api:)?(?:update_farm_profile|manage_farmer_field|log_farmer_memory|log_field_activity|update_field_activity)[\s\S]*?\]/gi, "")
+            .replace(/\[(?:default_api:)?(?:update_farm_profile|manage_farmer_field|log_farmer_memory|log_field_activity|update_field_activity|web_search)[\s\S]*?\]/gi, "")
             .replace(/\[default_api:[\s\S]*?\]/gi, "")
             // Strip any leftover JSON-like blocks that look like tool args
             .replace(/```[\s\S]*?```/g, "")
@@ -1233,12 +1441,29 @@ ${pestsDiseasesContext}
             );
         }
 
+        // Filter out Gemma models for primary chat turn to prevent 429 quota errors on large prompt context.
+        // Gemma models are reserved as sub-agents for web_search only.
+        const nonGemmaKeys = validKeys.filter(
+            (km: any) => !km.model_name || !km.model_name.toLowerCase().includes("gemma")
+        );
+        const primaryValidKeys = nonGemmaKeys.length > 0 ? nonGemmaKeys : validKeys;
+
         let currentKeyIndex = 0;
-        let keyData = validKeys[currentKeyIndex];
-        let modelName = keyData.model_name || "gemini-2.0-flash";
+        let keyData = primaryValidKeys[currentKeyIndex];
+        let modelName = keyData.model_name || "gemini-3.5-flash-lite";
         let geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyData.api_keys.api_key}`;
 
         console.log(`[crop-chat] Attempt ${attemptCount + 1}: Using model ${modelName} on key ${keyData.api_keys.id.slice(0, 6)}...`);
+
+        let accumulatedSources: Array<{ title: string; url: string }> = [];
+        const addSourcesFromCandidate = (cand: any) => {
+            const extracted = extractGroundingSources(cand);
+            for (const s of extracted) {
+                if (!accumulatedSources.some((existing) => existing.url === s.url)) {
+                    accumulatedSources.push(s);
+                }
+            }
+        };
 
         const requestPayload = {
             contents,
@@ -1309,6 +1534,7 @@ ${pestsDiseasesContext}
             console.log(`[crop-chat] 📊 Usage Metadata:`, data.usageMetadata);
         }
         const candidates = data.candidates?.[0];
+        addSourcesFromCandidate(candidates);
         let currentParts: GeminiPart[] = candidates?.content?.parts ?? [];
 
         // ── Agentic loop: handle chained tool calls (max 5 rounds) ───────────────
@@ -1726,6 +1952,25 @@ ${pestsDiseasesContext}
                     } else {
                         console.warn(`[crop-chat] ⚠️ [update_field_activity] Missing required activity_id or activity_type`);
                     }
+                } else if (name === "web_search") {
+                    const searchQuery = args?.query || message;
+                    console.log(`[crop-chat] 🌐 [web_search] Executing sub-agent web search tool with query: "${searchQuery}"`);
+                    const searchRes = await executeGemmaSearch(searchQuery, keyData.api_keys.api_key, keyModels, supabaseAdmin);
+                    
+                    if (searchRes.sources && searchRes.sources.length > 0) {
+                        for (const s of searchRes.sources) {
+                            if (!accumulatedSources.some((existing) => existing.url === s.url)) {
+                                accumulatedSources.push(s);
+                            }
+                        }
+                    }
+
+                    toolResult = {
+                        status: searchRes.success ? "success" : "error",
+                        query: searchQuery,
+                        search_result: searchRes.resultText,
+                        sources: searchRes.sources,
+                    };
                 }
 
                 functionResponseParts.push({
@@ -1791,7 +2036,9 @@ ${pestsDiseasesContext}
                         if (followUpData.usageMetadata) {
                             console.log(`[crop-chat] 📊 Follow-up Usage Metadata (Round ${loopCount}):`, followUpData.usageMetadata);
                         }
-                        currentParts = followUpData.candidates?.[0]?.content?.parts ?? [];
+                        const cand = followUpData.candidates?.[0];
+                        addSourcesFromCandidate(cand);
+                        currentParts = cand?.content?.parts ?? [];
                         followUpOk = true;
                         break;
                     } else {
@@ -1825,6 +2072,7 @@ ${pestsDiseasesContext}
                 return NextResponse.json({
                     success: true,
                     text: "تم تنفيذ العملية بنجاح.",
+                    sources: accumulatedSources.length > 0 ? accumulatedSources : undefined,
                 });
             }
 
@@ -1841,6 +2089,7 @@ ${pestsDiseasesContext}
                     success: true,
                     text: cleanText,
                     recommendedProduct,
+                    sources: accumulatedSources.length > 0 ? accumulatedSources : undefined,
                 });
             }
 
@@ -1856,12 +2105,21 @@ ${pestsDiseasesContext}
 
         if (loopExitText) {
             const { cleanText, recommendedProduct } = processResponseText(loopExitText);
-            return NextResponse.json({ success: true, text: cleanText, recommendedProduct });
+            return NextResponse.json({
+                success: true,
+                text: cleanText,
+                recommendedProduct,
+                sources: accumulatedSources.length > 0 ? accumulatedSources : undefined,
+            });
         }
 
         if (loopCount >= MAX_TOOL_ROUNDS) {
             console.warn(`[crop-chat] Reached max tool rounds (${MAX_TOOL_ROUNDS}) without text response.`);
-            return NextResponse.json({ success: true, text: "تم تنفيذ العملية بنجاح." });
+            return NextResponse.json({
+                success: true,
+                text: "تم تنفيذ العملية بنجاح.",
+                sources: accumulatedSources.length > 0 ? accumulatedSources : undefined,
+            });
         }
 
         // ── No function calls were made at all — pure text response ───────────────
@@ -1886,6 +2144,7 @@ ${pestsDiseasesContext}
             success: true,
             text: cleanText,
             recommendedProduct,
+            sources: accumulatedSources.length > 0 ? accumulatedSources : undefined,
         });
     }
 
