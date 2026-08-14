@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Wind, Droplets, Thermometer, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { Wind, Droplets, Thermometer, ShieldAlert, ArrowLeft, ChevronLeft } from 'lucide-react';
 import {
   calcVPD,
   calcSprayStatus,
@@ -7,8 +7,6 @@ import {
   calcHeatWarning,
   calcFrostWarning,
   getWeatherDescription,
-  getArabicDayName,
-  splitDayPeriods,
   HourlyPoint,
   DayForecast,
 } from '@/lib/weatherLogic';
@@ -54,242 +52,236 @@ function formatTime(iso: string): string {
   }
 }
 
+function getHourIcon(hour: number, wmo?: number): string {
+  if (wmo !== undefined) return getWeatherDescription(wmo).emoji;
+  if (hour >= 5 && hour < 7)   return '🌅';
+  if (hour >= 7 && hour < 18)  return '☀️';
+  if (hour >= 18 && hour < 20) return '🌇';
+  return '🌙';
+}
+
 export default function WeatherWidget({ weather, cropType, latestAlert }: WeatherWidgetProps) {
   if (!weather) {
     return (
-      <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-6 text-center">
+      <div className="bg-white/[0.04] backdrop-blur-md border border-white/[0.08] rounded-3xl p-6 text-center">
         <p className="text-slate-500 text-sm">🌡️ بيانات الطقس غير متاحة حالياً</p>
       </div>
     );
   }
 
-  const temp = weather.temperature_2m !== null ? Math.round(weather.temperature_2m) : null;
-  const rh = weather.relative_humidity_2m !== null ? Math.round(weather.relative_humidity_2m) : 50;
-  const wind = weather.wind_speed_10m !== null ? Math.round(weather.wind_speed_10m) : 0;
+  const temp     = weather.temperature_2m      !== null ? Math.round(weather.temperature_2m)      : null;
+  const rh       = weather.relative_humidity_2m !== null ? Math.round(weather.relative_humidity_2m) : 50;
+  const wind     = weather.wind_speed_10m       !== null ? Math.round(weather.wind_speed_10m)       : 0;
   const apparent = weather.apparent_temperature !== null ? Math.round(weather.apparent_temperature) : temp;
-  const et0 = weather.et0_fao_evapotranspiration !== null ? Number(weather.et0_fao_evapotranspiration) : 0;
+  const dewPoint = weather.dew_point_2m         !== null ? Math.round(weather.dew_point_2m)         : null;
+  const et0      = weather.et0_fao_evapotranspiration !== null
+    ? Number(weather.et0_fao_evapotranspiration) : 0;
 
-  // Forecast precip probability for today / next 24h
   const todayForecast = weather.daily_forecast?.[0];
   const precipProb24h = todayForecast ? todayForecast.precip_prob : (weather.precipitation && weather.precipitation > 0 ? 50 : 0);
 
-  // VPD & Spray Status
-  const vpd = temp !== null ? calcVPD(temp, rh) : 1.0;
-  // Banners logic
-  const heatWarn = calcHeatWarning(weather.hourly_today, weather.apparent_temperature);
-  const spray = calcSprayStatus(wind, precipProb24h, vpd, heatWarn.show);
-
-  // Other banners
+  const vpd        = temp !== null ? calcVPD(temp, rh) : 1.0;
+  const heatWarn   = calcHeatWarning(weather.hourly_today, weather.apparent_temperature);
+  const spray      = calcSprayStatus(wind, precipProb24h, vpd, heatWarn.show);
   const irriAdvice = calcIrrigationAdvice(et0, precipProb24h);
-  const frostWarn = calcFrostWarning(todayForecast ? todayForecast.temp_min : null, cropType);
+  const frostWarn  = calcFrostWarning(todayForecast ? todayForecast.temp_min : null, cropType);
+  const condition  = getWeatherDescription(weather.weather_code);
 
-  // Periods logic
-  const periods = splitDayPeriods(weather.hourly_today);
-  const condition = getWeatherDescription(weather.weather_code);
+  const now         = new Date();
+  const currentHour = now.getHours();
+  const hourlyList  = weather.hourly_today || [];
 
   return (
-    <div className="space-y-4">
-      {/* 1. (و) بانر أمان العمل في الحر - أعلى أولوية */}
-      {heatWarn.show && (
-        <div className="bg-gradient-to-r from-red-600 to-amber-600 border border-red-400/40 rounded-3xl p-4 text-white shadow-lg flex items-center gap-3 animate-pulse">
-          <span className="text-3xl">🥵</span>
-          <div>
-            <h4 className="font-bold text-sm">تحذير من الإجهاد الحراري</h4>
-            <p className="text-xs text-red-100 font-medium leading-relaxed mt-0.5">{heatWarn.text}</p>
-          </div>
-        </div>
-      )}
-
-      {/* 2. (ز) سطر الربط بالتنبيه المفتوح */}
-      {latestAlert && (
-        <Link
-          href="/farmer/agenda"
-          className="block bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 rounded-2xl px-4 py-3 text-amber-300 text-xs font-medium flex items-center justify-between transition-colors group"
-        >
-          <div className="flex items-center gap-2 truncate max-w-[85%]">
-            <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0" />
-            <span className="truncate">
-              ⚠️ في تحديث جديد بخصوص {latestAlert.advice_text_snapshot.slice(0, 35)}...
-            </span>
-          </div>
-          <span className="text-[11px] text-amber-400 underline flex items-center gap-1 group-hover:translate-x-[-2px] transition-transform">
-            الأجندة <ArrowLeft className="w-3 h-3" />
-          </span>
-        </Link>
-      )}
-
-      {/* 3. (ج) توصية الري */}
-      {irriAdvice && (
-        <div className="bg-sky-950/60 border border-sky-500/30 rounded-2xl px-4 py-3 flex items-center gap-3">
-          <span className="text-xl flex-shrink-0">{irriAdvice.icon}</span>
-          <p className="text-sky-200 text-xs font-medium leading-relaxed">{irriAdvice.text}</p>
-        </div>
-      )}
-
-      {/* 4. (ب) شارة مناسب للرش؟ */}
-      <div
-        className={`rounded-2xl px-4 py-3 flex items-center justify-between border ${
-          spray.badge === 'green'
-            ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
-            : spray.badge === 'yellow'
-            ? 'bg-amber-950/50 border-amber-500/30 text-amber-300'
-            : 'bg-red-950/50 border-red-500/30 text-red-300'
-        }`}
-      >
-        <div className="flex items-center gap-2.5">
-          <span className="text-base">
-            {spray.badge === 'green' ? '🟢' : spray.badge === 'yellow' ? '🟡' : '🔴'}
-          </span>
-          <span className="text-xs font-bold">{spray.message}</span>
-        </div>
-        {spray.reason && (
-          <span className="text-[10px] bg-slate-900/60 px-2.5 py-1 rounded-full border border-slate-700/50">
-            {spray.reason}
-          </span>
-        )}
-      </div>
-
-      {/* 5. (أ) بطاقة الطقس الآن الرئيسية */}
-      <div className="bg-gradient-to-br from-sky-950/70 via-slate-900/80 to-slate-900/60 border border-sky-500/20 rounded-3xl p-5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/5 rounded-full blur-3xl pointer-events-none" />
-
+    <div className="space-y-3.5">
+      {/* ── 1. Hero Weather Card ── */}
+      <div className="bg-gradient-to-br from-sky-900/40 via-slate-900/60 to-slate-950/80 backdrop-blur-md border border-sky-400/10 rounded-3xl p-5 relative overflow-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <p className="text-slate-400 text-xs mb-0.5">الطقس الآن</p>
-            <p className="text-slate-200 text-sm font-bold truncate max-w-[200px]">
-              📍 {weather.location_name}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5 truncate max-w-[70%]">
+            <span className="text-sm">📍</span>
+            <p className="text-slate-200 text-sm font-bold truncate">
+              {weather.location_name}
             </p>
           </div>
-          <div className="text-slate-500 text-[11px]">
-            آخر تحديث {formatTime(weather.fetched_at)}
-          </div>
+          <Link
+            href="/farmer/weather"
+            className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-0.5 font-medium transition-colors"
+          >
+            التفاصيل <ChevronLeft className="w-3.5 h-3.5" />
+          </Link>
         </div>
 
-        {/* Main Temp & Condition */}
-        <div className="flex items-end gap-4 mb-5">
-          <div className="flex items-end gap-1.5">
-            <span className="text-5xl font-bold tabular-nums leading-none text-amber-400">
-              {temp !== null ? temp : '--'}
+        {/* Temp & Status */}
+        <div className="flex items-end justify-between my-3">
+          <div className="flex items-end gap-3">
+            <span className="text-6xl font-bold text-white tabular-nums leading-none">
+              {temp !== null ? temp : '--'}°
             </span>
-            <span className="text-slate-400 text-xl mb-1">°م</span>
+            <div className="pb-1">
+              <span className="text-3xl block leading-none mb-1">{condition.emoji}</span>
+              <p className={`text-xs font-semibold ${condition.color}`}>{condition.label}</p>
+            </div>
           </div>
-          <div className="mb-1">
-            <span className="text-3xl">{condition.emoji}</span>
-            <p className={`text-xs font-medium mt-0.5 ${condition.color}`}>{condition.label}</p>
-          </div>
-        </div>
-
-        {/* Stats Row */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-slate-900/50 rounded-2xl p-3 flex flex-col items-center gap-1">
-            <Thermometer className="w-4 h-4 text-orange-400" />
-            <span className="text-slate-200 text-xs font-medium">{apparent}°</span>
-            <span className="text-slate-500 text-[10px]">الإحساس</span>
-          </div>
-
-          <div className="bg-slate-900/50 rounded-2xl p-3 flex flex-col items-center gap-1">
-            <Droplets className="w-4 h-4 text-blue-400" />
-            <span className="text-slate-200 text-xs font-medium">{rh}%</span>
-            <span className="text-slate-500 text-[10px]">الرطوبة</span>
-          </div>
-
-          <div className="bg-slate-900/50 rounded-2xl p-3 flex flex-col items-center gap-1">
-            <Wind className="w-4 h-4 text-emerald-400" />
-            <span className="text-slate-200 text-xs font-medium">{wind}</span>
-            <span className="text-slate-500 text-[10px]">كم/س رياح</span>
+          <div className="text-left text-xs text-slate-400 pb-1">
+            <p>يبان زي {apparent}°</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              ↑{todayForecast ? Math.round(todayForecast.temp_max) : '--'}° ↓{todayForecast ? Math.round(todayForecast.temp_min) : '--'}°
+            </p>
           </div>
         </div>
 
-        {/* (ح) تحذير البرودة الشديدة / الصقيع */}
+        {/* Quick Chips */}
+        <div className="grid grid-cols-4 gap-2 pt-2 border-t border-white/[0.06]">
+          <div className="bg-white/[0.04] rounded-2xl p-2 text-center">
+            <Droplets className="w-3.5 h-3.5 text-blue-400 mx-auto mb-0.5" />
+            <span className="text-slate-200 text-xs font-semibold block">{rh}%</span>
+            <span className="text-slate-500 text-[10px]">رطوبة</span>
+          </div>
+          <div className="bg-white/[0.04] rounded-2xl p-2 text-center">
+            <Wind className="w-3.5 h-3.5 text-emerald-400 mx-auto mb-0.5" />
+            <span className="text-slate-200 text-xs font-semibold block">{wind}</span>
+            <span className="text-slate-500 text-[10px]">كم/س</span>
+          </div>
+          <div className="bg-white/[0.04] rounded-2xl p-2 text-center">
+            <span className="text-xs block mb-0.5">🌧️</span>
+            <span className="text-slate-200 text-xs font-semibold block">{precipProb24h}%</span>
+            <span className="text-slate-500 text-[10px]">مطر</span>
+          </div>
+          <div className="bg-white/[0.04] rounded-2xl p-2 text-center">
+            <Thermometer className="w-3.5 h-3.5 text-orange-400 mx-auto mb-0.5" />
+            <span className="text-slate-200 text-xs font-semibold block">{dewPoint !== null ? `${dewPoint}°` : '--'}</span>
+            <span className="text-slate-500 text-[10px]">ندى</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 2. Agricultural Recommendations (Prominent) ── */}
+      <div className="bg-white/[0.04] backdrop-blur-md border border-white/[0.06] rounded-3xl p-4 space-y-2.5">
+        <div className="flex items-center justify-between pb-1 border-b border-white/[0.06]">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm">🌾</span>
+            <h3 className="text-white font-bold text-xs">التوصيات الزراعية</h3>
+          </div>
+          <Link
+            href="/farmer/weather"
+            className="text-[10px] text-emerald-400 hover:underline flex items-center gap-0.5"
+          >
+            عرض الكل <ArrowLeft className="w-3 h-3" />
+          </Link>
+        </div>
+
+        {/* Heat Alert */}
+        {heatWarn.show && (
+          <div className="bg-gradient-to-l from-red-950/70 to-amber-950/70 border border-red-400/20 rounded-2xl p-3 flex items-start gap-2.5">
+            <span className="text-xl flex-shrink-0">🥵</span>
+            <p className="text-red-200 text-xs font-medium leading-relaxed">{heatWarn.text}</p>
+          </div>
+        )}
+
+        {/* Latest Alert */}
+        {latestAlert && (
+          <Link
+            href="/farmer/agenda"
+            className="flex items-center justify-between bg-amber-500/[0.08] border border-amber-400/20 hover:bg-amber-500/[0.14] rounded-2xl px-3.5 py-2.5 transition-colors group"
+          >
+            <div className="flex items-center gap-2 truncate">
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+              <p className="text-amber-300 text-[11px] font-medium truncate">
+                ⚠️ {latestAlert.advice_text_snapshot.slice(0, 36)}...
+              </p>
+            </div>
+            <ArrowLeft className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mr-1.5 group-hover:-translate-x-0.5 transition-transform" />
+          </Link>
+        )}
+
+        {/* Spray Status */}
+        <div className={`rounded-2xl p-3 flex items-start gap-2.5 border ${
+          spray.badge === 'green'
+            ? 'bg-emerald-950/50 border-emerald-500/20'
+            : spray.badge === 'yellow'
+            ? 'bg-amber-950/50 border-amber-500/20'
+            : 'bg-red-950/50 border-red-500/20'
+        }`}>
+          <span className="text-xl flex-shrink-0">
+            {spray.badge === 'green' ? '✅' : spray.badge === 'yellow' ? '⚠️' : '🚫'}
+          </span>
+          <div>
+            <p className={`font-bold text-xs ${
+              spray.badge === 'green'
+                ? 'text-emerald-300'
+                : spray.badge === 'yellow'
+                ? 'text-amber-300'
+                : 'text-red-300'
+            }`}>
+              {spray.message}
+            </p>
+            {spray.reason && (
+              <p className="text-slate-400 text-[10px] mt-0.5">{spray.reason}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Irrigation Advice */}
+        {irriAdvice && (
+          <div className="bg-sky-950/50 border border-sky-500/20 rounded-2xl p-3 flex items-start gap-2.5">
+            <span className="text-xl flex-shrink-0">{irriAdvice.icon}</span>
+            <p className="text-sky-200/90 text-xs font-medium leading-relaxed">{irriAdvice.text}</p>
+          </div>
+        )}
+
+        {/* Frost Warning */}
         {frostWarn.show && (
-          <div className="mt-3 bg-blue-500/10 border border-blue-500/30 rounded-2xl px-3.5 py-2.5 flex items-center gap-2">
-            <span className="text-base">❄️</span>
-            <p className="text-blue-300 text-xs font-medium">{frostWarn.text}</p>
+          <div className="bg-blue-950/50 border border-blue-400/20 rounded-2xl p-3 flex items-start gap-2.5">
+            <span className="text-xl flex-shrink-0">❄️</span>
+            <p className="text-blue-200 text-xs font-medium leading-relaxed">{frostWarn.text}</p>
           </div>
         )}
       </div>
 
-      {/* 6. (هـ) تفصيل فترات اليوم (3 فترات بس) */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-4">
-        <p className="text-slate-400 text-xs font-medium mb-3">تفاصيل اليوم</p>
-        <div className="grid grid-cols-3 gap-2">
-          {/* الصبح */}
-          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3 text-center flex flex-col items-center justify-between min-h-[90px]">
-            <span className="text-xs text-slate-400 font-medium">🌅 الصبح</span>
-            <div className="my-1">
-              <span className="text-lg font-bold text-slate-200">
-                {periods.morning ? `${periods.morning.avgTemp}°` : '--'}
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-500">
-              {periods.morning?.maxPrecip && periods.morning.maxPrecip >= 20
-                ? `🌧️ ${periods.morning.maxPrecip}%`
-                : periods.morning?.wmoLabel || 'جو مناسب'}
+      {/* ── 3. 24-Hour Preview Row ── */}
+      {hourlyList.length > 0 && (
+        <div className="bg-white/[0.04] backdrop-blur-md border border-white/[0.06] rounded-3xl p-3.5">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-slate-400 text-[11px] font-medium flex items-center gap-1">
+              <span>🕐</span> طقس الساعات القادمة
             </span>
+            <Link
+              href="/farmer/weather"
+              className="text-[10px] text-sky-400 hover:underline"
+            >
+              24 ساعة كاملة ←
+            </Link>
           </div>
-
-          {/* الضهر */}
-          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3 text-center flex flex-col items-center justify-between min-h-[90px]">
-            <span className="text-xs text-slate-400 font-medium">☀️ الضهر</span>
-            <div className="my-1">
-              <span className="text-lg font-bold text-slate-200">
-                {periods.midday ? `${periods.midday.avgTemp}°` : '--'}
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-500">
-              {periods.midday?.maxPrecip && periods.midday.maxPrecip >= 20
-                ? `🌧️ ${periods.midday.maxPrecip}%`
-                : 'أوج الحرارة'}
-            </span>
-          </div>
-
-          {/* العصر / المغرب */}
-          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3 text-center flex flex-col items-center justify-between min-h-[90px]">
-            <span className="text-xs text-slate-400 font-medium">🌇 العصر</span>
-            <div className="my-1">
-              <span className="text-lg font-bold text-slate-200">
-                {periods.evening ? `${periods.evening.avgTemp}°` : '--'}
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-500">
-              {periods.evening?.maxPrecip && periods.evening.maxPrecip >= 20
-                ? `🌧️ ${periods.evening.maxPrecip}%`
-                : 'لطيف'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 7. (د) توقعات 5 أيام - Scroll جانبي */}
-      {weather.daily_forecast && weather.daily_forecast.length > 1 && (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-4">
-          <p className="text-slate-400 text-xs font-medium mb-3">توقعات الأيام القادمة</p>
-          <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none snap-x">
-            {weather.daily_forecast.slice(1, 6).map((day, idx) => {
-              const dayDesc = getWeatherDescription(day.wmo);
-              const dayName = getArabicDayName(day.date, idx + 1);
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none snap-x">
+            {hourlyList.map(h => {
+              const hour          = new Date(h.time).getHours();
+              const isCurrentHour = hour === currentHour;
+              const isPast        = hour < currentHour;
 
               return (
                 <div
-                  key={day.date}
-                  className="flex-shrink-0 snap-start bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3 w-24 text-center flex flex-col items-center justify-between space-y-2"
+                  key={h.time}
+                  className={`flex-shrink-0 snap-start rounded-2xl p-2 w-[54px] text-center flex flex-col items-center gap-1 transition-all ${
+                    isCurrentHour
+                      ? 'bg-white shadow-md shadow-white/10 scale-[1.04]'
+                      : isPast
+                      ? 'bg-white/[0.03] border border-white/[0.04] opacity-30'
+                      : 'bg-white/[0.05] border border-white/[0.07]'
+                  }`}
                 >
-                  <span className="text-xs font-bold text-slate-300">{dayName}</span>
-                  <span className="text-2xl">{dayDesc.emoji}</span>
-                  <div className="flex items-center gap-1 text-xs">
-                    <span className="font-bold text-amber-400">{Math.round(day.temp_max)}°</span>
-                    <span className="text-slate-500">/</span>
-                    <span className="text-slate-400 text-[11px]">{Math.round(day.temp_min)}°</span>
-                  </div>
-                  {/* عرض نسبة المطر فقط إذا كانت أعلى من 20% */}
-                  {day.precip_prob >= 20 ? (
-                    <span className="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-medium">
-                      💧 {day.precip_prob}%
-                    </span>
-                  ) : (
-                    <span className="h-4 text-[10px] text-slate-600">—</span>
-                  )}
+                  <span className={`text-[10px] font-medium ${
+                    isCurrentHour ? 'text-slate-600' : 'text-slate-400'
+                  }`}>
+                    {isCurrentHour ? 'الآن' : `${hour}:00`}
+                  </span>
+                  <span className="text-sm leading-none">
+                    {getHourIcon(hour, h.wmo)}
+                  </span>
+                  <span className={`text-xs font-bold tabular-nums ${
+                    isCurrentHour ? 'text-slate-900' : 'text-slate-200'
+                  }`}>
+                    {Math.round(h.temp)}°
+                  </span>
                 </div>
               );
             })}

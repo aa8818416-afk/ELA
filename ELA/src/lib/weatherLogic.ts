@@ -13,6 +13,7 @@ export interface HourlyPoint {
   temp: number;
   wind: number;
   precip_prob: number;
+  wmo?: number;
 }
 
 export interface DayForecast {
@@ -231,4 +232,136 @@ export function splitDayPeriods(hourlyData: HourlyPoint[]) {
     midday: summarize(midday),
     evening: summarize(evening),
   };
+}
+
+/**
+ * Retrieves weather from cache or fetches fresh from Open-Meteo
+ * if cache is missing or contains incomplete hourly data (< 24 hours).
+ */
+export async function getOrFetchCenterWeather(
+  center: { governorate: string; center: string; lat: number; lng: number },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any
+) {
+  try {
+    // 1. Try cache first
+    const { data: cached } = await supabase
+      .from('weather_cache')
+      .select('*')
+      .eq('latitude', center.lat)
+      .eq('longitude', center.lng)
+      .maybeSingle();
+
+    // If cache exists and has full 24h per day data (e.g. >= 24 hourly points)
+    if (
+      cached &&
+      Array.isArray(cached.hourly_today) &&
+      cached.hourly_today.length >= 24 &&
+      Array.isArray(cached.daily_forecast) &&
+      cached.daily_forecast.length >= 6
+    ) {
+      return cached;
+    }
+
+    // 2. Fetch fresh 7-day data from Open-Meteo
+    const locationName = `${center.governorate} - ${center.center}`;
+    const url = new URL('https://api.open-meteo.com/v1/forecast');
+    url.searchParams.set('latitude', center.lat.toString());
+    url.searchParams.set('longitude', center.lng.toString());
+    url.searchParams.set('current', [
+      'temperature_2m',
+      'apparent_temperature',
+      'relative_humidity_2m',
+      'weather_code',
+      'wind_speed_10m',
+      'precipitation',
+      'dew_point_2m',
+    ].join(','));
+    url.searchParams.set('hourly', [
+      'temperature_2m',
+      'wind_speed_10m',
+      'precipitation_probability',
+      'weather_code',
+    ].join(','));
+    url.searchParams.set('daily', [
+      'temperature_2m_max',
+      'temperature_2m_min',
+      'precipitation_probability_max',
+      'weather_code',
+      'sunrise',
+      'sunset',
+      'et0_fao_evapotranspiration',
+    ].join(','));
+    url.searchParams.set('forecast_days', '7');
+    url.searchParams.set('timezone', 'Africa/Cairo');
+
+    const res = await fetch(url.toString(), {
+      headers: { Accept: 'application/json' },
+      next: { revalidate: 1800 },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) {
+      return cached || null;
+    }
+
+    const data = await res.json();
+    const current = data.current;
+    const hourly  = data.hourly;
+    const daily   = data.daily;
+
+    // All 24 hours per day for all 7 days (168 hours total)
+    const hourlyPoints: HourlyPoint[] = (hourly.time as string[]).map((t: string, i: number) => ({
+      time: t,
+      temp: hourly.temperature_2m[i] as number,
+      wind: hourly.wind_speed_10m[i] as number,
+      precip_prob: (hourly.precipitation_probability[i] as number) ?? 0,
+      wmo: hourly.weather_code?.[i] as number | undefined,
+    }));
+
+    // 7-day forecast array
+    const dailyForecast: DayForecast[] = (daily.time as string[]).slice(0, 7).map((date: string, i: number) => ({
+      date,
+      wmo: daily.weather_code[i] as number,
+      temp_max: daily.temperature_2m_max[i] as number,
+      temp_min: daily.temperature_2m_min[i] as number,
+      precip_prob: (daily.precipitation_probability_max[i] as number) ?? 0,
+    }));
+
+    const freshRecord = {
+      location_name: locationName,
+      latitude: center.lat,
+      longitude: center.lng,
+      temperature_2m: current.temperature_2m,
+      relative_humidity_2m: current.relative_humidity_2m,
+      apparent_temperature: current.apparent_temperature,
+      weather_code: current.weather_code,
+      wind_speed_10m: current.wind_speed_10m,
+      precipitation: current.precipitation,
+      dew_point_2m: current.dew_point_2m,
+      et0_fao_evapotranspiration: daily.et0_fao_evapotranspiration[0],
+      sunrise: daily.sunrise[0],
+      sunset: daily.sunset[0],
+      daily_forecast: dailyForecast,
+      hourly_today: hourlyPoints,
+      fetched_at: new Date().toISOString(),
+    };
+
+    // Upsert into cache asynchronously
+    supabase
+      .from('weather_cache')
+      .upsert(
+        {
+          ...freshRecord,
+          raw_data: data,
+        },
+        { onConflict: 'latitude,longitude' }
+      )
+      .then();
+
+    return freshRecord;
+  } catch (err) {
+    console.error('Failed to fetch weather in getOrFetchCenterWeather:', err);
+    return null;
+  }
 }

@@ -10,6 +10,7 @@ interface HourlyPoint {
   temp: number;
   wind: number;
   precip_prob: number;
+  wmo?: number;
 }
 
 interface DayForecast {
@@ -45,6 +46,7 @@ async function fetchLocationWeather(item: CenterCoordinates, supabase: any) {
       'temperature_2m',
       'wind_speed_10m',
       'precipitation_probability',
+      'weather_code',
     ].join(','));
 
     // --- daily (5-day forecast + ET0 + sunrise/sunset) ---
@@ -58,7 +60,7 @@ async function fetchLocationWeather(item: CenterCoordinates, supabase: any) {
       'et0_fao_evapotranspiration',
     ].join(','));
 
-    url.searchParams.set('forecast_days', '6');
+    url.searchParams.set('forecast_days', '7');
     url.searchParams.set('timezone', 'Africa/Cairo');
 
     const response = await fetch(url.toString(), {
@@ -75,21 +77,18 @@ async function fetchLocationWeather(item: CenterCoordinates, supabase: any) {
     const hourly  = data.hourly;
     const daily   = data.daily;
 
-    // Filter hourly to 6am–8pm only (indices where hour 6–20)
+    // All 24 hours per day for all 7 days — no filter
     const hourlyPoints: HourlyPoint[] = (hourly.time as string[])
       .map((t: string, i: number) => ({
         time: t,
         temp: hourly.temperature_2m[i] as number,
         wind: hourly.wind_speed_10m[i] as number,
         precip_prob: (hourly.precipitation_probability[i] as number) ?? 0,
-      }))
-      .filter(h => {
-        const hr = new Date(h.time).getHours();
-        return hr >= 6 && hr <= 20;
-      });
+        wmo:  (hourly.weather_code?.[i] as number | undefined),
+      }));
 
-    // Build 6-day forecast array (today + 5 days)
-    const dailyForecast: DayForecast[] = (daily.time as string[]).slice(0, 6).map((date: string, i: number) => ({
+    // Build 7-day forecast array
+    const dailyForecast: DayForecast[] = (daily.time as string[]).slice(0, 7).map((date: string, i: number) => ({
       date,
       wmo:        daily.weather_code[i] as number,
       temp_max:   daily.temperature_2m_max[i] as number,

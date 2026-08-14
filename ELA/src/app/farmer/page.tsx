@@ -4,7 +4,7 @@ import CampaignCard from "@/components/farmer/CampaignCard";
 import CompactWeatherBar from "@/components/farmer/CompactWeatherBar";
 import { Sparkles, CalendarDays } from "lucide-react";
 import Link from "next/link";
-
+import { getOrFetchCenterWeather } from "@/lib/weatherLogic";
 import { EGYPT_CENTERS_COORDINATES } from "@/data/egyptCenters";
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -98,14 +98,7 @@ export default async function FarmerHomePage() {
     { center: EGYPT_CENTERS_COORDINATES[0], dist: Infinity }
   ).center;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: weatherData } = await (supabase as any)
-    .from("weather_cache")
-    .select("*")
-    .eq("latitude", nearestCenter.lat)
-    .eq("longitude", nearestCenter.lng)
-    .maybeSingle();
-
+  const weatherData = await getOrFetchCenterWeather(nearestCenter, supabase);
   const currentCrop = farmerFields?.[0]?.crop_type || undefined;
 
 

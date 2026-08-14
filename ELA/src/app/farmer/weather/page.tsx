@@ -2,6 +2,7 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import FarmerWeatherClient from "@/components/farmer/FarmerWeatherClient";
 import { EGYPT_CENTERS_COORDINATES } from "@/data/egyptCenters";
+import { getOrFetchCenterWeather } from "@/lib/weatherLogic";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export default async function FarmerWeatherPage() {
     }
   }
 
-  // 3. Find weather coordinates
+  // 3. Find weather coordinates and get or fetch 7-day 24h data
   const fieldLat = farmerFields?.[0]?.latitude ?? 30.0444;
   const fieldLon = farmerFields?.[0]?.longitude ?? 31.2357;
 
@@ -69,14 +70,7 @@ export default async function FarmerWeatherPage() {
     { center: EGYPT_CENTERS_COORDINATES[0], dist: Infinity }
   ).center;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: weatherData } = await (supabase as any)
-    .from("weather_cache")
-    .select("*")
-    .eq("latitude", nearestCenter.lat)
-    .eq("longitude", nearestCenter.lng)
-    .maybeSingle();
-
+  const weatherData = await getOrFetchCenterWeather(nearestCenter, supabase);
   const currentCrop = farmerFields?.[0]?.crop_type || undefined;
 
   return (

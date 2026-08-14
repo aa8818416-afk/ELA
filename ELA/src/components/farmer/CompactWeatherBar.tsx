@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Droplets, Wind } from 'lucide-react';
 import { getWeatherDescription, calcSprayStatus, calcVPD, calcHeatWarning } from '@/lib/weatherLogic';
 
 interface CompactWeatherBarProps {
@@ -11,7 +11,7 @@ interface CompactWeatherBarProps {
 export default function CompactWeatherBar({ weather }: CompactWeatherBarProps) {
   if (!weather) {
     return (
-      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 text-center">
+      <div className="bg-white/[0.04] backdrop-blur-md border border-white/[0.08] rounded-3xl p-4 text-center">
         <p className="text-slate-500 text-xs">🌡️ جاري تحميل بيانات الطقس...</p>
       </div>
     );
@@ -20,6 +20,7 @@ export default function CompactWeatherBar({ weather }: CompactWeatherBarProps) {
   const temp = weather.temperature_2m !== null ? Math.round(weather.temperature_2m) : '--';
   const rh = weather.relative_humidity_2m !== null ? Math.round(weather.relative_humidity_2m) : 50;
   const wind = weather.wind_speed_10m !== null ? Math.round(weather.wind_speed_10m) : 0;
+  const apparent = weather.apparent_temperature !== null ? Math.round(weather.apparent_temperature) : temp;
   const condition = getWeatherDescription(weather.weather_code);
 
   const todayForecast = weather.daily_forecast?.[0];
@@ -31,25 +32,35 @@ export default function CompactWeatherBar({ weather }: CompactWeatherBarProps) {
   return (
     <Link
       href="/farmer/weather"
-      className="block bg-gradient-to-r from-sky-950/80 via-slate-900/90 to-slate-900/80 border border-sky-500/30 hover:border-sky-500/50 rounded-2xl p-4 transition-all shadow-lg group active:scale-[0.98]"
+      className="block bg-gradient-to-br from-sky-900/40 via-slate-900/60 to-slate-950/80 backdrop-blur-md border border-sky-400/15 hover:border-sky-400/30 rounded-3xl p-4 transition-all shadow-lg group active:scale-[0.98]"
     >
       <div className="flex items-center justify-between">
-        {/* Left: Temp & Location */}
+        {/* Right (in RTL): Temp, icon, condition */}
         <div className="flex items-center gap-3">
-          <span className="text-3xl">{condition.emoji}</span>
+          <span className="text-3xl flex-shrink-0">{condition.emoji}</span>
           <div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold text-amber-400 tabular-nums">{temp}°م</span>
-              <span className="text-slate-400 text-xs font-medium truncate max-w-[120px]">
-                {weather.location_name.split('-')[1] || weather.location_name}
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-bold text-white tabular-nums">{temp}°</span>
+              <span className="text-slate-400 text-xs font-medium">
+                ({condition.label})
               </span>
             </div>
-            <p className="text-slate-400 text-[11px] font-medium">{condition.label}</p>
+            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
+              <span>يبان زي {apparent}°</span>
+              <span>·</span>
+              <span className="flex items-center gap-0.5 text-slate-400">
+                <Wind className="w-3 h-3 text-emerald-400" /> {wind}
+              </span>
+              <span>·</span>
+              <span className="flex items-center gap-0.5 text-slate-400">
+                <Droplets className="w-3 h-3 text-blue-400" /> {rh}%
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Right: Spray badge + CTA link */}
-        <div className="flex items-center gap-2">
+        {/* Left: Spray status + Arrow */}
+        <div className="flex items-center gap-2 flex-shrink-0">
           <div
             className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 border ${
               spray.badge === 'green'
@@ -60,7 +71,7 @@ export default function CompactWeatherBar({ weather }: CompactWeatherBarProps) {
             }`}
           >
             <span>{spray.badge === 'green' ? '🟢' : spray.badge === 'yellow' ? '🟡' : '🔴'}</span>
-            <span className="truncate max-w-[110px]">{spray.message}</span>
+            <span className="truncate max-w-[100px]">{spray.message}</span>
           </div>
 
           <ChevronLeft className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 group-hover:-translate-x-1 transition-all" />
