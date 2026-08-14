@@ -170,83 +170,116 @@ export default async function FarmerHomePage() {
 
 
   return (
-    <div className="space-y-6">
-      {/* Greeting */}
-      <div className="pt-2 pb-4">
-        <p className="text-slate-400 text-sm mb-1">أهلاً بك</p>
-        <h1 className="text-2xl font-bold text-white">
-          صباح النور يا {firstName} 👋
-        </h1>
-        {village && (
-          <span className="inline-block mt-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs px-3 py-1 rounded-full">
-            📍 قرية {village}
-          </span>
-        )}
+    <div className="space-y-5 text-right">
+      {/* Greeting Card */}
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-slate-500 text-xs font-medium mb-0.5">أهلاً بك في منصة ELA</p>
+            <h1 className="text-xl font-black text-slate-900">
+              صباح النور يا {firstName} 👋
+            </h1>
+            {village && (
+              <span className="inline-flex items-center gap-1 mt-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full shadow-xs">
+                📍 قرية {village}
+              </span>
+            )}
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-2xl shadow-xs">
+            🧑‍🌾
+          </div>
+        </div>
       </div>
 
       {/* Weather Compact Summary Bar */}
       <CompactWeatherBar weather={weatherData} />
 
-      {/* Daily Agenda Card */}
-      <Link
-        href="/farmer/agenda"
-        className="block relative bg-gradient-to-br from-indigo-900/60 via-violet-900/40 to-slate-900/60 border border-indigo-500/20 rounded-3xl p-5 overflow-hidden group active:scale-[0.98] transition-transform"
-      >
-        {/* Background glow */}
-        <div className="absolute top-0 left-0 w-full h-full bg-indigo-500/5 pointer-events-none" />
-
-        <div className="flex items-start justify-between">
+      {/* Parallel Bento Cards: Agenda & Smart AI Assistant */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        {/* Daily Agenda Card */}
+        <Link
+          href="/farmer/agenda"
+          className="bg-white hover:bg-slate-50/80 border border-slate-200/90 hover:border-indigo-300 rounded-3xl p-5 shadow-xs transition-all flex flex-col justify-between group active:scale-[0.98]"
+        >
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <CalendarDays className="w-5 h-5 text-indigo-400" />
-              <h3 className="font-bold text-white text-base">أجندتي اليومية</h3>
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shadow-xs">
+                <CalendarDays className="w-5 h-5" />
+              </div>
+              {openAlertsCount > 0 ? (
+                <span className="bg-red-500 text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-xs">
+                  {openAlertsCount} تنبيه
+                </span>
+              ) : (
+                <span className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
+                  محصولك بخير 🌱
+                </span>
+              )}
             </div>
-            <p className="text-slate-300 text-sm">
+
+            <h3 className="font-black text-slate-900 text-base mb-1">أجندتي اليومية</h3>
+            <p className="text-slate-600 text-xs leading-relaxed">
               {hasFields
                 ? openAlertsCount > 0
                   ? `لديك ${openAlertsCount} تنبيه زراعي مفتوح — اضغط للاطلاع`
-                  : "لا توجد تنبيهات مفتوحة اليوم — محصولك بخير 🌱"
-                : "أضف حقلك الأول للبدء في تلقي التنبيهات الزراعية"}
+                  : "لا توجد تنبيهات مفتوحة اليوم — حقولك بحالة ممتازة."
+                : "أضف حقلك الأول للبدء في متابعة دورة حياة النبات."}
             </p>
           </div>
 
-          {openAlertsCount > 0 && (
-            <div className="flex-shrink-0 bg-red-500 text-white text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-lg shadow-red-500/30">
-              {openAlertsCount}
-            </div>
-          )}
-        </div>
-
-        {openAlertsCount > 0 && (
-          <div className="mt-3 flex gap-2 flex-wrap">
-            <span className="bg-indigo-500/20 text-indigo-300 text-xs px-3 py-1 rounded-full border border-indigo-500/30">
-              عرض التفاصيل ←
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-xl group-hover:bg-indigo-100 transition-colors">
+              فتح الأجندة ←
             </span>
+            <span className="text-[11px] text-slate-400 font-medium">متابعة الحقل</span>
           </div>
-        )}
-      </Link>
+        </Link>
 
-      {/* Chat Access Card */}
-      <Link
-        href="/farmer/chat"
-        className="block bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-3xl p-6 text-white shadow-lg active:scale-[0.98] transition-transform"
-      >
-        <h3 className="font-bold text-lg mb-1">اسأل المرشد الزراعي 🤖</h3>
-        <p className="text-emerald-50 text-sm opacity-90">
-          هل عندك سؤال بخصوص محصولك؟ اضغط هنا للدردشة مع المرشد الذكي.
-        </p>
-      </Link>
+        {/* Chat Access Card */}
+        <Link
+          href="/farmer/scanner"
+          className="bg-white hover:bg-emerald-50/40 border border-slate-200/90 hover:border-emerald-300 rounded-3xl p-5 shadow-xs transition-all flex flex-col justify-between group active:scale-[0.98]"
+        >
+          <div>
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-xs">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <span className="bg-emerald-100 border border-emerald-200 text-emerald-800 text-[11px] font-black px-2.5 py-0.5 rounded-full">
+                ذكاء اصطناعي
+              </span>
+            </div>
+
+            <h3 className="font-black text-slate-900 text-base mb-1">طبيب المحاصيل الذكي 🤖</h3>
+            <p className="text-slate-600 text-xs leading-relaxed">
+              صوّر ورقة النبات المصابة أو اسأل المرشد عن أي مشكلة في مزرعتك.
+            </p>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-3.5 py-1.5 rounded-xl group-hover:bg-emerald-100 transition-colors">
+              فحص وتشخيص 📸
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">استشارة فورية</span>
+          </div>
+        </Link>
+      </div>
 
       {/* Active Campaigns Header */}
-      <div className="flex items-center gap-2">
-        <Sparkles className="w-5 h-5 text-amber-400" />
-        <h2 className="text-white font-bold text-lg">عروض الشراء الجماعي النشطة</h2>
+      <div className="flex items-center justify-between pt-2">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-amber-500" />
+          <h2 className="text-slate-900 font-black text-base">عروض الشراء الجماعي النشطة</h2>
+        </div>
+        <span className="text-xs font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+          خصومات قريتك
+        </span>
       </div>
 
       {/* Campaign Cards */}
       {activeCampaigns.length === 0 ? (
-        <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-10 text-center">
-          <p className="text-slate-400">لا توجد عروض شراء جماعي نشطة حالياً</p>
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-8 text-center shadow-xs">
+          <p className="text-slate-500 text-xs font-medium">لا توجد عروض شراء جماعي نشطة حالياً بقريتك</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -263,12 +296,12 @@ export default async function FarmerHomePage() {
       )}
 
       {/* How it works footer */}
-      <div className="bg-slate-900/40 border border-slate-800/50 rounded-3xl p-5">
-        <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
-          💡 كيف يعمل الخصم الجماعي؟
+      <div className="bg-emerald-50/70 border border-emerald-200 rounded-3xl p-5 shadow-xs">
+        <h3 className="text-slate-900 font-black text-xs mb-2 flex items-center gap-1.5">
+          <span>💡 كيف يعمل الخصم الجماعي؟</span>
         </h3>
-        <p className="text-slate-400 text-xs leading-relaxed">
-          كل ما حجزت أنت وجيرانك من المزارعين في القرية نفس المنتج وبلغنا الكمية المطلوبة، تحصل الكل تلقائياً على خصم في أسعار الدواء. شارك الكارت مع جيرانك وكسبوا سوا!
+        <p className="text-slate-600 text-xs leading-relaxed">
+          كل ما حجزت أنت وجيرانك من المزارعين في القرية نفس المنتج وبلغنا الكمية المطلوبة، يحصل الكل تلقائياً على خصم في أسعار الدواء. شارك الكارت مع جيرانك وكسبوا سوا!
         </p>
       </div>
     </div>

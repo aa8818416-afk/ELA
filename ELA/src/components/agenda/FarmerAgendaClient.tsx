@@ -112,22 +112,7 @@ export default function FarmerAgendaClient({ fields, openAlerts, todayLogs }: Pr
   void loadingKey;
 
   return (
-    <div className="space-y-4">
-      {/* Top Action Bar */}
-      <div className="flex items-center justify-between bg-slate-900/60 border border-slate-800 rounded-3xl p-4">
-        <div>
-          <h3 className="text-white font-bold text-sm">أراضيك ومحاصيلك</h3>
-          <p className="text-slate-400 text-xs">إجمالي الحقول: {fields.length}</p>
-        </div>
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-2xl flex items-center gap-1.5 transition-colors shadow-lg shadow-emerald-950/50"
-        >
-          <span>🌱</span>
-          <span>إضافة محصول جديد</span>
-        </button>
-      </div>
-
+    <div className="space-y-0">
       <DailyAgendaView
         fieldsAgendaData={fieldsAgendaData}
         onRespond={handleRespond}

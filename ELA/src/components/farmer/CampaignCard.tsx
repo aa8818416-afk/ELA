@@ -99,24 +99,24 @@ export default function CampaignCard({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-3xl border transition-all ${
+      className={`relative overflow-hidden rounded-3xl border transition-all shadow-xs ${
         isMaxAchieved
-          ? "bg-emerald-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/5"
+          ? "bg-emerald-50/80 border-emerald-300 shadow-sm"
           : activeDiscount > 0
-          ? "bg-slate-900/80 border-emerald-500/20"
-          : "bg-slate-900/70 border-slate-800"
+          ? "bg-white border-amber-300"
+          : "bg-white border-slate-200/90"
       }`}
     >
       {/* Product Header */}
       <div className="p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-white font-bold text-lg leading-tight mb-1">
+            <h3 className="text-slate-900 font-black text-lg leading-tight mb-1">
               {product.name_ar}
             </h3>
-            <p className="text-emerald-400 font-bold text-xl">
+            <p className="text-emerald-700 font-black text-xl font-mono">
               {product.price_to_farmer}{" "}
-              <span className="text-sm font-medium text-emerald-500/70">ج.م</span>
+              <span className="text-sm font-bold text-slate-500">ج.م</span>
             </p>
           </div>
           {/* Product Image or Emoji Icon Placeholder */}
@@ -124,10 +124,10 @@ export default function CampaignCard({
             <ZoomableImage
               src={product.image_url}
               alt={product.name_ar}
-              className="w-14 h-14 rounded-2xl object-cover border border-emerald-500/20 shrink-0"
+              className="w-14 h-14 rounded-2xl object-cover border border-emerald-200 shrink-0"
             />
           ) : (
-            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl shrink-0">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-3xl shrink-0">
               🧪
             </div>
           )}
@@ -135,22 +135,22 @@ export default function CampaignCard({
 
         {/* Progress Info */}
         <div className="mb-3">
-          <div className="flex items-center justify-between text-sm mb-2">
-            <span className="text-slate-400">
-              حجز القرية:{" "}
-              <span className="text-white font-bold">{currentVolume}</span> عبوة
+          <div className="flex items-center justify-between text-sm mb-2 font-medium">
+            <span className="text-slate-600 text-xs">
+              حجز قريتنا:{" "}
+              <span className="text-slate-900 font-black">{currentVolume}</span> عبوة
             </span>
-            <span className="text-emerald-500 font-bold">
+            <span className="text-emerald-700 font-bold text-xs">
               الهدف النهائي: {maxTargetQty}
             </span>
           </div>
 
           {/* Progress Bar */}
-          <div className="h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+          <div className="h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
             <div
               className={`h-full rounded-full transition-all duration-700 ease-out ${
                 isMaxAchieved
-                  ? "bg-gradient-to-l from-emerald-400 to-emerald-600"
+                  ? "bg-gradient-to-l from-emerald-500 to-emerald-600"
                   : activeDiscount > 0
                   ? "bg-gradient-to-l from-emerald-500 to-amber-500"
                   : "bg-gradient-to-l from-amber-400 to-amber-600"
@@ -161,17 +161,17 @@ export default function CampaignCard({
 
           <div className="mt-2 text-center">
             {isMaxAchieved ? (
-              <span className="text-emerald-400 text-sm font-bold flex items-center justify-center gap-1">
+              <span className="text-emerald-800 text-xs font-black flex items-center justify-center gap-1 bg-emerald-100 py-1 px-3 rounded-full border border-emerald-200">
                 ✅ تم تفعيل الحد الأقصى للخصم {activeDiscount}% للجميع! 🎉
               </span>
             ) : activeDiscount > 0 ? (
-              <span className="text-emerald-400 text-xs font-bold block">
-                مفعّل حالياً: خصم {activeDiscount}%! متبقي <strong className="text-amber-400">{remaining} عبوة</strong> للوصول للخصم التالي ({nextTargetDiscount}%)
+              <span className="text-emerald-800 text-xs font-bold block bg-emerald-50 py-1 px-2.5 rounded-full border border-emerald-200">
+                مفعّل حالياً: خصم {activeDiscount}%! متبقي <strong className="text-amber-800 font-black">{remaining} عبوة</strong> للوصول للخصم التالي ({nextTargetDiscount}%)
               </span>
             ) : (
-              <span className="text-amber-400/80 text-xs">
+              <span className="text-amber-900 text-xs font-medium bg-amber-50 py-1 px-2.5 rounded-full border border-amber-200 inline-block">
                 متبقي{" "}
-                <strong className="text-amber-400">{remaining} عبوة</strong>{" "}
+                <strong className="text-amber-900 font-black">{remaining} عبوة</strong>{" "}
                 للوصول للخصم الأول ({nextTargetDiscount}%)
               </span>
             )}
@@ -179,63 +179,63 @@ export default function CampaignCard({
         </div>
 
         {/* Discount Tiers Visual Display */}
-        <div className="mt-4 pt-4 border-t border-slate-800/40 grid grid-cols-3 gap-2 text-center text-xs">
+        <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-3 gap-2 text-center text-xs">
           <div className={`p-2 rounded-2xl border transition-all ${
             currentVolume >= campaign.tier1_qty
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-bold'
-              : 'bg-slate-950/40 border-slate-900/60 text-slate-500'
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-black shadow-xs'
+              : 'bg-slate-50 border-slate-200 text-slate-400'
           }`}>
-            <p className="text-slate-400 text-[10px] mb-1">الخصم الأول</p>
-            <p className="font-bold text-sm">%{campaign.tier1_discount}</p>
-            <p className="text-[10px] font-normal">{campaign.tier1_qty} عبوة</p>
+            <p className="text-slate-500 text-[10px] mb-1 font-bold">الخصم الأول</p>
+            <p className="font-black text-sm font-mono">%{campaign.tier1_discount}</p>
+            <p className="text-[10px] font-medium">{campaign.tier1_qty} عبوة</p>
           </div>
           
           {campaign.tier2_qty ? (
             <div className={`p-2 rounded-2xl border transition-all ${
               currentVolume >= campaign.tier2_qty
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-bold'
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-black shadow-xs'
                 : currentVolume >= campaign.tier1_qty
-                ? 'bg-amber-500/5 border-amber-500/20 text-amber-400 font-bold'
-                : 'bg-slate-950/40 border-slate-900/60 text-slate-500'
+                ? 'bg-amber-50 border-amber-300 text-amber-800 font-bold'
+                : 'bg-slate-50 border-slate-200 text-slate-400'
             }`}>
-              <p className="text-slate-400 text-[10px] mb-1">الخصم الثاني</p>
-              <p className="font-bold text-sm">%{campaign.tier2_discount}</p>
-              <p className="text-[10px] font-normal">{campaign.tier2_qty} عبوة</p>
+              <p className="text-slate-500 text-[10px] mb-1 font-bold">الخصم الثاني</p>
+              <p className="font-black text-sm font-mono">%{campaign.tier2_discount}</p>
+              <p className="text-[10px] font-medium">{campaign.tier2_qty} عبوة</p>
             </div>
           ) : (
-            <div className="p-2 rounded-2xl border bg-slate-950/10 border-slate-900/30 text-slate-600 flex flex-col justify-center items-center">
-              <span className="text-slate-600 text-[10px]">—</span>
+            <div className="p-2 rounded-2xl border bg-slate-50 border-slate-200 text-slate-400 flex flex-col justify-center items-center">
+              <span className="text-slate-400 text-[10px]">—</span>
             </div>
           )}
 
           {campaign.tier3_qty ? (
             <div className={`p-2 rounded-2xl border transition-all ${
               currentVolume >= campaign.tier3_qty
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-bold'
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-black shadow-xs'
                 : campaign.tier2_qty !== null && currentVolume >= campaign.tier2_qty
-                ? 'bg-amber-500/5 border-amber-500/20 text-amber-400 font-bold'
-                : 'bg-slate-950/40 border-slate-900/60 text-slate-500'
+                ? 'bg-amber-50 border-amber-300 text-amber-800 font-bold'
+                : 'bg-slate-50 border-slate-200 text-slate-400'
             }`}>
-              <p className="text-slate-400 text-[10px] mb-1">الخصم الثالث</p>
-              <p className="font-bold text-sm">%{campaign.tier3_discount}</p>
-              <p className="text-[10px] font-normal">{campaign.tier3_qty} عبوة</p>
+              <p className="text-slate-500 text-[10px] mb-1 font-bold">الخصم الثالث</p>
+              <p className="font-black text-sm font-mono">%{campaign.tier3_discount}</p>
+              <p className="text-[10px] font-medium">{campaign.tier3_qty} عبوة</p>
             </div>
           ) : (
-            <div className="p-2 rounded-2xl border bg-slate-950/10 border-slate-900/30 text-slate-600 flex flex-col justify-center items-center">
-              <span className="text-slate-600 text-[10px]">—</span>
+            <div className="p-2 rounded-2xl border bg-slate-50 border-slate-200 text-slate-400 flex flex-col justify-center items-center">
+              <span className="text-slate-400 text-[10px]">—</span>
             </div>
           )}
         </div>
       </div>
 
       {/* WhatsApp Share Footer */}
-      <div className="border-t border-slate-800/50 px-5 py-3">
+      <div className="border-t border-slate-100 px-5 py-3 bg-slate-50/50">
         <button
           onClick={handleWhatsAppShare}
-          className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 ${
+          className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-xs transition-all active:scale-95 border ${
             shared
-              ? "bg-emerald-600 text-white"
-              : "bg-[#25D366] hover:bg-[#20ba5a] text-white shadow-lg shadow-[#25D366]/25"
+              ? "bg-emerald-700 text-white border-emerald-800 shadow-sm"
+              : "bg-[#25D366] hover:bg-[#20ba5a] text-white border-[#1ebc56] shadow-sm shadow-[#25D366]/20"
           }`}
         >
           <Share2 className="w-4 h-4" />
@@ -245,7 +245,7 @@ export default function CampaignCard({
 
       {/* Expiry Badge */}
       {campaign.end_date && (
-        <div className="absolute top-3 left-3 bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+        <div className="absolute top-3 left-3 bg-red-50 border border-red-200 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
           <Calendar className="w-3 h-3" />
           ينتهي {new Date(campaign.end_date).toLocaleDateString("ar-EG")}
         </div>

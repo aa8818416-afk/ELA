@@ -236,23 +236,23 @@ export default function FarmerCropScanner() {
   };
 
   return (
-    <div className="bg-slate-900/60 border border-slate-800 rounded-3xl overflow-hidden shadow-xl flex flex-col" style={{ minHeight: "70vh" }}>
+    <div className="bg-white border border-slate-200/90 rounded-3xl overflow-hidden shadow-xs flex flex-col" style={{ minHeight: "72vh" }}>
       {/* Header */}
-      <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-slate-800 bg-slate-900/80 shrink-0">
-        <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-          <Bot className="w-5 h-5 text-emerald-400" />
+      <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-slate-100 bg-[#fbfdfa] shrink-0">
+        <div className="w-9 h-9 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-xs">
+          <Bot className="w-5 h-5" />
         </div>
         <div>
-          <p className="text-white font-bold">المرشد الزراعي الذكي</p>
-          <p className="text-slate-500 text-xs flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-            يمكنك سؤاله والتحدث معه وإرفاق صور المحاصيل
+          <p className="text-slate-900 font-black text-sm">المرشد الزراعي الذكي (طبيب المحاصيل)</p>
+          <p className="text-slate-500 text-[11px] flex items-center gap-1.5 font-medium">
+            <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full animate-pulse" />
+            جاهز لتشخيص الأمراض والإجابة عن كل استفساراتك الزراعية
           </p>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth bg-[#f8faf9]">
         {chatMessages.map((msg) => (
           <div
             key={msg.id}
@@ -260,37 +260,37 @@ export default function FarmerCropScanner() {
           >
             {/* Avatar */}
             <div
-              className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${
+              className={`w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center shadow-xs ${
                 msg.role === "model"
-                  ? "bg-emerald-500/10 border border-emerald-500/20"
-                  : "bg-slate-700"
+                  ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                  : "bg-slate-200 text-slate-700"
               }`}
             >
               {msg.role === "model" ? (
-                <Bot className="w-4 h-4 text-emerald-400" />
+                <Bot className="w-4 h-4" />
               ) : (
-                <User className="w-4 h-4 text-slate-300" />
+                <User className="w-4 h-4" />
               )}
             </div>
 
             {/* Bubble */}
-            <div className={`max-w-[82%] flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+            <div className={`max-w-[85%] flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}>
               {/* Attached image */}
               {msg.chatImagePreview && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={msg.chatImagePreview}
                   alt="صورة مرفقة"
-                  className="w-52 h-40 object-cover rounded-2xl border border-slate-700 shadow-md"
+                  className="w-52 h-40 object-cover rounded-2xl border border-slate-200 shadow-xs"
                 />
               )}
-              {/* Text content — hide if it's just the placeholder emoji */}
+              {/* Text content */}
               {msg.content && msg.content !== "📷" && (
                 <div
-                  className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed relative ${
+                  className={`px-4 py-3 rounded-2xl text-xs leading-relaxed relative shadow-xs border ${
                     msg.role === "model"
-                      ? "bg-slate-800 text-slate-200 rounded-tl-sm"
-                      : "bg-emerald-600 text-white rounded-tr-sm"
+                      ? "bg-white text-slate-800 border-slate-200/80 rounded-tr-sm"
+                      : "bg-emerald-600 text-white border-emerald-700 rounded-tl-sm font-medium"
                   }`}
                 >
                   <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -302,10 +302,10 @@ export default function FarmerCropScanner() {
 
                   {/* Web Search Grounding Sources */}
                   {msg.role === "model" && msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-3 pt-2.5 border-t border-slate-700/60 text-xs">
-                      <div className="flex items-center gap-1.5 text-emerald-400 font-medium mb-1.5">
-                        <Globe className="w-3.5 h-3.5 shrink-0" />
-                        <span>المصادر ومراجع البحث في الويب:</span>
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 text-xs">
+                      <div className="flex items-center gap-1.5 text-emerald-800 font-bold mb-1.5">
+                        <Globe className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                        <span>المصادر ومراجع البحث:</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {msg.sources.map((source, idx) => (
@@ -314,10 +314,10 @@ export default function FarmerCropScanner() {
                             href={source.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 bg-slate-900/80 hover:bg-slate-900 border border-slate-700/80 hover:border-emerald-500/50 text-slate-300 hover:text-emerald-400 text-[11px] px-2.5 py-1 rounded-lg transition-colors"
+                            className="inline-flex items-center gap-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-emerald-800 text-[11px] px-2.5 py-1 rounded-lg transition-colors shadow-xs"
                             title={source.url}
                           >
-                            <span className="truncate max-w-[180px]">{source.title}</span>
+                            <span className="truncate max-w-[180px] font-medium">{source.title}</span>
                             <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
                           </a>
                         ))}
@@ -329,16 +329,17 @@ export default function FarmerCropScanner() {
                   {msg.role === "model" && isTtsSupported() && (
                     <button
                       onClick={() => handleSpeak(msg.content, msg.id)}
-                      className={`absolute -bottom-3 -left-3 p-1.5 rounded-full border shadow-md transition-colors ${activeSpeechId === msg.id
-                        ? "bg-emerald-500 text-white border-emerald-400"
-                        : "bg-slate-800 text-slate-400 hover:text-white border-slate-700 hover:bg-slate-700"
-                        }`}
+                      className={`absolute -bottom-3 -left-3 p-1.5 rounded-full border shadow-xs transition-colors ${
+                        activeSpeechId === msg.id
+                          ? "bg-emerald-600 text-white border-emerald-700"
+                          : "bg-white text-slate-600 hover:text-emerald-800 border-slate-200 hover:bg-slate-50"
+                      }`}
                       title={activeSpeechId === msg.id ? "إيقاف الصوت" : "قراءة الرسالة بصوت عالي"}
                     >
                       {activeSpeechId === msg.id ? (
-                        <VolumeX className="w-4 h-4" />
+                        <VolumeX className="w-3.5 h-3.5" />
                       ) : (
-                        <Volume2 className="w-4 h-4" />
+                        <Volume2 className="w-3.5 h-3.5" />
                       )}
                     </button>
                   )}
@@ -351,14 +352,14 @@ export default function FarmerCropScanner() {
         {/* Typing indicator */}
         {isChatLoading && (
           <div className="flex gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-              <Bot className="w-4 h-4 text-emerald-400" />
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center justify-center">
+              <Bot className="w-4 h-4" />
             </div>
-            <div className="bg-slate-800 px-4 py-3 rounded-2xl rounded-tl-sm">
+            <div className="bg-white border border-slate-200 px-4 py-3 rounded-2xl rounded-tr-sm shadow-xs">
               <div className="flex gap-1 items-center">
-                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full animate-bounce [animation-delay:0ms]" />
+                <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full animate-bounce [animation-delay:150ms]" />
+                <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full animate-bounce [animation-delay:300ms]" />
               </div>
             </div>
           </div>
@@ -367,13 +368,13 @@ export default function FarmerCropScanner() {
         {/* Audio transcribing indicator */}
         {transcribing && (
           <div className="flex gap-2.5 mr-auto flex-row-reverse">
-            <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center bg-slate-700">
-              <User className="w-4 h-4 text-slate-300" />
+            <div className="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center bg-slate-200 text-slate-700">
+              <User className="w-4 h-4" />
             </div>
-            <div className="bg-slate-800 px-4 py-3 rounded-2xl rounded-tr-sm">
-              <div className="flex gap-2 items-center text-slate-400 text-sm">
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                <span>جاري ترجمة صوتك لنص...</span>
+            <div className="bg-white border border-slate-200 px-4 py-3 rounded-2xl rounded-tl-sm shadow-xs">
+              <div className="flex gap-2 items-center text-slate-600 text-xs font-medium">
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                <span>جاري تحويل صوتك لنص...</span>
               </div>
             </div>
           </div>
@@ -382,13 +383,13 @@ export default function FarmerCropScanner() {
         {/* Errors display */}
         {(chatError || recorderError) && (
           <div className="flex flex-col items-center gap-2">
-            <p className="text-red-400 text-xs text-center bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2">
+            <p className="text-red-700 text-xs text-center bg-red-50 border border-red-200 rounded-xl px-4 py-2 font-medium">
               {chatError || recorderError}
             </p>
             {failedPayload && (
               <button
                 onClick={handleRetry}
-                className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 px-4 py-2 rounded-xl transition-colors"
+                className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 px-4 py-2 rounded-xl transition-colors shadow-xs"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 إعادة الإرسال
@@ -401,28 +402,28 @@ export default function FarmerCropScanner() {
 
       {/* Image preview before send */}
       {chatAttachedImage && (
-        <div className="px-4 py-2 flex items-center gap-3 bg-slate-950/60 border-t border-slate-800 shrink-0">
+        <div className="px-4 py-2 flex items-center gap-3 bg-emerald-50 border-t border-emerald-200 shrink-0">
           <div className="relative inline-block">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={chatAttachedImage}
               alt="معاينة الصورة"
-              className="w-16 h-12 object-cover rounded-xl border border-emerald-500/40"
+              className="w-16 h-12 object-cover rounded-xl border border-emerald-300 shadow-xs"
             />
             <button
               onClick={() => setChatAttachedImage(null)}
-              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white shadow-sm"
+              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white shadow-xs hover:bg-red-600"
             >
               <X className="w-3 h-3" />
             </button>
           </div>
-          <span className="text-slate-400 text-xs">صورة جاهزة للإرسال — يمكنك إضافة سؤال أو الإرسال مباشرة</span>
+          <span className="text-emerald-900 text-xs font-medium">صورة الورقة جاهزة للتشخيص — اكتب سؤالك أو أرسلها مباشرة</span>
         </div>
       )}
 
       {/* Input bar */}
-      <div className="border-t border-slate-800 px-3 pt-2 pb-3 flex flex-col bg-slate-900/60 shrink-0">
-        {/* Row 1: Textarea + Send (always visible, full width) */}
+      <div className="border-t border-slate-200 px-3 pt-2.5 pb-3 flex flex-col bg-white shrink-0">
+        {/* Row 1: Textarea + Send */}
         <div className="flex items-end gap-2 mb-2">
           <textarea
             ref={chatInputRef}
@@ -442,79 +443,79 @@ export default function FarmerCropScanner() {
                 ? "⏳ جاري ترجمة صوتك..."
                 : chatAttachedImage
                 ? "اكتب سؤالك عن الصورة (اختياري)..."
-                : "اسأل المرشد أو أرفق صورة..."
+                : "اسأل المرشد أو صوّر الورقة المصابة..."
             }
             disabled={isChatLoading || transcribing}
-            className="flex-1 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 text-white placeholder-slate-500 rounded-2xl py-3 px-4 text-sm outline-none transition-colors disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
+            className="flex-1 bg-[#f8faf9] border border-slate-200 hover:border-slate-300 focus:border-emerald-500 text-slate-900 placeholder-slate-400 rounded-2xl py-2.5 px-4 text-xs outline-none transition-colors disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
             style={{ minHeight: "44px", maxHeight: "144px" }}
           />
 
           <button
             onClick={handleChatSend}
             disabled={isChatLoading || transcribing || (!chatInput.trim() && !chatAttachedImage)}
-            className="p-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-2xl transition-colors active:scale-95 shadow-lg flex items-center justify-center shrink-0 self-end"
+            className="p-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-2xl transition-all active:scale-95 shadow-xs border border-emerald-700 flex items-center justify-center shrink-0 self-end"
             aria-label="إرسال"
           >
             {isChatLoading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              <Send className="w-5 h-5" />
+              <Send className="w-5 h-5 rotate-180" />
             )}
           </button>
         </div>
 
-        {/* Row 2: Camera / Gallery / Mic icons */}
+        {/* Row 2: Framed Camera / Gallery / Mic buttons */}
         <div className="flex items-center gap-2">
-          {/* Camera: instant capture */}
+          {/* Camera */}
           <button
             type="button"
             onClick={() => cameraInputRef.current?.click()}
             disabled={isChatLoading || transcribing}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors text-xs"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-emerald-700 disabled:opacity-40 transition-colors text-xs font-bold shadow-xs"
             title="تصوير فوري بالكاميرا"
           >
-            <Camera className="w-4 h-4" />
-            <span className="hidden sm:inline">كاميرا</span>
+            <Camera className="w-4 h-4 text-emerald-600" />
+            <span>كاميرا</span>
           </button>
           <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={handleImageSelect} className="hidden" />
 
-          {/* Gallery: pick from device */}
+          {/* Gallery */}
           <button
             type="button"
             onClick={() => galleryInputRef.current?.click()}
             disabled={isChatLoading || transcribing}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors text-xs"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-emerald-700 disabled:opacity-40 transition-colors text-xs font-bold shadow-xs"
             title="اختر صورة من الجهاز"
           >
-            <FolderOpen className="w-4 h-4" />
-            <span className="hidden sm:inline">معرض</span>
+            <FolderOpen className="w-4 h-4 text-teal-600" />
+            <span>معرض</span>
           </button>
           <input type="file" accept="image/*" ref={galleryInputRef} onChange={handleImageSelect} className="hidden" />
 
-          {/* Microphone button (Speech-to-Text via Groq Whisper) */}
+          {/* Microphone */}
           {hasMic && (
             <button
               type="button"
               onClick={handleMicClick}
               disabled={isChatLoading || transcribing}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border transition-all duration-300 text-xs ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border transition-all text-xs font-bold shadow-xs ${
                 isRecording
-                  ? "bg-red-500 text-white border-red-400 animate-pulse"
-                  : "bg-slate-800 hover:bg-slate-700 text-slate-350 border-slate-700"
+                  ? "bg-red-500 text-white border-red-600 animate-pulse"
+                  : "bg-white hover:bg-slate-50 text-slate-700 hover:text-emerald-700 border-slate-200"
               }`}
               title={isRecording ? "إيقاف التسجيل" : "تحدث بالصوت"}
             >
               {isRecording ? (
-                <><Square className="w-4 h-4 fill-current" /><span>إيقاف</span></>
+                <><Square className="w-4 h-4 fill-current text-white" /><span>إيقاف</span></>
               ) : (
-                <><Mic className="w-4 h-4" /><span className="hidden sm:inline">صوت</span></>
+                <><Mic className="w-4 h-4 text-amber-600" /><span>صوت</span></>
               )}
             </button>
           )}
         </div>
 
         {isRecording && (
-          <p className="text-center text-[10px] text-red-400 animate-pulse mt-1.5">
+          <p className="text-center text-[10px] text-red-600 font-bold animate-pulse mt-1.5">
             الميكروفون نشط — انقر «إيقاف» عند الانتهاء
           </p>
         )}

@@ -20,8 +20,9 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-green-500/20 border border-green-500/30 mb-4">
             <span className="text-3xl">🌱</span>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">إيلا</h1>
-          <p className="text-green-300 text-sm">منصة الزراعة الاجتماعية في مصر</p>
+          <h1 className="text-3xl font-black text-white tracking-wider font-mono">ELA</h1>
+          <p className="text-emerald-400 text-xs font-bold mt-0.5">(ال اي)</p>
+          <p className="text-slate-300 text-xs mt-2">منصة الزراعة الذكية في مصر</p>
         </div>
 
         {/* Login Card */}

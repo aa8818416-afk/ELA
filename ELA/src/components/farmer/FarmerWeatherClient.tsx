@@ -104,7 +104,7 @@ function SunArc({ sunrise, sunset }: { sunrise: string | null; sunset: string | 
         <path
           d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
           fill="none"
-          stroke="rgba(255,255,255,0.1)"
+          stroke="rgba(0,0,0,0.08)"
           strokeWidth="1.5"
           strokeDasharray="4 7"
         />
@@ -119,10 +119,10 @@ function SunArc({ sunrise, sunset }: { sunrise: string | null; sunset: string | 
           />
         )}
         {/* sun glow + circle */}
-        <circle cx={sunX} cy={sunY} r={10} fill="rgba(251,191,36,0.15)" />
-        <circle cx={sunX} cy={sunY} r={6}  fill="#fbbf24" />
+        <circle cx={sunX} cy={sunY} r={10} fill="rgba(245,158,11,0.15)" />
+        <circle cx={sunX} cy={sunY} r={6}  fill="#f59e0b" />
       </svg>
-      <div className="flex justify-between text-[11px] text-slate-500 -mt-1">
+      <div className="flex justify-between text-[11px] text-slate-500 -mt-1 font-medium">
         <span>🌅 {formatTime(sunrise)}</span>
         <span>{formatTime(sunset)} 🌇</span>
       </div>
@@ -159,10 +159,10 @@ export default function FarmerWeatherClient({
   /* ── Empty state ── */
   if (!weather) {
     return (
-      <div className="bg-white/[0.04] backdrop-blur-md border border-white/[0.08] rounded-3xl p-8 text-center space-y-3">
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-8 text-center space-y-3 shadow-xs">
         <span className="text-4xl">🌤️</span>
-        <h3 className="text-white font-bold text-lg">بيانات الطقس غير متاحة حالياً</h3>
-        <p className="text-slate-400 text-sm">سيتم تحديث البيانات تلقائياً فور توفرها.</p>
+        <h3 className="text-slate-900 font-bold text-lg">بيانات الطقس غير متاحة حالياً</h3>
+        <p className="text-slate-500 text-sm">سيتم تحديث البيانات تلقائياً فور توفرها.</p>
       </div>
     );
   }
@@ -206,19 +206,20 @@ export default function FarmerWeatherClient({
   const hasAgriAlert = heatWarn.show || !!latestAlert || !!irriAdvice || frostWarn.show;
 
   return (
-    <div className="space-y-4 pb-4">
+    <div className="space-y-4 pb-4 text-right font-sans">
 
       {/* ════════════════════════════════════
-          1 · HERO WEATHER CARD (B-style glass)
+          1 · HERO WEATHER CARD (Light theme)
           ════════════════════════════════════ */}
-      <div className="bg-gradient-to-br from-sky-900/40 via-slate-900/60 to-slate-950/80 backdrop-blur-md border border-sky-400/10 rounded-3xl overflow-hidden">
+      <div className="bg-white border border-slate-200/90 rounded-3xl overflow-hidden shadow-xs">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-1">
-          <p className="text-slate-200 text-sm font-semibold truncate max-w-[60%]">
-            📍 {weather.location_name}
+          <p className="text-slate-900 text-sm font-bold truncate max-w-[60%] flex items-center gap-1">
+            <span>📍</span>
+            <span>{weather.location_name}</span>
           </p>
-          <p className="text-slate-500 text-[11px] flex-shrink-0">
+          <p className="text-slate-500 text-[11px] flex-shrink-0 font-medium">
             آخر تحديث {formatTime(weather.fetched_at)}
           </p>
         </div>
@@ -226,13 +227,13 @@ export default function FarmerWeatherClient({
         {/* Main temperature display */}
         <div className="px-5 pb-3">
           <div className="flex items-end gap-3 mb-1">
-            <span className="text-[80px] font-bold text-white tabular-nums leading-none">
-              {temp !== null ? temp : '--'}
+            <span className="text-[72px] font-black text-slate-900 font-mono leading-none">
+              {temp !== null ? temp : '--'}°
             </span>
-            <span className="text-5xl mb-3">{condition.emoji}</span>
+            <span className="text-5xl mb-2">{condition.emoji}</span>
           </div>
-          <p className={`text-lg font-bold ${condition.color} mb-0.5`}>{condition.label}</p>
-          <p className="text-slate-400 text-sm">
+          <p className="text-base font-black text-emerald-800 mb-0.5">{condition.label}</p>
+          <p className="text-slate-600 text-xs font-medium">
             يبان زي {apparent}°&nbsp;&nbsp;·&nbsp;&nbsp;
             ↑&nbsp;{todayForecast ? Math.round(todayForecast.temp_max) : '--'}°&nbsp;
             ↓&nbsp;{todayForecast ? Math.round(todayForecast.temp_min) : '--'}°
@@ -240,26 +241,26 @@ export default function FarmerWeatherClient({
         </div>
 
         {/* Stats chips */}
-        <div className="flex gap-2 px-5 pb-5 flex-wrap">
-          <div className="flex items-center gap-1.5 bg-white/[0.06] border border-white/[0.08] rounded-full px-3 py-1.5">
-            <Droplets className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-slate-200 text-xs font-semibold">{rh}%</span>
+        <div className="flex gap-2 px-5 pb-4 flex-wrap">
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
+            <Droplets className="w-3.5 h-3.5 text-blue-600" />
+            <span className="text-slate-900 text-xs font-bold font-mono">{rh}%</span>
             <span className="text-slate-500 text-[10px]">رطوبة</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-white/[0.06] border border-white/[0.08] rounded-full px-3 py-1.5">
-            <Wind className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-slate-200 text-xs font-semibold">{wind}</span>
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
+            <Wind className="w-3.5 h-3.5 text-teal-600" />
+            <span className="text-slate-900 text-xs font-bold font-mono">{wind}</span>
             <span className="text-slate-500 text-[10px]">كم/س</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-white/[0.06] border border-white/[0.08] rounded-full px-3 py-1.5">
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
             <span className="text-xs">🌧️</span>
-            <span className="text-slate-200 text-xs font-semibold">{precipProb24h}%</span>
+            <span className="text-slate-900 text-xs font-bold font-mono">{precipProb24h}%</span>
             <span className="text-slate-500 text-[10px]">مطر</span>
           </div>
           {dewPoint !== null && (
-            <div className="flex items-center gap-1.5 bg-white/[0.06] border border-white/[0.08] rounded-full px-3 py-1.5">
-              <Thermometer className="w-3.5 h-3.5 text-orange-400" />
-              <span className="text-slate-200 text-xs font-semibold">{dewPoint}°</span>
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
+              <Thermometer className="w-3.5 h-3.5 text-amber-600" />
+              <span className="text-slate-900 text-xs font-bold font-mono">{dewPoint}°</span>
               <span className="text-slate-500 text-[10px]">ندى</span>
             </div>
           )}
@@ -270,24 +271,26 @@ export default function FarmerWeatherClient({
       </div>
 
       {/* ════════════════════════════════════
-          2 · AGRICULTURAL RECOMMENDATIONS (C-style prominence)
+          2 · AGRICULTURAL RECOMMENDATIONS
           ════════════════════════════════════ */}
-      <div className="bg-white/[0.04] backdrop-blur-md border border-white/[0.06] rounded-3xl p-4 space-y-3">
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-5 space-y-3 shadow-xs">
         <div className="flex items-center gap-2">
           <span className="text-lg">🌾</span>
-          <h2 className="text-white font-bold text-sm">التوصيات الزراعية اليوم</h2>
+          <h2 className="text-slate-900 font-black text-sm">التوصيات الزراعية اليوم</h2>
           {!hasAgriAlert && (
-            <span className="text-emerald-400 text-xs mr-auto">✓ لا توجد تحذيرات</span>
+            <span className="text-emerald-800 text-xs font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mr-auto">
+              ✓ لا توجد تحذيرات
+            </span>
           )}
         </div>
 
         {/* Heat warning */}
         {heatWarn.show && (
-          <div className="bg-gradient-to-l from-red-950/70 to-amber-950/70 border border-red-400/20 rounded-2xl p-4 flex items-start gap-3">
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
             <span className="text-2xl flex-shrink-0 mt-0.5">🥵</span>
             <div>
-              <p className="text-red-300 font-bold text-sm mb-0.5">تحذير: إجهاد حراري</p>
-              <p className="text-red-200/70 text-xs leading-relaxed">{heatWarn.text}</p>
+              <p className="text-red-800 font-black text-sm mb-0.5">تحذير: إجهاد حراري</p>
+              <p className="text-red-700 text-xs leading-relaxed">{heatWarn.text}</p>
             </div>
           </div>
         )}
@@ -296,63 +299,63 @@ export default function FarmerWeatherClient({
         {latestAlert && (
           <Link
             href="/farmer/agenda"
-            className="flex items-center justify-between bg-amber-500/[0.08] border border-amber-400/20 hover:bg-amber-500/[0.14] rounded-2xl px-4 py-3.5 transition-colors group"
+            className="flex items-center justify-between bg-amber-50 border border-amber-300 hover:bg-amber-100 rounded-2xl px-4 py-3.5 transition-colors group shadow-xs"
           >
             <div className="flex items-center gap-2.5 truncate">
-              <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0" />
-              <p className="text-amber-300 text-xs font-medium truncate">
+              <ShieldAlert className="w-4 h-4 text-amber-600 flex-shrink-0" />
+              <p className="text-amber-900 text-xs font-bold truncate">
                 ⚠️ تحديث جديد: {latestAlert.advice_text_snapshot.slice(0, 42)}...
               </p>
             </div>
-            <ArrowLeft className="w-4 h-4 text-amber-400 flex-shrink-0 mr-2 group-hover:-translate-x-0.5 transition-transform" />
+            <ArrowLeft className="w-4 h-4 text-amber-700 flex-shrink-0 mr-2 group-hover:-translate-x-0.5 transition-transform" />
           </Link>
         )}
 
         {/* Spray status */}
-        <div className={`rounded-2xl p-4 flex items-start gap-3 border ${
+        <div className={`rounded-2xl p-4 flex items-start gap-3 border shadow-xs ${
           spray.badge === 'green'
-            ? 'bg-emerald-950/50 border-emerald-500/20'
+            ? 'bg-emerald-50 border-emerald-300'
             : spray.badge === 'yellow'
-            ? 'bg-amber-950/50 border-amber-500/20'
-            : 'bg-red-950/50 border-red-500/20'
+            ? 'bg-amber-50 border-amber-300'
+            : 'bg-red-50 border-red-300'
         }`}>
           <span className="text-2xl flex-shrink-0 mt-0.5">
             {spray.badge === 'green' ? '✅' : spray.badge === 'yellow' ? '⚠️' : '🚫'}
           </span>
           <div>
-            <p className={`font-bold text-sm mb-0.5 ${
+            <p className={`font-black text-sm mb-0.5 ${
               spray.badge === 'green'
-                ? 'text-emerald-300'
+                ? 'text-emerald-900'
                 : spray.badge === 'yellow'
-                ? 'text-amber-300'
-                : 'text-red-300'
+                ? 'text-amber-900'
+                : 'text-red-900'
             }`}>
               {spray.message}
             </p>
             {spray.reason && (
-              <p className="text-slate-400 text-xs">{spray.reason}</p>
+              <p className="text-slate-600 text-xs mt-0.5">{spray.reason}</p>
             )}
           </div>
         </div>
 
         {/* Irrigation advice */}
         {irriAdvice && (
-          <div className="bg-sky-950/50 border border-sky-500/20 rounded-2xl p-4 flex items-start gap-3">
+          <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
             <span className="text-2xl flex-shrink-0 mt-0.5">{irriAdvice.icon}</span>
             <div>
-              <p className="text-sky-300 font-bold text-sm mb-0.5">توصية الري</p>
-              <p className="text-sky-200/70 text-xs leading-relaxed">{irriAdvice.text}</p>
+              <p className="text-sky-900 font-black text-sm mb-0.5">توصية الري</p>
+              <p className="text-sky-800 text-xs leading-relaxed">{irriAdvice.text}</p>
             </div>
           </div>
         )}
 
         {/* Frost warning */}
         {frostWarn.show && (
-          <div className="bg-blue-950/50 border border-blue-400/20 rounded-2xl p-4 flex items-start gap-3">
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
             <span className="text-2xl flex-shrink-0 mt-0.5">❄️</span>
             <div>
-              <p className="text-blue-300 font-bold text-sm mb-0.5">تحذير: خطر الصقيع</p>
-              <p className="text-blue-200/70 text-xs leading-relaxed">{frostWarn.text}</p>
+              <p className="text-blue-900 font-black text-sm mb-0.5">تحذير: خطر الصقيع</p>
+              <p className="text-blue-800 text-xs leading-relaxed">{frostWarn.text}</p>
             </div>
           </div>
         )}
@@ -361,11 +364,11 @@ export default function FarmerWeatherClient({
       {/* ════════════════════════════════════
           3 · 24-HOUR TIMELINE
           ════════════════════════════════════ */}
-      <div className="bg-white/[0.04] backdrop-blur-md border border-white/[0.06] rounded-3xl p-4">
-        <p className="text-slate-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs">
+        <p className="text-slate-900 text-xs font-black mb-3 flex items-center gap-1.5">
           <span>🕐</span>
           التفاصيل بالساعة
-          <span className="text-slate-600 text-[10px]">({selectedDayHours.length} ساعة)</span>
+          <span className="text-slate-500 text-[10px] font-normal">({selectedDayHours.length} ساعة)</span>
         </p>
 
         {selectedDayHours.length === 0 ? (
@@ -386,33 +389,33 @@ export default function FarmerWeatherClient({
                 <div
                   key={h.time}
                   ref={isCurrentHour ? currentHourRef : undefined}
-                  className={`flex-shrink-0 snap-start rounded-2xl p-2.5 w-[62px] text-center flex flex-col items-center gap-1 transition-all duration-200 ${
+                  className={`flex-shrink-0 snap-start rounded-2xl p-2.5 w-[62px] text-center flex flex-col items-center gap-1 transition-all duration-200 border ${
                     isCurrentHour
-                      ? 'bg-white shadow-lg shadow-white/10 scale-[1.05]'
+                      ? 'bg-emerald-600 border-emerald-700 text-white shadow-sm scale-[1.03]'
                       : isPast
-                      ? 'bg-white/[0.03] border border-white/[0.04] opacity-30'
-                      : 'bg-white/[0.05] border border-white/[0.07]'
+                      ? 'bg-slate-50 border-slate-200 opacity-40'
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
                   }`}
                 >
-                  <span className={`text-[11px] font-medium leading-tight ${
-                    isCurrentHour ? 'text-slate-600' : 'text-slate-400'
+                  <span className={`text-[11px] font-bold leading-tight ${
+                    isCurrentHour ? 'text-emerald-100' : 'text-slate-500'
                   }`}>
                     {isCurrentHour ? 'الآن' : `${hour}:00`}
                   </span>
                   <span className="text-base leading-none">
                     {getHourIcon(hour, h.wmo)}
                   </span>
-                  <span className={`text-sm font-bold tabular-nums leading-tight ${
-                    isCurrentHour ? 'text-slate-900' : 'text-slate-200'
+                  <span className={`text-sm font-black font-mono leading-tight ${
+                    isCurrentHour ? 'text-white' : 'text-slate-900'
                   }`}>
                     {Math.round(h.temp)}°
                   </span>
-                  <div className={`text-[10px] flex flex-col items-center gap-0.5 leading-tight ${
-                    isCurrentHour ? 'text-slate-600' : 'text-slate-500'
+                  <div className={`text-[10px] flex flex-col items-center gap-0.5 leading-tight font-medium ${
+                    isCurrentHour ? 'text-emerald-100' : 'text-slate-600'
                   }`}>
                     <span>💨 {Math.round(h.wind)}</span>
                     {h.precip_prob > 0 && (
-                      <span className={isCurrentHour ? 'text-blue-700' : 'text-blue-400'}>
+                      <span className={isCurrentHour ? 'text-cyan-200' : 'text-blue-600'}>
                         💧{h.precip_prob}%
                       </span>
                     )}
@@ -428,16 +431,16 @@ export default function FarmerWeatherClient({
           4 · 7-DAY FORECAST (Interactive Accordion)
           ════════════════════════════════════ */}
       {dailyList.length > 0 && (
-        <div className="bg-white/[0.04] backdrop-blur-md border border-white/[0.06] rounded-3xl overflow-hidden">
-          <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-            <p className="text-slate-400 text-xs font-medium flex items-center gap-1.5">
+        <div className="bg-white border border-slate-200/80 rounded-3xl overflow-hidden shadow-xs">
+          <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+            <p className="text-slate-900 text-xs font-black flex items-center gap-1.5">
               <span>📅</span>
               توقعات {dailyList.length} أيام (اضغط على أي يوم للتفاصيل)
             </p>
             <span className="text-[10px] text-slate-500">24 ساعة لكل يوم</span>
           </div>
 
-          <div className="divide-y divide-white/[0.05]">
+          <div className="divide-y divide-slate-100">
             {dailyList.map((day, idx) => {
               const desc        = getWeatherDescription(day.wmo);
               const dayName     = getArabicDayName(day.date, idx);
@@ -454,13 +457,13 @@ export default function FarmerWeatherClient({
                   <button
                     type="button"
                     onClick={() => setExpandedDate(prev => prev === day.date ? null : day.date)}
-                    className={`w-full flex items-center gap-2.5 px-4 py-3.5 text-right transition-all hover:bg-white/[0.04] active:bg-white/[0.08] cursor-pointer ${
-                      isToday ? 'bg-white/[0.02]' : ''
-                    } ${isExpanded ? 'bg-white/[0.06]' : ''}`}
+                    className={`w-full flex items-center gap-2.5 px-4 py-3.5 text-right transition-all hover:bg-slate-50 active:bg-slate-100 cursor-pointer ${
+                      isToday ? 'bg-emerald-50/30' : ''
+                    } ${isExpanded ? 'bg-slate-50' : ''}`}
                   >
                     {/* Day name */}
-                    <span className={`text-xs font-bold w-[54px] text-right flex-shrink-0 ${
-                      isToday ? 'text-emerald-400' : 'text-slate-200'
+                    <span className={`text-xs font-black w-[54px] text-right flex-shrink-0 ${
+                      isToday ? 'text-emerald-800' : 'text-slate-900'
                     }`}>
                       {dayName}
                     </span>
@@ -471,19 +474,19 @@ export default function FarmerWeatherClient({
                     {/* Rain probability */}
                     <div className="w-10 flex-shrink-0 text-right">
                       {day.precip_prob >= 10 && (
-                        <span className="text-[10px] text-blue-400 font-medium tabular-nums">
+                        <span className="text-[10px] text-blue-600 font-bold font-mono">
                           💧{day.precip_prob}%
                         </span>
                       )}
                     </div>
 
                     {/* Low temp */}
-                    <span className="text-[11px] text-slate-500 tabular-nums w-7 text-right flex-shrink-0">
+                    <span className="text-[11px] text-slate-500 font-mono w-7 text-right flex-shrink-0 font-medium">
                       {Math.round(day.temp_min)}°
                     </span>
 
                     {/* Gradient temperature bar */}
-                    <div className="flex-1 relative h-1.5 bg-white/[0.08] rounded-full">
+                    <div className="flex-1 relative h-1.5 bg-slate-100 rounded-full">
                       <div
                         className="absolute top-0 h-full rounded-full"
                         style={{
@@ -495,37 +498,37 @@ export default function FarmerWeatherClient({
                     </div>
 
                     {/* High temp */}
-                    <span className="text-[11px] text-slate-200 tabular-nums font-semibold w-7 flex-shrink-0">
+                    <span className="text-[11px] text-slate-900 font-mono font-black w-7 flex-shrink-0">
                       {Math.round(day.temp_max)}°
                     </span>
 
                     {/* Chevron indicator */}
                     <ChevronDown
                       className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${
-                        isExpanded ? 'rotate-180 text-emerald-400' : ''
+                        isExpanded ? 'rotate-180 text-emerald-700' : ''
                       }`}
                     />
                   </button>
 
                   {/* ── EXPANDED DAY DETAILS ACCORDION ── */}
                   {isExpanded && (
-                    <div className="px-4 py-3.5 bg-slate-950/80 border-t border-b border-white/[0.08] space-y-3">
+                    <div className="px-4 py-3.5 bg-slate-50/80 border-t border-b border-slate-200/80 space-y-3">
                       {/* Header row */}
                       <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-emerald-400 font-bold">
+                          <span className="text-emerald-800 font-black">
                             🌤️ تفاصيل ساعات {dayName}
                           </span>
                           <span className="text-slate-500 text-[11px]">
                             ({desc.label})
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                          <span className="bg-white/[0.05] px-2 py-0.5 rounded-full border border-white/[0.08]">
+                        <div className="flex items-center gap-2 text-[11px] text-slate-600">
+                          <span className="bg-white px-2 py-0.5 rounded-full border border-slate-200 font-bold font-mono">
                             العظمى {Math.round(day.temp_max)}° / الصغرى {Math.round(day.temp_min)}°
                           </span>
                           {day.precip_prob > 0 && (
-                            <span className="bg-blue-500/10 text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/20">
+                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 font-bold font-mono">
                               💧 مطر {day.precip_prob}%
                             </span>
                           )}
@@ -547,33 +550,33 @@ export default function FarmerWeatherClient({
                             return (
                               <div
                                 key={h.time}
-                                className={`flex-shrink-0 snap-start rounded-2xl p-2.5 w-[62px] text-center flex flex-col items-center gap-1 transition-all ${
+                                className={`flex-shrink-0 snap-start rounded-2xl p-2.5 w-[62px] text-center flex flex-col items-center gap-1 transition-all border ${
                                   isCurrentHour
-                                    ? 'bg-white shadow-lg shadow-white/10 scale-[1.05]'
+                                    ? 'bg-emerald-600 border-emerald-700 text-white shadow-xs scale-[1.03]'
                                     : isPast
-                                    ? 'bg-white/[0.03] border border-white/[0.04] opacity-30'
-                                    : 'bg-white/[0.06] border border-white/[0.08]'
+                                    ? 'bg-white border-slate-200 opacity-40'
+                                    : 'bg-white border-slate-200 hover:border-slate-300'
                                 }`}
                               >
-                                <span className={`text-[11px] font-medium leading-tight ${
-                                  isCurrentHour ? 'text-slate-600' : 'text-slate-400'
+                                <span className={`text-[11px] font-bold leading-tight ${
+                                  isCurrentHour ? 'text-emerald-100' : 'text-slate-500'
                                 }`}>
                                   {isCurrentHour ? 'الآن' : `${hour}:00`}
                                 </span>
                                 <span className="text-base leading-none">
                                   {getHourIcon(hour, h.wmo)}
                                 </span>
-                                <span className={`text-sm font-bold tabular-nums leading-tight ${
-                                  isCurrentHour ? 'text-slate-900' : 'text-slate-200'
+                                <span className={`text-sm font-black font-mono leading-tight ${
+                                  isCurrentHour ? 'text-white' : 'text-slate-900'
                                 }`}>
                                   {Math.round(h.temp)}°
                                 </span>
-                                <div className={`text-[10px] flex flex-col items-center gap-0.5 leading-tight ${
-                                  isCurrentHour ? 'text-slate-600' : 'text-slate-500'
+                                <div className={`text-[10px] flex flex-col items-center gap-0.5 leading-tight font-medium ${
+                                  isCurrentHour ? 'text-emerald-100' : 'text-slate-600'
                                 }`}>
                                   <span>💨 {Math.round(h.wind)}</span>
                                   {h.precip_prob > 0 && (
-                                    <span className={isCurrentHour ? 'text-blue-700' : 'text-blue-400'}>
+                                    <span className={isCurrentHour ? 'text-cyan-200' : 'text-blue-600'}>
                                       💧{h.precip_prob}%
                                     </span>
                                   )}
