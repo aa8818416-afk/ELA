@@ -31,7 +31,6 @@ export default function FarmerRegistrationModal({ supervisedVillages }: FarmerRe
     } else {
       setIsOpen(false);
       setIsLoading(false);
-      // Wait a moment for server to revalidate and refresh UI
     }
   }
 
@@ -39,44 +38,44 @@ export default function FarmerRegistrationModal({ supervisedVillages }: FarmerRe
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="bg-amber-600 hover:bg-amber-500 text-white font-medium px-4 py-2 rounded-xl transition-all flex items-center gap-2"
+        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition-all flex items-center gap-2 border border-emerald-700 shadow-xs active:scale-95"
       >
-        <UserPlus className="w-5 h-5" />
+        <UserPlus className="w-4 h-4" />
         تسجيل فلاح جديد
       </button>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
         <button
           onClick={() => setIsOpen(false)}
-          className="absolute top-4 left-4 text-slate-400 hover:text-white transition-colors"
+          className="absolute top-4 left-4 text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
         >
-          <X className="w-6 h-6" />
+          <X className="w-5 h-5" />
         </button>
 
-        <h3 className="text-xl font-bold text-white mb-6">تسجيل فلاح جديد</h3>
+        <h3 className="text-lg font-bold text-slate-900 mb-5">تسجيل فلاح جديد</h3>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* الاسم */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1">
               الاسم بالكامل
             </label>
             <input
               name="fullName"
               type="text"
               required
-              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
               placeholder="مثال: محمد أحمد"
             />
           </div>
 
           {/* الهاتف */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1">
               رقم الهاتف
             </label>
             <input
@@ -84,23 +83,23 @@ export default function FarmerRegistrationModal({ supervisedVillages }: FarmerRe
               type="tel"
               required
               dir="ltr"
-              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-right"
+              className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 text-right font-medium"
               placeholder="01xxxxxxxxx"
             />
           </div>
 
-          {/* القرية — Dropdown إجباري لو متعدد، يُخفى لو قرية واحدة (تُورَّث تلقائيًا) */}
+          {/* القرية */}
           {requireVillageSelection ? (
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
-                القرية <span className="text-red-400">*</span>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                القرية <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <select
                   name="village"
                   required
                   defaultValue=""
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 appearance-none"
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium appearance-none"
                 >
                   <option value="" disabled>اختر القرية...</option>
                   {supervisedVillages.map((v) => (
@@ -111,25 +110,24 @@ export default function FarmerRegistrationModal({ supervisedVillages }: FarmerRe
               </div>
             </div>
           ) : (
-            /* قرية واحدة أو بدون قرية — تُورَّث تلقائيًا، نمرر القيمة المخفية للـ action */
             supervisedVillages.length === 1 && (
               <input type="hidden" name="village" value={supervisedVillages[0]} />
             )
           )}
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-xl p-3">
-              {error}
+            <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl p-3">
+              ⚠️ {error}
             </div>
           )}
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-amber-900 disabled:cursor-not-allowed text-white font-semibold rounded-xl py-3 mt-2 flex items-center justify-center gap-2 transition-colors"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl py-3 text-xs mt-2 flex items-center justify-center gap-2 transition-all shadow-xs border border-emerald-700 active:scale-95"
           >
             {isLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               "حفظ بيانات الفلاح"
             )}

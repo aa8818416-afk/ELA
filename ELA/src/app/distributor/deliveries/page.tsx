@@ -24,7 +24,7 @@ export default async function DeliveriesPage() {
       total_price,
       status,
       farmers (
-        profiles (full_name)
+        profiles (full_name, phone)
       ),
       order_items (
         id,
@@ -70,6 +70,7 @@ export default async function DeliveriesPage() {
       total_price: order.total_price,
       status: order.status,
       farmer_name: profileObj?.full_name || "اسم غير معروف",
+      farmer_phone: profileObj?.phone || null,
       village: null,
       items_count: items.length,
       items,
@@ -78,3 +79,4 @@ export default async function DeliveriesPage() {
 
   return <DeliveriesClient allOrders={allOrders} />;
 }
+

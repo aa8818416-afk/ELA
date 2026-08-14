@@ -93,12 +93,19 @@ export default async function OrdersPage() {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
       {/* Left Column - Order Form */}
-      <div className="xl:col-span-2">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-white mb-2">طلب جديد</h2>
-          <p className="text-slate-400 text-sm">
-            قم بإصدار طلبات للفلاحين التابعين لك، وسيتم تجميعها لخصومات القرية
-          </p>
+      <div className="xl:col-span-2 space-y-6">
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-slate-900">إصدار طلبات الفلاحين والشراء الجماعي</h2>
+              <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
+                مباشر
+              </span>
+            </div>
+            <p className="text-slate-500 text-xs mt-1">
+              قم بإصدار طلبات للفلاحين التابعين لك، وسيتم تجميعها تلقائياً لاحتساب خصومات القرية
+            </p>
+          </div>
         </div>
 
         <OrderForm farmers={farmers} products={products} />
@@ -106,20 +113,25 @@ export default async function OrdersPage() {
 
       {/* Right Column - Group Buying Status */}
       <div className="xl:col-span-1 space-y-6">
-        <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 relative overflow-hidden">
-          {/* Decorative background element */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-
-          <h3 className="text-lg font-bold text-white mb-4 relative z-10">
-            خصم الكمية الجماعي 🏆
-          </h3>
+        <div className="bg-white border border-slate-200/90 rounded-3xl p-6 relative overflow-hidden shadow-xs">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <span>🏆</span>
+              <span>عروض الشراء الجماعي النشطة</span>
+            </h3>
+            <span className="text-[10px] bg-amber-50 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">
+              قريتك
+            </span>
+          </div>
 
           {activeCampaigns.length === 0 ? (
-            <p className="text-slate-400 text-sm relative z-10">
-              لا توجد عروض شراء جماعي نشطة حالياً في قريتك.
-            </p>
+            <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80 text-center">
+              <p className="text-slate-500 text-xs">
+                لا توجد عروض شراء جماعي نشطة حالياً في قريتك.
+              </p>
+            </div>
           ) : (
-            <div className="space-y-6 relative z-10">
+            <div className="space-y-5">
               {activeCampaigns.map((camp: any) => {
                 const currentVolume = productVolumes[camp.product_id] || 0;
                 
@@ -152,41 +164,48 @@ export default async function OrdersPage() {
                 const remaining = nextTargetQty ? nextTargetQty - currentVolume : 0;
 
                 return (
-                  <div key={camp.id} className="border-b border-slate-800/40 pb-4 last:border-0 last:pb-0">
-                    <h4 className="font-bold text-white text-sm mb-1">{camp.products?.name_ar}</h4>
+                  <div key={camp.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="font-bold text-slate-900 text-xs leading-snug">{camp.products?.name_ar}</h4>
+                      {activeDiscount > 0 && (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                          مفعل {activeDiscount}%
+                        </span>
+                      )}
+                    </div>
                     
                     {nextTargetQty ? (
-                      <p className="text-slate-400 text-xs mb-3 leading-relaxed">
-                        مبيعات قريتك الحالية ({currentVolume} عبوة) تقترب من تفعيل خصم <span className="text-amber-400 font-bold">%{nextTargetDiscount}</span> للجميع.
+                      <p className="text-slate-600 text-xs leading-relaxed">
+                        مبيعات قريتك الحالية ({currentVolume} عبوة) تقترب من تفعيل خصم <span className="text-amber-700 font-bold">%{nextTargetDiscount}</span> للجميع.
                       </p>
                     ) : (
-                      <p className="text-emerald-400 text-xs mb-3 font-bold">
+                      <p className="text-emerald-800 text-xs font-bold bg-emerald-50 p-2 rounded-xl border border-emerald-200">
                         🎉 مبروك! حققت قريتك الحد الأقصى للخصم (%{activeDiscount}) للجميع!
                       </p>
                     )}
 
                     <div>
-                      <div className="flex justify-between text-xs mb-1.5 font-medium">
-                        <span className="text-slate-300">{currentVolume} عبوة</span>
-                        <span className="text-amber-500">
-                          {nextTargetQty ? `الهدف التالي: ${nextTargetQty}` : `الهدف الأقصى: ${maxTarget}`}
+                      <div className="flex justify-between text-xs mb-1.5 font-semibold">
+                        <span className="text-slate-700">{currentVolume} عبوة مسجلة</span>
+                        <span className="text-emerald-800 font-mono">
+                          {nextTargetQty ? `الهدف: ${nextTargetQty}` : `الحد الأقصى: ${maxTarget}`}
                         </span>
                       </div>
                       
                       {/* Progress Bar */}
-                      <div className="w-full h-3.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                      <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden border border-slate-300">
                         <div
                           className={`h-full rounded-full transition-all duration-1000 ease-out ${
                             nextTargetQty === null
-                              ? "bg-gradient-to-l from-emerald-400 to-emerald-600"
-                              : "bg-gradient-to-l from-amber-400 to-amber-600"
+                              ? "bg-gradient-to-l from-emerald-500 to-emerald-700"
+                              : "bg-gradient-to-l from-amber-500 to-emerald-600"
                           }`}
                           style={{ width: `${progressPercent}%` }}
                         ></div>
                       </div>
                       
                       {nextTargetQty && (
-                        <p className="text-center text-amber-500/80 text-[10px] mt-2 font-medium">
+                        <p className="text-center text-amber-800 text-[11px] mt-2 font-bold bg-amber-50/70 p-1.5 rounded-lg border border-amber-200">
                           متبقي {remaining} عبوة لتفعيل خصم %{nextTargetDiscount}!
                         </p>
                       )}
@@ -199,11 +218,11 @@ export default async function OrdersPage() {
         </div>
 
         {/* Info Card */}
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-3xl p-6">
-          <h4 className="text-blue-400 font-bold text-sm mb-2 flex items-center gap-2">
+        <div className="bg-emerald-50/70 border border-emerald-200 rounded-3xl p-6 shadow-xs">
+          <h4 className="text-emerald-900 font-bold text-sm mb-2 flex items-center gap-2">
             💡 كيف يعمل الشراء الجماعي؟
           </h4>
-          <p className="text-slate-400 text-xs leading-relaxed">
+          <p className="text-slate-600 text-xs leading-relaxed">
             عندما تقوم بتجميع طلبات من عدة فلاحين في نفس القرية لنفس المنتج وتصل للحد الأدنى للكمية، سيتم تطبيق الخصم التلقائي وإضافته لمحفظتك فوراً بعد التحصيل.
           </p>
         </div>

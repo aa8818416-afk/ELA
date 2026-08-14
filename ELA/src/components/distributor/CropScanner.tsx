@@ -16,6 +16,15 @@ import {
   VolumeX,
   Globe,
   ExternalLink,
+  AlertTriangle,
+  MapPin,
+  Sparkles,
+  CheckCircle2,
+  ShoppingCart,
+  Phone,
+  MessageCircle,
+  Radio,
+  Layers
 } from "lucide-react";
 import {
   useAudioRecorder,
@@ -25,46 +34,64 @@ import {
 } from "@/utils/speech";
 import ProductRecommendationCard from "@/components/chat/ProductRecommendationCard";
 import type { RecommendedProduct } from "@/components/chat/QuickOrderModal";
+import { ZoomableImage } from "@/components/ui/ImageModal";
 
 type ChatMessage = {
   id: string;
   role: "user" | "model";
   content: string;
-  /** Image specifically attached to this message turn (already compressed base64) */
   chatImagePreview?: string;
   recommendedProduct?: RecommendedProduct;
   sources?: Array<{ title: string; url: string }>;
 };
 
-type FailedPayload = {
-  message: string;
-  history: { role: "user" | "model"; content: string; imageBase64?: string }[];
-  imageBase64?: string;
+type FarmerOption = {
+  id: string;
+  name: string;
+  phone: string;
 };
 
-export default function CropScanner() {
-  // Follow-up chat state - persistent from the start
+type OutbreakItem = {
+  id: string;
+  riskType: string;
+  severity: "critical" | "moderate" | "preventive";
+  status: string;
+  createdAt: string;
+  fieldName: string;
+  cropType: string;
+  farmerName: string;
+};
+
+export default function CropScanner({
+  farmers = [],
+  outbreaks = [],
+  distributorId,
+}: {
+  farmers?: FarmerOption[];
+  outbreaks?: OutbreakItem[];
+  distributorId?: string;
+}) {
+  const [selectedFarmerId, setSelectedFarmerId] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<"scanner" | "outbreaks">("scanner");
+
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
       role: "model",
-      content: "أهلاً بك يا سفير قريتنا 🌾! يمكنك استخدام هذه الدردشة مباشرة لمناقشة أي استفسار زراعي، أو التقاط صورة فورا بالكاميرا وتوفيرها للذكاء الاصطناعي للمساعدة في تشخيص المرض وحجز العلاج.",
-    }
+      content:
+        "أهلاً بك يا سفير قريتنا 🌾! يمكنك التقاط صورة للورقة المصابة أو طرح أي استفسار زراعي لتشخيصه بالذكاء الاصطناعي فوراً. كما يمكنك ربط التشخيص بالمزارع لحفظه في ملف أرضه.",
+    },
   ]);
   const [chatInput, setChatInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [activeSpeechId, setActiveSpeechId] = useState<string | null>(null);
-  
-  // Image attached inside chat
+
   const [chatAttachedImage, setChatAttachedImage] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const chatImageGalleryInputRef = useRef<HTMLInputElement>(null);
   const chatImageCameraInputRef = useRef<HTMLInputElement>(null);
-
-  // Stores the last failed request so we can retry it
-  const [failedPayload, setFailedPayload] = useState<FailedPayload | null>(null);
 
   const {
     isRecording,
@@ -75,7 +102,6 @@ export default function CropScanner() {
     stopRecording,
   } = useAudioRecorder();
 
-  // Scroll chat to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, isChatLoading]);
@@ -86,145 +112,122 @@ export default function CropScanner() {
     };
   }, []);
 
-  // Auto-resize textarea whenever chatInput changes
   const autoResize = useCallback(() => {
     const el = chatInputRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 144) + "px";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
   }, []);
 
   useEffect(() => {
     autoResize();
   }, [chatInput, autoResize]);
 
-  // Compress image helper
-  function compressImage(
-    dataUrl: string,
-    maxWidth = 768,
-    quality = 0.65
-  ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const img = new window.Image();
-      img.onload = () => {
-        const ratio = Math.min(maxWidth / img.width, maxWidth / img.height, 1);
-        const w = Math.round(img.width * ratio);
-        const h = Math.round(img.height * ratio);
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) { reject("Canvas not supported"); return; }
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-      img.onerror = () => reject("Failed to load image");
-      img.src = dataUrl;
-    });
-  }
-
-  // Handlers for attaching an image inside the chat
-  const handleChatImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // Handle Image Upload & Compression
+  const handleImageFile = (file: File) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      setChatAttachedImage(ev.target?.result as string);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        const maxDimension = 1024;
+
+        if (width > height && width > maxDimension) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else if (height > maxDimension) {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const compressed = canvas.toDataURL("image/jpeg", 0.85);
+        setChatAttachedImage(compressed);
+      };
+      img.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
-    if (chatImageGalleryInputRef.current) chatImageGalleryInputRef.current.value = "";
-    if (chatImageCameraInputRef.current) chatImageCameraInputRef.current.value = "";
   };
 
-  const removeChatAttachedImage = () => setChatAttachedImage(null);
+  // Send Message / Scan
+  const handleSendMessage = async (customMessage?: string) => {
+    const text = (customMessage !== undefined ? customMessage : chatInput).trim();
+    const imageToSend = chatAttachedImage;
 
-  // Core API call shared for retry
-  const callChatApi = async (payload: FailedPayload) => {
-    setIsChatLoading(true);
-    setChatError(null);
-    setFailedPayload(null);
+    if (!text && !imageToSend) return;
 
-    try {
-      const res = await fetch("/api/crop-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    const userMessageId = "msg-" + Date.now();
+    const newUserMessage: ChatMessage = {
+      id: userMessageId,
+      role: "user",
+      content: text || "قام السفير بإرفاق صورة لفحصها بالذكاء الاصطناعي",
+      chatImagePreview: imageToSend || undefined,
+    };
 
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        setChatError(data.error || "حدث خطأ، حاول مرة أخرى");
-        setFailedPayload(payload);
-      } else {
-        const newMsgId = `m-${Date.now()}`;
-        setChatMessages((prev) => [
-          ...prev,
-          { id: newMsgId, role: "model", content: data.text, recommendedProduct: data.recommendedProduct || undefined, sources: data.sources || undefined },
-        ]);
-
-        // Auto-play the AI response if TTS is supported
-        if (isTtsSupported()) {
-          handleSpeak(data.text, newMsgId);
-        }
-      }
-    } catch {
-      setChatError("تعذر الاتصال، تأكد من الإنترنت");
-      setFailedPayload(payload);
-    } finally {
-      setIsChatLoading(false);
-    }
-  };
-
-  // ── Follow-up chat send ─────────────────────────────────────────────────
-  const handleChatSend = async (textOverride?: string) => {
-    const text = (textOverride ?? chatInput).trim();
-    if (!text && !chatAttachedImage) return;
-    if (isChatLoading) return;
-
-    let compressedImageToSend: string | undefined = undefined;
-    if (chatAttachedImage) {
-      try {
-        compressedImageToSend = await compressImage(chatAttachedImage);
-      } catch {
-        compressedImageToSend = chatAttachedImage;
-      }
-    }
-
-    const chatImagePreview = chatAttachedImage || undefined;
-
+    setChatMessages((prev) => [...prev, newUserMessage]);
     setChatInput("");
     setChatAttachedImage(null);
+    setIsChatLoading(true);
+    setChatError(null);
 
-    const userMsg: ChatMessage = {
-      id: `u-${Date.now()}`,
-      role: "user",
-      content: text || "📷",
-      chatImagePreview,
-    };
-    const updatedMessages = [...chatMessages, userMsg];
-    setChatMessages(updatedMessages);
-
-    const historyForApi = updatedMessages
+    const historyForApi = chatMessages
       .filter((m) => m.id !== "welcome")
-      .slice(0, -1) // exclude last user msg (sent as `message`)
       .map((m) => ({
         role: m.role,
         content: m.content,
         imageBase64: m.chatImagePreview,
       }));
 
-    const payload: FailedPayload = {
-      message: text || "انظر إلى الصورة المرفقة وأخبرني بما تراه من إصابات أو أمراض",
-      history: historyForApi,
-      imageBase64: compressedImageToSend,
-    };
+    try {
+      const response = await fetch("/api/crop-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          history: historyForApi,
+          imageBase64: imageToSend || undefined,
+          targetFarmerId: selectedFarmerId || undefined,
+          userRole: "distributor",
+        }),
+      });
 
-    await callChatApi(payload);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "فشل الاتصال بالذكاء الاصطناعي الزراعي");
+      }
+
+      const newBotMessage: ChatMessage = {
+        id: "bot-" + Date.now(),
+        role: "model",
+        content: data.reply || "تم إتمام الفحص والتشخيص بنجاح.",
+        recommendedProduct: data.recommendedProduct,
+        sources: data.sources,
+      };
+
+      setChatMessages((prev) => [...prev, newBotMessage]);
+    } catch (err: any) {
+      setChatError(err.message || "حدث خطأ أثناء الفحص.");
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
-  const handleRetry = () => {
-    if (!failedPayload) return;
-    callChatApi(failedPayload);
+  const handleTtsToggle = (msgId: string, text: string) => {
+    if (activeSpeechId === msgId) {
+      stopSpeaking();
+      setActiveSpeechId(null);
+    } else {
+      speakArabic(text, () => setActiveSpeechId(null));
+      setActiveSpeechId(msgId);
+    }
   };
 
   const handleMicClick = async () => {
@@ -237,313 +240,371 @@ export default function CropScanner() {
     }
   };
 
-  const handleSpeak = (text: string, msgId: string) => {
-    if (activeSpeechId === msgId) {
-      stopSpeaking();
-      setActiveSpeechId(null);
-    } else {
-      setActiveSpeechId(msgId);
-      speakArabic(
-        text,
-        () => setActiveSpeechId(msgId),
-        () => setActiveSpeechId(msgId),
-        () => setActiveSpeechId(null)
-      );
-    }
-  };
-
   return (
-    <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-4 lg:p-6 max-w-3xl mx-auto space-y-4">
-      {/* ── Follow-up Chat directly underneath ── */}
-      <div className="border border-slate-800 rounded-2xl overflow-hidden shadow-lg bg-slate-955/40 flex flex-col" style={{ minHeight: "65vh" }}>
-        {/* Header */}
-        <div className="flex items-center gap-2.5 px-4 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
-          <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-            <Bot className="w-4.5 h-4.5 text-emerald-400" />
-          </div>
-          <div>
-            <p className="text-white text-sm font-bold">المرشد الزراعي الذكي (سفير القرية)</p>
-            <p className="text-slate-550 text-xs">اسأل المرشد أو صوّر الإصابة مباشرة لمساعدتك</p>
-          </div>
+    <div className="space-y-6">
+      {/* 1. Station Tabs Switcher (Model B Village Outbreaks vs Model A Fast Scanner) */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1.5 p-1 bg-white border border-slate-200 rounded-2xl shadow-2xs">
+          <button
+            onClick={() => setActiveTab("scanner")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "scanner"
+                ? "bg-emerald-600 text-white shadow-xs border border-emerald-700"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Camera className="w-3.5 h-3.5" />
+            <span>الفحص والتشخيص الذكي المباشر</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("outbreaks")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "outbreaks"
+                ? "bg-emerald-600 text-white shadow-xs border border-emerald-700"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5 text-amber-300" />
+            <span>خريطة بؤر الآفات بالقرية</span>
+            {outbreaks.length > 0 && (
+              <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded-md font-bold">
+                {outbreaks.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/40">
-          {chatMessages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-2.5 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-            >
-              <div
-                className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center ${
-                  msg.role === "model"
-                    ? "bg-emerald-500/10 border border-emerald-500/20"
-                    : "bg-slate-700"
-                }`}
-              >
-                {msg.role === "model" ? (
-                  <Bot className="w-4 h-4 text-emerald-400" />
-                ) : (
-                  <User className="w-4 h-4 text-slate-300" />
-                )}
-              </div>
-              <div className={`max-w-[80%] flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}>
-                {msg.chatImagePreview && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={msg.chatImagePreview}
-                    alt="صورة مرفقة"
-                    className="w-48 h-36 object-cover rounded-xl border border-slate-750 shadow-md"
-                  />
-                )}
-                {msg.content && msg.content !== "📷" && (
-                  <div
-                    className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed relative ${
-                      msg.role === "model"
-                        ? "bg-slate-800 text-slate-200 rounded-tl-sm"
-                        : "bg-emerald-600 text-white rounded-tr-sm"
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+        {/* Farmer Link Indicator */}
+        {selectedFarmerId ? (
+          <span className="text-xs bg-emerald-50 text-emerald-800 font-bold px-3 py-1.5 rounded-xl border border-emerald-200 flex items-center gap-1">
+            <User className="w-3.5 h-3.5 text-emerald-600" />
+            مرتبط بـ: {farmers.find((f) => f.id === selectedFarmerId)?.name}
+          </span>
+        ) : (
+          <span className="text-xs text-slate-500 font-medium">فحص عام / غير مرتبط بمزارع محدد</span>
+        )}
+      </div>
 
-                    {/* Product Recommendation Card */}
-                    {msg.role === "model" && msg.recommendedProduct && (
-                      <ProductRecommendationCard product={msg.recommendedProduct} userRole="distributor" />
-                    )}
-
-                    {/* Web Search Grounding Sources */}
-                    {msg.role === "model" && msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-3 pt-2.5 border-t border-slate-700/60 text-xs">
-                        <div className="flex items-center gap-1.5 text-emerald-400 font-medium mb-1.5">
-                          <Globe className="w-3.5 h-3.5 shrink-0" />
-                          <span>المصادر ومراجع البحث في الويب:</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {msg.sources.map((source, idx) => (
-                            <a
-                              key={idx}
-                              href={source.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 bg-slate-900/80 hover:bg-slate-900 border border-slate-700/80 hover:border-emerald-500/50 text-slate-300 hover:text-emerald-400 text-[11px] px-2.5 py-1 rounded-lg transition-colors"
-                              title={source.url}
-                            >
-                              <span className="truncate max-w-[180px]">{source.title}</span>
-                              <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* TTS Speaker icon for model replies */}
-                    {msg.role === "model" && isTtsSupported() && (
-                      <button
-                        onClick={() => handleSpeak(msg.content, msg.id)}
-                        className={`absolute -bottom-3 -left-3 p-1.5 rounded-full border shadow-md transition-colors ${activeSpeechId === msg.id
-                          ? "bg-emerald-500 text-white border-emerald-400"
-                          : "bg-slate-800 text-slate-400 hover:text-white border-slate-700 hover:bg-slate-700"
-                          }`}
-                        title={activeSpeechId === msg.id ? "إيقاف الصوت" : "قراءة الرسالة بصوت عالي"}
-                      >
-                        {activeSpeechId === msg.id ? (
-                          <VolumeX className="w-4 h-4" />
-                        ) : (
-                          <Volume2 className="w-4 h-4" />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {/* Typing indicator */}
-          {isChatLoading && (
-            <div className="flex gap-2.5">
-              <div className="w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                <Bot className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="bg-slate-800 px-4 py-3 rounded-2xl rounded-tl-sm">
-                <div className="flex gap-1 items-center">
-                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:300ms]" />
+      {/* 2. TAB 1: FAST SCANNER & DIAGNOSTICS */}
+      {activeTab === "scanner" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: Fast Action Upload Card + Farmer Selector */}
+          <div className="lg:col-span-1 space-y-4">
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center justify-center font-bold">
+                  🌿
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">فحص عينة ورقة مصابة</h3>
+                  <p className="text-[11px] text-slate-500">التقاط أو سحب صورة للتشخيص</p>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Audio transcribing indicator */}
-          {transcribing && (
-            <div className="flex gap-2.5 mr-auto flex-row-reverse">
-              <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-slate-700">
-                <User className="w-4 h-4 text-slate-300" />
-              </div>
-              <div className="bg-slate-800 px-4 py-3 rounded-2xl rounded-tr-sm">
-                <div className="flex gap-2 items-center text-slate-400 text-sm">
-                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                  <span>جاري ترجمة صوتك لنص...</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Errors display */}
-          {(chatError || recorderError) && (
-            <div className="flex flex-col items-center gap-2">
-              <p className="text-red-400 text-xs text-center bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2">
-                {chatError || recorderError}
-              </p>
-              {failedPayload && (
-                <button
-                  onClick={handleRetry}
-                  className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 px-4 py-2 rounded-xl transition-colors"
+              {/* Farmer Link Selector (Requirement from User) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span>ربط الفحص بمزارع:</span>
+                  {selectedFarmerId && (
+                    <button
+                      onClick={() => setSelectedFarmerId("")}
+                      className="text-[10px] text-red-600 hover:underline"
+                    >
+                      إلغاء الربط
+                    </button>
+                  )}
+                </label>
+                <select
+                  value={selectedFarmerId}
+                  onChange={(e) => setSelectedFarmerId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  إعادة الإرسال
+                  <option value="">-- فحص عام (بدون ربط) --</option>
+                  {farmers.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} {f.phone ? `(${f.phone})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400">
+                  عند ربط الفحص، سيتم حفظ التوصية في سجل أرض الفلاح تلقائياً
+                </p>
+              </div>
+
+              {/* Upload Dropzone */}
+              <div className="border-2 border-dashed border-slate-200 hover:border-emerald-500 rounded-2xl p-6 text-center bg-slate-50/70 transition-all space-y-3">
+                {chatAttachedImage ? (
+                  <div className="space-y-2">
+                    <img
+                      src={chatAttachedImage}
+                      alt="عينة الفحص"
+                      className="w-full h-36 object-cover rounded-xl border border-slate-300"
+                    />
+                    <button
+                      onClick={() => setChatAttachedImage(null)}
+                      className="text-xs text-red-600 hover:underline font-bold"
+                    >
+                      إزالة الصورة
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-800 flex items-center justify-center mx-auto shadow-2xs">
+                      <Camera className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">التقط صورة للورقة المصابة</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">يدعم الكاميرا المباشرة أو من المعرض</p>
+                    </div>
+                  </>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => chatImageCameraInputRef.current?.click()}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-2.5 rounded-xl border border-emerald-700 shadow-xs flex items-center justify-center gap-1 active:scale-95 transition-all"
+                  >
+                    <Camera className="w-3.5 h-3.5" /> كاميرا
+                  </button>
+                  <button
+                    onClick={() => chatImageGalleryInputRef.current?.click()}
+                    className="flex-1 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs py-2 px-2.5 rounded-xl border border-slate-300 shadow-xs flex items-center justify-center gap-1 active:scale-95 transition-all"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 text-slate-500" /> المعرض
+                  </button>
+                </div>
+
+                <input
+                  ref={chatImageCameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) handleImageFile(e.target.files[0]);
+                  }}
+                />
+                <input
+                  ref={chatImageGalleryInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) handleImageFile(e.target.files[0]);
+                  }}
+                />
+              </div>
+
+              {chatAttachedImage && (
+                <button
+                  onClick={() => handleSendMessage("يرجى تشخيص المرض الظاهر في هذه الصورة وتحديد خطة العلاج المناسبة")}
+                  disabled={isChatLoading}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold text-xs py-3 rounded-xl border border-emerald-700 shadow-xs flex items-center justify-center gap-1.5 active:scale-95"
+                >
+                  {isChatLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "بدء التحليل الفوري 🚀"}
                 </button>
               )}
             </div>
-          )}
-          <div ref={chatEndRef} />
-        </div>
-
-        {/* Chat-attached image preview */}
-        {chatAttachedImage && (
-          <div className="px-4 py-2 flex items-center gap-2 bg-slate-900 border-t border-slate-800 shrink-0">
-            <div className="relative inline-block">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={chatAttachedImage}
-                alt="صورة مرفقة"
-                className="w-16 h-12 object-cover rounded-xl border border-emerald-500/40"
-              />
-              <button
-                onClick={removeChatAttachedImage}
-                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-            <span className="text-slate-400 text-xs">صورة مرفقة جاهزة للإرسال</span>
           </div>
-        )}
 
-        {/* Input bar */}
-        <div className="border-t border-slate-800 px-3 pt-2 pb-3 flex flex-col bg-slate-900 shrink-0">
-          {/* Row 1: Textarea + Send (always visible, full width) */}
-          <div className="flex items-end gap-2 mb-2">
-            <textarea
-              ref={chatInputRef}
-              rows={1}
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleChatSend();
-                }
-              }}
-              placeholder={
-                isRecording
-                  ? "🎙️ جاري تسجيل صوتك..."
-                  : transcribing
-                  ? "⏳ جاري ترجمة صوتك..."
-                  : chatAttachedImage
-                  ? "اكتب سؤالك عن الصورة (اختياري)..."
-                  : "اسأل المرشد أو أرفق صورة..."
-              }
-              disabled={isChatLoading || transcribing}
-              className="flex-1 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 text-white placeholder-slate-500 rounded-2xl py-3 px-4 text-sm outline-none transition-colors disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
-              style={{ minHeight: "44px", maxHeight: "144px" }}
-            />
+          {/* Right Column: Interactive Diagnostic Chat & Diagnosis Station */}
+          <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/90 shadow-xs flex flex-col h-[600px] overflow-hidden">
+            {/* Chat Messages */}
+            <div className="flex-1 p-5 overflow-y-auto space-y-4">
+              {chatMessages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
+                >
+                  <div
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
+                      msg.role === "user"
+                        ? "bg-slate-900 text-white"
+                        : "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                    }`}
+                  >
+                    {msg.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                  </div>
 
-            <button
-              onClick={() => handleChatSend()}
-              disabled={isChatLoading || transcribing || (!chatInput.trim() && !chatAttachedImage)}
-              className="p-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-2xl transition-colors active:scale-95 shadow-lg flex items-center justify-center shrink-0 self-end"
-              aria-label="إرسال"
-            >
-              {isChatLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
+                  <div className="max-w-[85%] space-y-2">
+                    <div
+                      className={`p-4 rounded-2xl text-xs leading-relaxed ${
+                        msg.role === "user"
+                          ? "bg-slate-900 text-white rounded-tr-none"
+                          : "bg-slate-50 border border-slate-200 text-slate-900 rounded-tl-none"
+                      }`}
+                    >
+                      {msg.chatImagePreview && (
+                        <div className="mb-2">
+                          <img
+                            src={msg.chatImagePreview}
+                            alt="عينة"
+                            className="max-h-48 rounded-xl border border-slate-200 object-cover"
+                          />
+                        </div>
+                      )}
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+
+                      {msg.role === "model" && isTtsSupported() && (
+                        <button
+                          onClick={() => handleTtsToggle(msg.id, msg.content)}
+                          className="mt-2 text-[10px] text-slate-500 hover:text-emerald-700 flex items-center gap-1 font-bold"
+                        >
+                          {activeSpeechId === msg.id ? (
+                            <>
+                              <VolumeX className="w-3 h-3 text-red-500" /> إيقاف القراءة
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="w-3 h-3 text-emerald-600" /> استماع صوتي
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Recommended Product Quick Action */}
+                    {msg.recommendedProduct && (
+                      <ProductRecommendationCard product={msg.recommendedProduct} />
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {isChatLoading && (
+                <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs text-emerald-800 w-fit">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                  <span>طبيب المحاصيل يقوم بفحص الصورة وتحليل الأعراض...</span>
+                </div>
               )}
-            </button>
-          </div>
 
-          {/* Row 2: Camera / Gallery / Mic icons */}
-          <div className="flex items-center gap-2">
-            {/* Camera: instant capture */}
-            <button
-              type="button"
-              onClick={() => chatImageCameraInputRef.current?.click()}
-              disabled={isChatLoading || transcribing}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors text-xs"
-              title="التقاط صورة فورا بالكاميرا"
-            >
-              <Camera className="w-4 h-4" />
-              <span className="hidden sm:inline">كاميرا</span>
-            </button>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              ref={chatImageCameraInputRef}
-              onChange={handleChatImageSelect}
-              className="hidden"
-            />
+              {chatError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
+                  ⚠️ {chatError}
+                </div>
+              )}
 
-            {/* Gallery: pick from device */}
-            <button
-              type="button"
-              onClick={() => chatImageGalleryInputRef.current?.click()}
-              disabled={isChatLoading || transcribing}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors text-xs"
-              title="إرفاق صورة من الهاتف"
-            >
-              <FolderOpen className="w-4 h-4" />
-              <span className="hidden sm:inline">معرض</span>
-            </button>
-            <input
-              type="file"
-              accept="image/*"
-              ref={chatImageGalleryInputRef}
-              onChange={handleChatImageSelect}
-              className="hidden"
-            />
+              <div ref={chatEndRef} />
+            </div>
 
-            {/* Microphone button (Speech-to-Text via Groq Whisper) */}
-            {hasMic && (
+            {/* Input Bar */}
+            <div className="p-3 bg-slate-50/80 border-t border-slate-200 flex items-end gap-2">
+              <textarea
+                ref={chatInputRef}
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="اسأل المرشد الزراعي أو صف أعراض الإصابة..."
+                rows={1}
+                className="flex-1 bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              />
+
               <button
                 type="button"
                 onClick={handleMicClick}
-                disabled={isChatLoading || transcribing}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border transition-all duration-300 text-xs ${
+                disabled={transcribing}
+                className={`p-2.5 rounded-xl border transition-all ${
                   isRecording
-                    ? "bg-red-500 text-white border-red-400 animate-pulse"
-                    : "bg-slate-800 hover:bg-slate-700 text-slate-350 border-slate-700"
+                    ? "bg-red-600 text-white border-red-700 animate-pulse"
+                    : transcribing
+                    ? "bg-amber-100 text-amber-800 border-amber-300"
+                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-100"
                 }`}
-                title={isRecording ? "إيقاف التسجيل" : "تحدث بالصوت"}
+                title="تسجيل صوتي"
               >
-                {isRecording ? (
-                  <><Square className="w-4 h-4 fill-current" /><span>إيقاف</span></>
+                {transcribing ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-700" />
+                ) : isRecording ? (
+                  <Square className="w-4 h-4" />
                 ) : (
-                  <><Mic className="w-4 h-4" /><span className="hidden sm:inline">صوت</span></>
+                  <Mic className="w-4 h-4" />
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => handleSendMessage()}
+                disabled={isChatLoading || (!chatInput.trim() && !chatAttachedImage)}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white p-2.5 rounded-xl border border-emerald-700 shadow-xs transition-all active:scale-95"
+              >
+                <Send className="w-4 h-4 rotate-180" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. TAB 2: VILLAGE PEST OUTBREAK HEATMAP & ADVISORIES (Model B) */}
+      {activeTab === "outbreaks" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">سجل بؤر الآفات الزراعية المرصودة بالقرية</h3>
+                <p className="text-xs text-slate-500 mt-0.5">تتبع انتشار العدوى بين المزارعين لمنع تحولها لوباء في الحقول المجاورة</p>
+              </div>
+              <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+                محدث لحظياً
+              </span>
+            </div>
+
+            {outbreaks.length === 0 ? (
+              <div className="text-center py-12 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="text-4xl mb-2">🌿</div>
+                <h4 className="font-bold text-slate-900 text-sm">القرية نظيفة وخالية من بؤر الآفات</h4>
+                <p className="text-xs text-slate-500 mt-1">لم يتم تسجيل إصابات حرجة في حقول المزارعين هذا الأسبوع</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {outbreaks.map((outbreak) => (
+                  <div
+                    key={outbreak.id}
+                    className="p-5 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-3 hover:border-emerald-300 transition-all shadow-2xs"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center font-bold">
+                          ⚠️
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-sm">{outbreak.riskType}</h4>
+                          <p className="text-[11px] text-slate-500">🌾 {outbreak.cropType} • {outbreak.fieldName}</p>
+                        </div>
+                      </div>
+
+                      <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full border border-rose-200">
+                        {outbreak.severity === "critical" ? "إصابة حرجة" : "متوسطة"}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-700 flex items-center justify-between">
+                      <span>المزارع المتأثر: <strong className="text-slate-900">{outbreak.farmerName}</strong></span>
+                      <span className="text-slate-400 text-[10px]">{new Date(outbreak.createdAt).toLocaleDateString("ar-EG")}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => {
+                          setActiveTab("scanner");
+                          setChatInput(`أريد خطة علاجية عاجلة لبؤرة مرض ${outbreak.riskType} في محصول ${outbreak.cropType}`);
+                        }}
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 rounded-xl border border-emerald-700 shadow-2xs text-center transition-all active:scale-95"
+                      >
+                        استشارة الدواء الموصى به
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-
-          {isRecording && (
-            <p className="text-center text-[10px] text-red-400 animate-pulse mt-1.5">
-              الميكروفون نشط — انقر «إيقاف» عند الانتهاء
-            </p>
-          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

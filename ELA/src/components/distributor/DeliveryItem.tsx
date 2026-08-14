@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { markOrderDelivered } from "@/app/actions/distributor";
-import { Loader2, CheckCircle, Package, Clock, Calendar, UserCheck, Globe } from "lucide-react";
+import { Loader2, CheckCircle, Package, Clock, Calendar, UserCheck, Globe, MessageCircle, Phone, Check } from "lucide-react";
 import { ZoomableImage } from "@/components/ui/ImageModal";
 
 type OrderItemProp = {
@@ -16,6 +16,7 @@ type OrderProp = {
   id: string;
   total_price: number;
   farmer_name: string;
+  farmer_phone?: string | null;
   village: string | null;
   items_count: number;
   status: string;
@@ -75,25 +76,35 @@ export default function DeliveryItem({ order, onDelivered, onMarkSeen }: Deliver
   const isByDistributor = order.created_by_type === "distributor";
   const isUnseen = order.is_seen === false;
 
-  return (
-    <div className={`bg-slate-900/50 backdrop-blur-xl border ${isUnseen ? "border-rose-500/40 bg-slate-900/80 shadow-lg shadow-rose-500/5" : "border-slate-800"} rounded-3xl p-6 transition-colors ${isSuccess ? "opacity-50" : "hover:bg-slate-800/50"}`}>
-      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+  const whatsappMessage = encodeURIComponent(
+    `السلام عليكم يا حاج ${order.farmer_name}، بخصوص طلبك من منصة ELA (ال اي) بقيمة ${order.total_price} ج.م، الشحنة جاهزة للتسليم معك.`
+  );
 
-        <div className="flex gap-4 items-start">
+  return (
+    <div
+      className={`bg-white border ${
+        isUnseen ? "border-rose-300 ring-2 ring-rose-200/50 shadow-md" : "border-slate-200/90"
+      } rounded-3xl p-5 md:p-6 transition-all shadow-xs ${
+        isSuccess ? "opacity-60" : "hover:border-emerald-300"
+      }`}
+    >
+      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+        <div className="flex gap-3.5 items-start">
           {firstItemWithImage?.image_url ? (
             <ZoomableImage
               src={firstItemWithImage.image_url}
               alt={firstItemWithImage.name_ar}
-              className="w-14 h-14 rounded-2xl object-cover border border-slate-700/80 bg-slate-950 shrink-0"
+              className="w-14 h-14 rounded-2xl object-cover border border-slate-200 bg-slate-50 shrink-0 shadow-2xs"
             />
           ) : (
-            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 shrink-0">
-              <Package className="w-7 h-7 text-indigo-400" />
+            <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0 shadow-2xs">
+              <Package className="w-7 h-7" />
             </div>
           )}
+
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h4 className="text-white font-bold text-lg">{order.farmer_name}</h4>
+              <h4 className="text-slate-900 font-bold text-base">{order.farmer_name}</h4>
 
               {/* Unread / New Badge */}
               {isUnseen && (
@@ -101,19 +112,19 @@ export default function DeliveryItem({ order, onDelivered, onMarkSeen }: Deliver
                   type="button"
                   onClick={handleBadgeClick}
                   title="اضغط لتعليم هذا الطلب كـ مقروء"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 animate-pulse transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-200 animate-pulse cursor-pointer shadow-2xs"
                 >
-                  <span className="w-2 h-2 rounded-full bg-rose-500" />
-                  جديد (اضغط للشواهد)
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+                  جديد
                 </button>
               )}
-              
+
               {/* Source Badge */}
               <span
-                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
                   isByDistributor
-                    ? "bg-purple-500/10 text-purple-300 border-purple-500/20"
-                    : "bg-teal-500/10 text-teal-300 border-teal-500/20"
+                    ? "bg-purple-50 text-purple-800 border-purple-200"
+                    : "bg-teal-50 text-teal-800 border-teal-200"
                 }`}
               >
                 {isByDistributor ? (
@@ -130,8 +141,8 @@ export default function DeliveryItem({ order, onDelivered, onMarkSeen }: Deliver
               </span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-400 mb-2">
-              <span className="bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 font-semibold text-indigo-300">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mb-2">
+              <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 font-semibold text-slate-700">
                 {order.items_count} {order.items_count === 1 ? "صنف" : "أصناف"}
               </span>
               {order.village && (
@@ -143,8 +154,8 @@ export default function DeliveryItem({ order, onDelivered, onMarkSeen }: Deliver
               {formattedDateTime && (
                 <>
                   <span>•</span>
-                  <span className="inline-flex items-center gap-1 text-slate-400 bg-slate-950/60 px-2 py-0.5 rounded-md border border-slate-800/80">
-                    <Clock className="w-3 h-3 text-amber-400/80" />
+                  <span className="inline-flex items-center gap-1 text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200">
+                    <Clock className="w-3 h-3 text-amber-600" />
                     {formattedDateTime}
                   </span>
                 </>
@@ -153,17 +164,23 @@ export default function DeliveryItem({ order, onDelivered, onMarkSeen }: Deliver
 
             {/* List of items if available */}
             {order.items && order.items.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 mt-2">
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 {order.items.map((item) => (
-                  <div key={item.id} className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-2.5 py-1 rounded-xl text-xs text-slate-300">
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl text-xs text-slate-800 font-medium"
+                  >
                     {item.image_url ? (
                       <ZoomableImage
                         src={item.image_url}
                         alt={item.name_ar}
-                        className="w-5 h-5 rounded-md object-cover"
+                        className="w-4 h-4 rounded object-cover"
                       />
                     ) : null}
                     <span>{item.name_ar}</span>
+                    {item.quantity && item.quantity > 1 && (
+                      <span className="font-bold text-emerald-800">({item.quantity})</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -171,34 +188,65 @@ export default function DeliveryItem({ order, onDelivered, onMarkSeen }: Deliver
           </div>
         </div>
 
-        <div className="text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between items-center sm:items-end">
-          <div className="mb-2">
-            <p className="text-slate-400 text-xs mb-1">المطلوب تحصيله</p>
-            <p className="text-amber-400 font-bold text-xl">{order.total_price.toLocaleString()} ج.م</p>
+        {/* Price & Primary Delivery Action */}
+        <div className="text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between items-center sm:items-end gap-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+          <div>
+            <p className="text-slate-500 text-[11px] font-medium mb-0.5">المطلوب تحصيله</p>
+            <p className="text-emerald-800 font-black text-xl font-mono">
+              {Math.round(order.total_price).toLocaleString("ar-EG")} <span className="text-xs font-normal">ج.م</span>
+            </p>
           </div>
+
           <button
             onClick={handleMarkDelivered}
             disabled={isLoading || isSuccess}
-            className={`text-white text-sm font-bold px-4 py-2 rounded-xl flex items-center gap-2 transition-all ${isSuccess
-              ? "bg-emerald-800/60 cursor-not-allowed"
-              : "bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500"
-              }`}
+            className={`font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-xs border active:scale-95 ${
+              isSuccess
+                ? "bg-emerald-100 text-emerald-900 border-emerald-300 cursor-not-allowed"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700"
+            }`}
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : isSuccess ? (
-              <CheckCircle className="w-4 h-4 text-emerald-400" />
+              <Check className="w-4 h-4 text-emerald-700" />
             ) : (
-              <CheckCircle className="w-4 h-4" />
+              <Check className="w-4 h-4" />
             )}
-            {isSuccess ? "تم التأكيد" : "تأكيد التسليم"}
+            {isSuccess ? "تم التحصيل والتسليم" : "تأكيد التسليم والتحصيل"}
           </button>
         </div>
       </div>
 
+      {/* Addition from Model B: Direct WhatsApp & Phone Call Action Bar */}
+      <div className="flex items-center gap-2 pt-4 mt-4 border-t border-slate-100">
+        {order.farmer_phone ? (
+          <>
+            <a
+              href={`https://wa.me/2${order.farmer_phone}?text=${whatsappMessage}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold text-xs py-2 px-3 rounded-xl border border-emerald-200 flex items-center justify-center gap-1.5 transition-all shadow-2xs active:scale-95"
+            >
+              <MessageCircle className="w-3.5 h-3.5 text-emerald-700" />
+              واتساب الفلاح
+            </a>
+            <a
+              href={`tel:${order.farmer_phone}`}
+              className="flex-1 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs py-2 px-3 rounded-xl border border-slate-300 flex items-center justify-center gap-1.5 transition-all shadow-2xs active:scale-95"
+            >
+              <Phone className="w-3.5 h-3.5 text-slate-500" />
+              اتصال هاتف
+            </a>
+          </>
+        ) : (
+          <div className="text-[11px] text-slate-400">لا يوجد رقم هاتف مسجل لهذا المزارع</div>
+        )}
+      </div>
+
       {error && (
-        <div className="mt-4 text-red-400 text-sm bg-red-500/10 px-3 py-2 rounded-lg">
-          {error}
+        <div className="mt-3 text-red-700 text-xs bg-red-50 border border-red-200 px-3 py-2 rounded-xl">
+          ⚠️ {error}
         </div>
       )}
     </div>
