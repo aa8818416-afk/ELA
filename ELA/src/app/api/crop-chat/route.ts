@@ -30,22 +30,106 @@ interface RequestHistoryItem {
     imageBase64?: string;
 }
 
-function extractGroundingSources(candidate: any): Array<{ title: string; url: string }> {
-    if (!candidate) return [];
-    const groundingMeta = candidate.groundingMetadata;
-    if (!groundingMeta) return [];
-
-    const chunks = groundingMeta.groundingChunks || [];
+function extractGroundingSources(
+    candidate?: any,
+    rootData?: any,
+    fallbackText?: string
+): Array<{ title: string; url: string }> {
     const sources: Array<{ title: string; url: string }> = [];
     const seenUrls = new Set<string>();
 
-    for (const chunk of chunks) {
-        const uri = chunk.web?.uri || chunk.uri;
-        const title = chunk.web?.title || chunk.title || "مصدر خارجي";
-        if (uri && !seenUrls.has(uri)) {
-            seenUrls.add(uri);
-            sources.push({ title, url: uri });
+    const addSource = (rawUrl?: string, rawTitle?: string) => {
+        if (!rawUrl || typeof rawUrl !== "string") return;
+        const cleanUrl = rawUrl.trim();
+        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) return;
+        if (seenUrls.has(cleanUrl)) return;
+
+        let title = rawTitle?.trim() || "";
+        if (!title || title === "مصدر خارجي" || title === "Google Search") {
+            try {
+                const parsed = new URL(cleanUrl);
+                title = parsed.hostname.replace(/^www\./, "");
+            } catch {
+                title = "مصدر ويب";
+            }
         }
+        seenUrls.add(cleanUrl);
+        sources.push({ title, url: cleanUrl });
+    };
+
+    // 1. Check all candidate and root-level groundingMetadata structures
+    const groundingMeta =
+        candidate?.groundingMetadata ||
+        candidate?.grounding_metadata ||
+        rootData?.groundingMetadata ||
+        rootData?.grounding_metadata ||
+        rootData?.candidates?.[0]?.groundingMetadata ||
+        rootData?.candidates?.[0]?.grounding_metadata;
+
+    if (groundingMeta) {
+        const chunks =
+            groundingMeta.groundingChunks ||
+            groundingMeta.grounding_chunks ||
+            groundingMeta.searchChunks ||
+            groundingMeta.search_chunks ||
+            groundingMeta.webChunks ||
+            groundingMeta.web_chunks ||
+            [];
+
+        if (Array.isArray(chunks)) {
+            for (const chunk of chunks) {
+                const uri =
+                    chunk?.web?.uri ||
+                    chunk?.web?.url ||
+                    chunk?.uri ||
+                    chunk?.url ||
+                    chunk?.web_uri ||
+                    chunk?.web_url;
+
+                const title =
+                    chunk?.web?.title ||
+                    chunk?.title ||
+                    chunk?.web_title;
+
+                if (uri) {
+                    addSource(uri, title);
+                }
+            }
+        }
+
+        // Check searchEntryPoint rendered HTML content for embedded URLs
+        const renderedContent =
+            groundingMeta.searchEntryPoint?.renderedContent ||
+            groundingMeta.search_entry_point?.rendered_content;
+        if (renderedContent && typeof renderedContent === "string") {
+            const hrefMatches = renderedContent.matchAll(/href=["'](https?:\/\/[^"']+)["']/gi);
+            for (const m of hrefMatches) {
+                addSource(m[1]);
+            }
+        }
+    }
+
+    // 2. Check candidate parts for any inline web URLs or citations
+    const parts: any[] = candidate?.content?.parts || [];
+    for (const part of parts) {
+        if (part?.text && typeof part.text === "string") {
+            const urlMatches = part.text.matchAll(/https?:\/\/[^\s\)\>\]"']+/gi);
+            for (const m of urlMatches) {
+                addSource(m[0]);
+            }
+        }
+    }
+
+    // 3. Fallback: Parse explicit HTTP/HTTPS URLs from search result text
+    if (fallbackText && typeof fallbackText === "string") {
+        const urlMatches = fallbackText.matchAll(/https?:\/\/[^\s\)\>\]"']+/gi);
+        for (const m of urlMatches) {
+            addSource(m[0]);
+        }
+    }
+
+    if (sources.length > 0) {
+        console.log(`[crop-chat] 🌐 [extractGroundingSources] Successfully captured ${sources.length} sources:`, sources);
     }
 
     return sources;
@@ -183,7 +267,7 @@ async function executeGemmaSearch(
                 const textParts = parts.filter((p: any) => !p.thought && p.text).map((p: any) => p.text);
                 const resultText = textParts.join("\n").trim() || "تم إجراء البحث بنجاح من المصادر المتاحة.";
 
-                const sources = extractGroundingSources(candidate);
+                const sources = extractGroundingSources(candidate, data, resultText);
 
                 // Increment daily_usage +1 in Supabase DB for this Gemma model
                 if (selectedKey.id && supabaseAdmin) {
@@ -1127,6 +1211,11 @@ export async function POST(request: Request) {
 3. اجمع دائماً كل استدعاءات الأدوات (tool calls) اللازمة في نفس الرد الواحد كلما أمكن ذلك، بدلاً من تنفيذها على دفعات متتالية عبر عدة جولات، لأن كل جولة إضافية تعيد إرسال كامل السياق من جديد وتزيد التكلفة والزمن دون أي فائدة إضافية للفلاح.
 </general_rules>
 
+<web_search_guidance>
+عندما يسأل المزارع عن أسعار السوق الحية اليوم، أو نشرات الطقس والتنبؤات الجوية المحدثة، أو معلومات وأخبار زراعية حية لا تتوفر في قاعدة البيانات المحلية، استخدم أداة web_search فوراً للحصول على أدق المعلومات من الويب.
+قم بصياغة الرد النهائي بناءً على نتائج البحث بأسلوبك الودود والفصيح المبسط. لا تقم بكتابة روابط الإنترنت أو مراجع الويب يدوياً داخل نص الإجابة لتجنب قراءتها صوتياً، حيث يقوم النظام تلقائياً باستخراج بطاقات المصادر والمراجع وعرضها في واجهة المزارع بشكل منفصل وأنيق.
+</web_search_guidance>
+
 <field_management required="true">
 بيانات الأراضي المسجلة حالياً للفلاح:
 ${activeFieldsContext}
@@ -1456,8 +1545,8 @@ ${pestsDiseasesContext}
         console.log(`[crop-chat] Attempt ${attemptCount + 1}: Using model ${modelName} on key ${keyData.api_keys.id.slice(0, 6)}...`);
 
         let accumulatedSources: Array<{ title: string; url: string }> = [];
-        const addSourcesFromCandidate = (cand: any) => {
-            const extracted = extractGroundingSources(cand);
+        const addSourcesFromCandidate = (cand: any, rootData?: any) => {
+            const extracted = extractGroundingSources(cand, rootData);
             for (const s of extracted) {
                 if (!accumulatedSources.some((existing) => existing.url === s.url)) {
                     accumulatedSources.push(s);
@@ -1534,7 +1623,7 @@ ${pestsDiseasesContext}
             console.log(`[crop-chat] 📊 Usage Metadata:`, data.usageMetadata);
         }
         const candidates = data.candidates?.[0];
-        addSourcesFromCandidate(candidates);
+        addSourcesFromCandidate(candidates, data);
         let currentParts: GeminiPart[] = candidates?.content?.parts ?? [];
 
         // ── Agentic loop: handle chained tool calls (max 5 rounds) ───────────────
@@ -2037,7 +2126,7 @@ ${pestsDiseasesContext}
                             console.log(`[crop-chat] 📊 Follow-up Usage Metadata (Round ${loopCount}):`, followUpData.usageMetadata);
                         }
                         const cand = followUpData.candidates?.[0];
-                        addSourcesFromCandidate(cand);
+                        addSourcesFromCandidate(cand, followUpData);
                         currentParts = cand?.content?.parts ?? [];
                         followUpOk = true;
                         break;
