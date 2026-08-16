@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="favBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#041f17" />
+      <stop offset="100%" stop-color="#082b21" />
+    </linearGradient>
+
+    <linearGradient id="favEmerald" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+
+    <linearGradient id="favGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="16" fill="url(#favBg)" />
+
+  <g transform="matrix(0.125 0 0 0.125 0 -2)">
+    <path d="M 120 280 C 100 240, 100 180, 150 140 C 190 110, 240 120, 250 160 C 260 200, 220 225, 180 225 L 240 225 C 255 225, 260 245, 245 260 C 230 275, 200 280, 170 280 Z" fill="url(#favEmerald)" />
+    <path d="M 150 140 C 190 110, 240 120, 250 160 C 230 145, 180 140, 140 170 C 120 185, 115 210, 115 240 C 105 210, 115 165, 150 140 Z" fill="url(#favGold)" />
+    <path d="M 230 165 C 245 220, 245 270, 270 280 C 295 290, 320 275, 335 240 L 335 280 C 310 295, 275 290, 255 265 C 235 240, 235 190, 230 165 Z" fill="url(#favEmerald)" />
+    <path d="M 320 280 C 340 230, 360 170, 385 140 C 405 115, 435 130, 430 165 C 425 200, 395 240, 360 280 Z" fill="url(#favEmerald)" />
+    <path d="M 385 140 C 405 115, 435 130, 430 165 C 410 175, 375 205, 340 245 C 330 215, 355 170, 385 140 Z" fill="url(#favGold)" />
+    <path d="M 130 225 C 190 225, 270 200, 340 225 C 380 240, 415 230, 440 200 C 420 225, 380 255, 330 240 C 270 220, 190 245, 130 225 Z" fill="url(#favGold)" />
+  </g>
+
+  <text x="32" y="52" text-anchor="middle" font-family="'Cairo', system-ui, sans-serif" font-size="10" font-weight="900" letter-spacing="1" fill="#FFFFFF">
+    ELA
+  </text>
+</svg>

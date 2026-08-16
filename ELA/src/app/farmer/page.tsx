@@ -170,22 +170,22 @@ export default async function FarmerHomePage() {
 
 
   return (
-    <div className="space-y-5 text-right">
+    <div className="space-y-4 text-right">
       {/* Greeting Card */}
-      <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs">
-        <div className="flex items-start justify-between">
-          <div>
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-4 shadow-xs">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-slate-500 text-xs font-medium mb-0.5">أهلاً بك في منصة ELA</p>
-            <h1 className="text-xl font-black text-slate-900">
+            <h1 className="text-xl font-black text-slate-900 leading-tight">
               صباح النور يا {firstName} 👋
             </h1>
             {village && (
-              <span className="inline-flex items-center gap-1 mt-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full shadow-xs">
+              <span className="inline-flex items-center gap-1 mt-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full shadow-xs">
                 📍 قرية {village}
               </span>
             )}
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-2xl shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-3xl shadow-xs flex-shrink-0">
             🧑‍🌾
           </div>
         </div>
@@ -194,73 +194,69 @@ export default async function FarmerHomePage() {
       {/* Weather Compact Summary Bar */}
       <CompactWeatherBar weather={weatherData} />
 
-      {/* Parallel Bento Cards: Agenda & Smart AI Assistant */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+      {/* Bento Cards: Agenda & Smart AI — always 2 columns side by side */}
+      <div className="grid grid-cols-2 gap-3">
         {/* Daily Agenda Card */}
         <Link
           href="/farmer/agenda"
-          className="bg-white hover:bg-slate-50/80 border border-slate-200/90 hover:border-indigo-300 rounded-3xl p-5 shadow-xs transition-all flex flex-col justify-between group active:scale-[0.98]"
+          className="bg-white hover:bg-slate-50/80 border border-slate-200/90 hover:border-indigo-300 rounded-3xl p-4 shadow-xs transition-all flex flex-col justify-between group active:scale-[0.97]"
         >
           <div>
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shadow-xs">
-                <CalendarDays className="w-5 h-5" />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shadow-xs">
+                <CalendarDays className="w-4 h-4" />
               </div>
               {openAlertsCount > 0 ? (
-                <span className="bg-red-500 text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-xs">
-                  {openAlertsCount} تنبيه
+                <span className="bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-xs">
+                  {openAlertsCount}
                 </span>
               ) : (
-                <span className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  محصولك بخير 🌱
-                </span>
+                <span className="text-emerald-600 text-base">🌱</span>
               )}
             </div>
 
-            <h3 className="font-black text-slate-900 text-base mb-1">أجندتي اليومية</h3>
-            <p className="text-slate-600 text-xs leading-relaxed">
+            <h3 className="font-black text-slate-900 text-sm mb-1 leading-snug">أجندتي</h3>
+            <p className="text-slate-500 text-[11px] leading-relaxed">
               {hasFields
                 ? openAlertsCount > 0
-                  ? `لديك ${openAlertsCount} تنبيه زراعي مفتوح — اضغط للاطلاع`
-                  : "لا توجد تنبيهات مفتوحة اليوم — حقولك بحالة ممتازة."
-                : "أضف حقلك الأول للبدء في متابعة دورة حياة النبات."}
+                  ? `${openAlertsCount} تنبيه مفتوح`
+                  : 'حقولك بخير اليوم ✨'
+                : 'أضف حقلك الأول'}
             </p>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-xl group-hover:bg-indigo-100 transition-colors">
-              فتح الأجندة ←
+          <div className="mt-3 pt-2.5 border-t border-slate-100">
+            <span className="text-[11px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl group-hover:bg-indigo-100 transition-colors">
+              افتح ←
             </span>
-            <span className="text-[11px] text-slate-400 font-medium">متابعة الحقل</span>
           </div>
         </Link>
 
-        {/* Chat Access Card */}
+        {/* AI Scanner Card */}
         <Link
           href="/farmer/scanner"
-          className="bg-white hover:bg-emerald-50/40 border border-slate-200/90 hover:border-emerald-300 rounded-3xl p-5 shadow-xs transition-all flex flex-col justify-between group active:scale-[0.98]"
+          className="bg-white hover:bg-emerald-50/40 border border-slate-200/90 hover:border-emerald-300 rounded-3xl p-4 shadow-xs transition-all flex flex-col justify-between group active:scale-[0.97]"
         >
           <div>
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-xs">
-                <Sparkles className="w-5 h-5" />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-xs">
+                <Sparkles className="w-4 h-4" />
               </div>
-              <span className="bg-emerald-100 border border-emerald-200 text-emerald-800 text-[11px] font-black px-2.5 py-0.5 rounded-full">
-                ذكاء اصطناعي
+              <span className="text-[10px] bg-emerald-100 border border-emerald-200 text-emerald-800 font-black px-1.5 py-0.5 rounded-full">
+                AI
               </span>
             </div>
 
-            <h3 className="font-black text-slate-900 text-base mb-1">طبيب المحاصيل الذكي 🤖</h3>
-            <p className="text-slate-600 text-xs leading-relaxed">
-              صوّر ورقة النبات المصابة أو اسأل المرشد عن أي مشكلة في مزرعتك.
+            <h3 className="font-black text-slate-900 text-sm mb-1 leading-snug">طبيب المحاصيل 🤖</h3>
+            <p className="text-slate-500 text-[11px] leading-relaxed">
+              صوّر الورقة المصابة واحصل على تشخيص فوري
             </p>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-3.5 py-1.5 rounded-xl group-hover:bg-emerald-100 transition-colors">
-              فحص وتشخيص 📸
+          <div className="mt-3 pt-2.5 border-t border-slate-100">
+            <span className="text-[11px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl group-hover:bg-emerald-100 transition-colors">
+              📸 فحص
             </span>
-            <span className="text-[11px] text-slate-400 font-medium">استشارة فورية</span>
           </div>
         </Link>
       </div>

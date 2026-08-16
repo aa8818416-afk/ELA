@@ -134,41 +134,41 @@ export default function FarmerOrdersClient({ orders, distProfile }: FarmerOrders
         </div>
       </div>
 
-      {/* Distributor Contact Pill */}
+      {/* Distributor Contact */}
       {distProfile && (
-        <div className="bg-emerald-50/70 border border-emerald-200 rounded-3xl p-4 flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-xs">
-              👨‍💼
+        <div className="bg-emerald-50/70 border border-emerald-200 rounded-3xl p-4 shadow-xs">
+          <div className="flex flex-col gap-3">
+            {/* Distributor Info */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-xs flex-shrink-0">
+                👨‍💼
+              </div>
+              <div className="min-w-0">
+                <p className="text-slate-900 font-black text-sm">{distProfile.full_name || 'سفير القرية'}</p>
+                <p className="text-emerald-800 text-xs font-bold">مندوب الاستلام المعتمد بقريتك</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-slate-900 font-black text-xs">{distProfile.full_name || "سفير القرية"}</p>
-              <p className="text-emerald-800 text-[11px] font-bold">مندوب الاستلام المعتمد بقريتك</p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2">
+            {/* Contact Buttons — full width on mobile */}
             {distProfile.phone && (
-              <>
+              <div className="grid grid-cols-2 gap-2">
                 <a
                   href={`tel:${distProfile.phone}`}
-                  className="p-2.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
-                  title="اتصال هاتفي"
+                  className="flex items-center justify-center gap-2 py-3 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-800 border border-slate-300 rounded-xl text-sm font-bold transition-all shadow-xs"
                 >
-                  <span className="text-xs">📞</span>
+                  <span>📞</span>
                   <span>اتصال</span>
                 </a>
                 <a
-                  href={`https://wa.me/${distProfile.phone.replace(/[^0-9]/g, "")}`}
+                  href={`https://wa.me/${distProfile.phone.replace(/[^0-9]/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2.5 bg-[#25D366] hover:bg-[#20ba5a] text-white border border-[#1ebc56] rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
-                  title="محادثة واتساب"
+                  className="flex items-center justify-center gap-2 py-3 bg-[#25D366] hover:bg-[#20ba5a] active:scale-[0.98] text-white border border-[#1ebc56] rounded-xl text-sm font-bold transition-all shadow-xs"
                 >
-                  <span className="text-xs">💬</span>
+                  <span>💬</span>
                   <span>واتساب</span>
                 </a>
-              </>
+              </div>
             )}
           </div>
         </div>

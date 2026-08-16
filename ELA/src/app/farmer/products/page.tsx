@@ -90,27 +90,29 @@ export default function FarmerProductsPage() {
   return (
     <div className="space-y-5 text-right font-sans text-slate-900" dir="rtl">
       {/* Header */}
-      <div className="bg-white border border-slate-200/80 p-4 sm:p-5 rounded-3xl shadow-xs flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-slate-900">سوق مستلزمات المزرعة</h1>
-          <p className="text-slate-500 text-xs mt-0.5">تصفح الأسمدة والمبيدات المعتمدة بأسعار الجملة</p>
+      <div className="bg-white border border-slate-200/80 p-4 rounded-3xl shadow-xs">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-black text-slate-900 leading-tight">سوق مستلزمات المزرعة</h1>
+            <p className="text-slate-500 text-xs mt-0.5">تصفح الأسمدة والمبيدات بأسعار الجملة</p>
+          </div>
+          <button
+            onClick={() => setShowFilter(!showFilter)}
+            className={`relative flex items-center gap-2 px-4 py-3 rounded-xl border text-xs font-black transition-all shadow-xs flex-shrink-0 ${
+              showFilter || activeFiltersCount > 0
+                ? 'bg-emerald-600 border-emerald-700 text-white'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            <span>فلترة</span>
+            {activeFiltersCount > 0 && (
+              <span className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-amber-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold shadow-xs">
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
         </div>
-        <button
-          onClick={() => setShowFilter(!showFilter)}
-          className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-black transition-all shadow-xs ${
-            showFilter || activeFiltersCount > 0
-              ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-              : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-          }`}
-        >
-          <Filter className="w-3.5 h-3.5" />
-          <span>فلترة</span>
-          {activeFiltersCount > 0 && (
-            <span className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-emerald-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold shadow-xs">
-              {activeFiltersCount}
-            </span>
-          )}
-        </button>
       </div>
 
       {/* Filter Panel */}
@@ -209,11 +211,11 @@ export default function FarmerProductsPage() {
           <p className="text-slate-500 text-xs mt-1">جرب تعديل الفلاتر المختارة</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-1 gap-3">
           {filteredProducts.map((p) => (
             <div
               key={p.id}
-              className="bg-white border border-slate-200/90 rounded-3xl p-4 flex flex-col justify-between shadow-xs hover:border-emerald-300 transition-all space-y-3"
+              className="bg-white border border-slate-200/90 rounded-3xl p-4 flex flex-col justify-between shadow-xs hover:border-emerald-300 transition-all"
             >
               {/* Row: Image + Info */}
               <div className="flex gap-3.5">
@@ -223,10 +225,10 @@ export default function FarmerProductsPage() {
                     <ZoomableImage
                       src={p.image_url}
                       alt={p.name_ar}
-                      className="w-16 h-16 rounded-2xl object-cover border border-slate-200 bg-slate-50 shadow-xs"
+                      className="w-20 h-20 rounded-2xl object-cover border border-slate-200 bg-slate-50 shadow-xs"
                     />
                   ) : (
-                    <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 text-2xl shadow-xs">
+                    <div className="w-20 h-20 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 text-3xl shadow-xs">
                       🧪
                     </div>
                   )}
@@ -235,15 +237,15 @@ export default function FarmerProductsPage() {
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-1">
-                    <h3 className="font-bold text-slate-900 text-sm leading-tight truncate">{p.name_ar}</h3>
+                    <h3 className="font-bold text-slate-900 text-sm leading-snug">{p.name_ar}</h3>
                     <div className="text-left shrink-0">
-                      <span className="text-base font-black text-emerald-700 font-mono">{p.price_to_farmer}</span>
+                      <span className="text-lg font-black text-emerald-700 font-mono">{p.price_to_farmer}</span>
                       <span className="text-slate-500 text-[11px] mr-0.5">ج.م</span>
                     </div>
                   </div>
 
                   {p.active_ingredient && (
-                    <p className="text-slate-500 text-[11px] truncate mt-0.5">{p.active_ingredient}</p>
+                    <p className="text-slate-500 text-[11px] mt-0.5 leading-snug line-clamp-1">{p.active_ingredient}</p>
                   )}
 
                   {/* Tags */}
@@ -252,24 +254,24 @@ export default function FarmerProductsPage() {
                       <span
                         key={t}
                         className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${
-                          t === "مبيدات"
-                            ? "bg-red-50 text-red-700 border-red-200"
-                            : t === "مغذيات"
-                            ? "bg-blue-50 text-blue-700 border-blue-200"
-                            : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          t === 'مبيدات'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : t === 'مغذيات'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         }`}
                       >
                         {t}
                       </span>
                     ))}
-                    {p.target_crops?.slice(0, 2).map((c) => (
+                    {p.target_crops?.slice(0, 3).map((c) => (
                       <span key={c} className="text-[10px] px-2 py-0.5 rounded-full border bg-slate-100 text-slate-600 border-slate-200 font-medium">
                         {c}
                       </span>
                     ))}
-                    {(p.target_crops?.length ?? 0) > 2 && (
+                    {(p.target_crops?.length ?? 0) > 3 && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full border bg-slate-50 text-slate-500 border-slate-200">
-                        +{(p.target_crops?.length ?? 0) - 2}
+                        +{(p.target_crops?.length ?? 0) - 3}
                       </span>
                     )}
                   </div>
@@ -279,9 +281,9 @@ export default function FarmerProductsPage() {
               {/* Buy Button */}
               <button
                 onClick={() => handleBuyClick(p)}
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-black rounded-xl transition-all shadow-xs border border-emerald-700"
+                className="mt-3 w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-sm font-black rounded-xl transition-all shadow-xs border border-emerald-700"
               >
-                <ShoppingBag className="w-3.5 h-3.5" />
+                <ShoppingBag className="w-4 h-4" />
                 <span>طلب سريع 🛒</span>
               </button>
             </div>

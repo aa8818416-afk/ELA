@@ -188,43 +188,43 @@ export default function DeliveriesClient({ allOrders }: DeliveriesClientProps) {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      {/* 1. Header & Addition from Model A (Top Reconciliation / Settlement Link) */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6 max-w-5xl mx-auto">
+      {/* 1. Header & Reconciliation Link */}
+      <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
               <CheckSquare className="w-5 h-5 text-emerald-700" />
               التسليمات والتحصيل الميداني
             </h2>
-            <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+            <span className="text-[10px] sm:text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
               مباشر
             </span>
           </div>
-          <p className="text-slate-500 text-xs mt-1">
-            سجل تسليم الأوردرات للفلاحين وحصل الدفعات كاش مع التواصل الفوري عبر الواتساب
+          <p className="text-slate-500 text-[11px] sm:text-xs mt-1">
+            سجل تسليم الأوردرات للفلاحين وحصل الدفعات كاش مع التواصل الفوري
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Unseen count action button */}
           {unseenOrderIds.length > 0 && (
             <button
               onClick={handleMarkAllSeen}
-              className="flex items-center gap-1.5 text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-3 py-2 rounded-xl transition-all shadow-2xs"
+              className="flex items-center gap-1.5 text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-3 py-2 rounded-xl transition-all shadow-2xs active:scale-95"
             >
               <Eye className="w-3.5 h-3.5 text-rose-600" />
-              تعليم كـ مقروء ({unseenOrderIds.length})
+              <span>تعليم كـ مقروء ({unseenOrderIds.length})</span>
             </button>
           )}
 
-          {/* Addition from A: Top Reconciliation Link */}
+          {/* Top Reconciliation Link */}
           <Link
             href="/distributor"
             className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 px-3.5 py-2 rounded-xl transition-all shadow-2xs active:scale-95"
           >
             <Receipt className="w-3.5 h-3.5 text-emerald-700" />
-            <span>تصفية الحساب مع الإدارة</span>
+            <span>تصفية الحساب</span>
             <ArrowUpRight className="w-3 h-3 text-slate-500" />
           </Link>
         </div>
@@ -235,17 +235,17 @@ export default function DeliveriesClient({ allOrders }: DeliveriesClientProps) {
         <div className="flex gap-1.5 p-1 bg-white border border-slate-200 rounded-2xl w-full sm:w-fit shadow-2xs">
           <button
             onClick={() => handleTabChange("pending")}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
               activeTab === "pending"
                 ? "bg-amber-500 text-slate-950 font-black shadow-xs border border-amber-600"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
-            الصفقات المعلقة
+            <span>الصفقات المعلقة</span>
             {pendingOrders.length > 0 && (
               <span
-                className={`text-[10px] px-2 py-0.2 rounded-full font-bold ${
+                className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                   activeTab === "pending"
                     ? "bg-amber-700 text-white"
                     : "bg-slate-100 text-slate-700"
@@ -258,17 +258,17 @@ export default function DeliveriesClient({ allOrders }: DeliveriesClientProps) {
 
           <button
             onClick={() => handleTabChange("completed")}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
               activeTab === "completed"
                 ? "bg-emerald-600 text-white font-black shadow-xs border border-emerald-700"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
-            الصفقات المكتملة
+            <span>المكتملة</span>
             {completedOrders.length > 0 && (
               <span
-                className={`text-[10px] px-2 py-0.2 rounded-full font-bold ${
+                className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                   activeTab === "completed"
                     ? "bg-emerald-800 text-white"
                     : "bg-slate-100 text-slate-700"
@@ -281,40 +281,42 @@ export default function DeliveriesClient({ allOrders }: DeliveriesClientProps) {
         </div>
 
         {/* Source Filter */}
-        <div className="flex items-center gap-1.5 bg-white p-1 border border-slate-200 rounded-2xl text-xs shadow-2xs">
+        <div className="flex items-center justify-between sm:justify-start gap-1.5 bg-white p-1 border border-slate-200 rounded-2xl text-xs shadow-2xs w-full sm:w-auto">
           <span className="text-[11px] font-bold text-slate-500 px-2">المصدر:</span>
-          <button
-            onClick={() => setSourceFilter("all")}
-            className={`px-3 py-1 rounded-xl font-bold transition-all ${
-              sourceFilter === "all"
-                ? "bg-slate-900 text-white shadow-2xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            الكل
-          </button>
-          <button
-            onClick={() => setSourceFilter("distributor")}
-            className={`flex items-center gap-1 px-3 py-1 rounded-xl font-bold transition-all ${
-              sourceFilter === "distributor"
-                ? "bg-purple-600 text-white shadow-2xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <UserCheck className="w-3 h-3" />
-            الموزع
-          </button>
-          <button
-            onClick={() => setSourceFilter("platform")}
-            className={`flex items-center gap-1 px-3 py-1 rounded-xl font-bold transition-all ${
-              sourceFilter === "platform"
-                ? "bg-teal-700 text-white shadow-2xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Globe className="w-3 h-3" />
-            المنصة
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setSourceFilter("all")}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all text-xs ${
+                sourceFilter === "all"
+                  ? "bg-slate-900 text-white shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              الكل
+            </button>
+            <button
+              onClick={() => setSourceFilter("distributor")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold transition-all text-xs ${
+                sourceFilter === "distributor"
+                  ? "bg-purple-600 text-white shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <UserCheck className="w-3 h-3" />
+              الموزع
+            </button>
+            <button
+              onClick={() => setSourceFilter("platform")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold transition-all text-xs ${
+                sourceFilter === "platform"
+                  ? "bg-teal-700 text-white shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Globe className="w-3 h-3" />
+              المنصة
+            </button>
+          </div>
         </div>
       </div>
 

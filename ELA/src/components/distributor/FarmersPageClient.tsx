@@ -108,30 +108,30 @@ function AddFarmerModal({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md shadow-2xl overflow-hidden max-h-[90dvh] overflow-y-auto">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 flex items-center justify-center">
                   <UserPlus className="w-4 h-4" />
                 </div>
-                <h3 className="text-base font-bold text-slate-900">تسجيل مزارع جديد بالقرية</h3>
+                <h3 className="text-sm sm:text-base font-bold text-slate-900">تسجيل مزارع جديد بالقرية</h3>
               </div>
               <button
                 onClick={handleClose}
-                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                className="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-100 transition-colors active:scale-90"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="p-5 sm:p-6">
               {!created ? (
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-1">
                     <label className="block text-xs font-bold text-slate-700 flex items-center gap-1">
-                      <User className="w-3 h-3 text-emerald-700" /> اسم الفلاح كاملاً
+                      <User className="w-3.5 h-3.5 text-emerald-700" /> اسم الفلاح كاملاً
                     </label>
                     <input
                       type="text"
@@ -139,13 +139,13 @@ function AddFarmerModal({
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="مثال: الحاج أحمد عبد الله"
                       required
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-3 text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
 
                   <div className="space-y-1">
                     <label className="block text-xs font-bold text-slate-700 flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-emerald-700" /> رقم الهاتف المحمول
+                      <Phone className="w-3.5 h-3.5 text-emerald-700" /> رقم الهاتف المحمول
                     </label>
                     <input
                       type="tel"
@@ -155,7 +155,7 @@ function AddFarmerModal({
                       required
                       inputMode="numeric"
                       dir="ltr"
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium text-right focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-3 text-xs text-slate-900 font-medium text-right focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
 
@@ -168,7 +168,7 @@ function AddFarmerModal({
                         value={selectedVillage}
                         onChange={(e) => setSelectedVillage(e.target.value)}
                         required
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-3 text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       >
                         <option value="" disabled>اختر القرية...</option>
                         {supervisedVillages.map((v) => (
@@ -189,7 +189,7 @@ function AddFarmerModal({
                           key={type}
                           type="button"
                           onClick={() => setSoilType(type)}
-                          className={`py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                          className={`py-3 rounded-xl text-xs font-bold border transition-all ${
                             soilType === type
                               ? "bg-emerald-600 border-emerald-700 text-white shadow-xs"
                               : "bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100"
@@ -210,7 +210,7 @@ function AddFarmerModal({
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl py-3 text-xs transition-all shadow-xs border border-emerald-700 flex items-center justify-center gap-2"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl py-3.5 text-xs transition-all shadow-xs border border-emerald-700 flex items-center justify-center gap-2"
                   >
                     {loading ? (
                       <>
@@ -234,20 +234,21 @@ function AddFarmerModal({
                   </div>
 
                   <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 text-right">
-                    <div className="flex items-center justify-between bg-white rounded-xl px-3 py-2 border border-slate-200">
+                    <div className="flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border border-slate-200">
                       <span className="text-xs text-slate-500">رقم الهاتف</span>
                       <div className="flex items-center gap-2">
                         <span className="text-slate-900 font-mono text-xs font-bold" dir="ltr">{created.phone}</span>
                         <button
                           onClick={() => handleCopy(created.phone, "phone")}
-                          className="text-slate-400 hover:text-emerald-700"
+                          className="text-slate-400 hover:text-emerald-700 p-1"
                         >
-                          {copied === "phone" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copied === "phone" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between bg-emerald-50/70 border border-emerald-200 rounded-xl px-3 py-2">
+                    <div className="flex items-center justify-between bg-emerald-50/70 border border-emerald-200 rounded-xl px-3 py-2.5">
+
                       <span className="text-xs text-emerald-900 font-bold">الرمز السري (PIN)</span>
                       <div className="flex items-center gap-2">
                         <span className="text-emerald-950 font-mono text-lg font-black tracking-widest" dir="ltr">{created.pin}</span>
@@ -329,8 +330,8 @@ function ResetPinModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-sm shadow-2xl p-6 space-y-4 text-center">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white border border-slate-200 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm shadow-2xl p-5 sm:p-6 space-y-4 text-center">
         {!result ? (
           <>
             <div className="w-12 h-12 bg-amber-50 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200">
@@ -338,7 +339,7 @@ function ResetPinModal({
             </div>
             <div>
               <h4 className="text-base font-bold text-slate-900">تصفير رمز دخول PIN</h4>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 هل أنت متأكد من تصفير رمز دخول <strong className="text-slate-900">{farmer.profiles?.full_name}</strong>؟
               </p>
             </div>
@@ -352,16 +353,16 @@ function ResetPinModal({
             <div className="grid grid-cols-2 gap-2 pt-2">
               <button
                 onClick={onClose}
-                className="bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs py-2.5 rounded-xl border border-slate-300 shadow-xs"
+                className="bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs py-3 rounded-xl border border-slate-300 shadow-xs active:scale-95"
               >
                 إلغاء
               </button>
               <button
                 onClick={handleReset}
                 disabled={loading}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-2.5 rounded-xl border border-amber-700 shadow-xs flex items-center justify-center gap-1.5"
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-3 rounded-xl border border-amber-700 shadow-xs flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
               >
-                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "نعم، تصفير الآن"}
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "تصفير الآن"}
               </button>
             </div>
           </>
@@ -382,15 +383,15 @@ function ResetPinModal({
 
             <button
               onClick={handleCopy}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 rounded-xl border border-emerald-700 shadow-xs flex items-center justify-center gap-1.5"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 rounded-xl border border-emerald-700 shadow-xs flex items-center justify-center gap-1.5 active:scale-95"
             >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? "تم نسخ الرمز!" : "نسخ الرمز السري"}
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              <span>{copied ? "تم نسخ الرمز!" : "نسخ الرمز السري"}</span>
             </button>
 
             <button
               onClick={onClose}
-              className="w-full text-xs text-slate-500 hover:text-slate-800 font-bold py-1"
+              className="w-full text-xs text-slate-500 hover:text-slate-800 font-bold py-2"
             >
               إغلاق
             </button>
@@ -426,18 +427,18 @@ export default function FarmersPageClient({
   }, [farmers, search]);
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto">
       {/* Header & Add Button */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900">سجل مزارعي القرية التابعين لك</h2>
-            <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
-              {farmers.length} مزارع مسجل
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 leading-tight">سجل مزارعي القرية التابعين لك</h2>
+            <span className="text-[10px] sm:text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
+              {farmers.length} مزارع
             </span>
           </div>
-          <p className="text-slate-500 text-xs mt-1">
-            إدارة الحسابات، تصفير رمز الدخول PIN، والتواصل الميداني السريع عبر الواتساب والاتصال
+          <p className="text-slate-500 text-[11px] sm:text-xs mt-1">
+            إدارة الحسابات، تصفير رمز الدخول PIN، والتواصل الميداني السريع
           </p>
         </div>
 
@@ -456,13 +457,13 @@ export default function FarmersPageClient({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="🔍 بحث سريع باسم المزارع أو رقم هاتفه..."
+            placeholder="🔍 بحث باسم المزارع أو الهاتف..."
             className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute left-3 top-2.5 text-slate-400 hover:text-slate-700"
+              className="absolute left-3 top-2.5 text-slate-400 hover:text-slate-700 p-1"
             >
               <X className="w-4 h-4" />
             </button>
@@ -470,115 +471,195 @@ export default function FarmersPageClient({
         </div>
       </div>
 
-      {/* Table: Model A Base with Model B Direct Action Columns */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
-        {filteredFarmers.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 text-xs">
-            {search ? "لم يتم العثور على مزارع يطابق معايير البحث." : "لا يوجد مزارعين مسجلين حتى الآن."}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
-                <tr>
-                  <th className="p-4">اسم المزارع</th>
-                  <th className="p-4">رقم الهاتف</th>
-                  <th className="p-4">رمز الدخول PIN</th>
-                  <th className="p-4 text-center">تواصل سريع (واتساب / اتصال)</th>
-                  <th className="p-4 text-center">إجراءات الحساب</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredFarmers.map((f) => {
-                  const name = f.profiles?.full_name || "بدون اسم";
-                  const phone = f.profiles?.phone || "";
-                  const whatsappUrl = phone
-                    ? `https://wa.me/2${phone}?text=${encodeURIComponent(
-                        `السلام عليكم يا حاج ${name}، بخصوص حسابك في منصة ELA الزراعية.`
-                      )}`
-                    : null;
+      {/* Farmers List: Mobile Cards + Desktop Table */}
+      {filteredFarmers.length === 0 ? (
+        <div className="bg-white rounded-3xl p-10 text-center text-slate-500 text-xs border border-slate-200/90 shadow-xs">
+          {search ? "لم يتم العثور على مزارع يطابق معايير البحث." : "لا يوجد مزارعين مسجلين حتى الآن."}
+        </div>
+      ) : (
+        <>
+          {/* Mobile Cards (< md) */}
+          <div className="md:hidden space-y-3">
+            {filteredFarmers.map((f) => {
+              const name = f.profiles?.full_name || "بدون اسم";
+              const phone = f.profiles?.phone || "";
+              const whatsappUrl = phone
+                ? `https://wa.me/2${phone}?text=${encodeURIComponent(
+                    `السلام عليكم يا حاج ${name}، بخصوص حسابك في منصة ELA الزراعية.`
+                  )}`
+                : null;
 
-                  return (
-                    <tr key={f.profile_id} className="hover:bg-slate-50/80 transition-all">
-                      {/* Name */}
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold flex items-center justify-center text-xs shadow-2xs">
-                            {name[0]}
-                          </div>
-                          <div>
-                            <span className="font-bold text-slate-900 block text-sm">{name}</span>
-                            <span className="text-[10px] text-slate-500">حساب مزارع معتمد</span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Phone */}
-                      <td className="p-4">
+              return (
+                <div
+                  key={f.profile_id}
+                  className="bg-white border border-slate-200/90 rounded-3xl p-4 shadow-xs space-y-3"
+                >
+                  {/* Top: Avatar, Name & Phone */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold flex items-center justify-center text-sm shadow-2xs flex-shrink-0">
+                        {name[0]}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-900 block text-sm truncate">{name}</span>
                         {phone ? (
-                          <span className="font-mono font-bold text-slate-800 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200" dir="ltr">
+                          <span className="font-mono text-xs font-semibold text-slate-600" dir="ltr">
                             {phone}
                           </span>
                         ) : (
-                          <span className="text-slate-400">غير مسجل</span>
+                          <span className="text-[11px] text-slate-400">بدون هاتف</span>
                         )}
-                      </td>
+                      </div>
+                    </div>
 
-                      {/* PIN Status */}
-                      <td className="p-4">
-                        <span className="text-[11px] text-emerald-800 font-bold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                          ✓ نشط ومفعل
-                        </span>
-                      </td>
+                    <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                      ✓ مفعل
+                    </span>
+                  </div>
 
-                      {/* Addition from Model B: Direct WhatsApp & Call buttons in row */}
-                      <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {phone ? (
-                            <>
-                              <a
-                                href={whatsappUrl || "#"}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold px-3 py-1.5 rounded-xl border border-emerald-200 shadow-2xs transition-all active:scale-95"
-                                title="مراسلة عبر الواتساب"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5 text-emerald-700" />
-                                <span>واتساب</span>
-                              </a>
-                              <a
-                                href={`tel:${phone}`}
-                                className="inline-flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-700 font-bold px-3 py-1.5 rounded-xl border border-slate-300 shadow-2xs transition-all active:scale-95"
-                                title="اتصال مباشر"
-                              >
-                                <Phone className="w-3.5 h-3.5 text-slate-500" />
-                                <span>اتصال</span>
-                              </a>
-                            </>
-                          ) : (
-                            <span className="text-slate-400 text-[11px]">-</span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* PIN Reset Button */}
-                      <td className="p-4 text-center">
-                        <button
-                          onClick={() => setResetTarget(f)}
-                          className="bg-white hover:bg-amber-50 text-amber-800 font-bold px-3 py-1.5 rounded-xl border border-amber-300 shadow-2xs transition-all flex items-center gap-1.5 mx-auto active:scale-95 text-[11px]"
+                  {/* Actions Grid */}
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+                    {phone ? (
+                      <>
+                        <a
+                          href={whatsappUrl || "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-1.5 py-2.5 bg-[#25D366] hover:bg-[#20ba5a] text-white rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95"
                         >
-                          <RotateCcw className="w-3 h-3 text-amber-600" />
-                          <span>تصفير PIN</span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>واتساب</span>
+                        </a>
+                        <a
+                          href={`tel:${phone}`}
+                          className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-200 transition-all active:scale-95"
+                        >
+                          <Phone className="w-3.5 h-3.5 text-slate-600" />
+                          <span>اتصال</span>
+                        </a>
+                      </>
+                    ) : (
+                      <div className="col-span-2 text-center text-slate-400 text-[11px] py-2">لا يوجد هاتف</div>
+                    )}
+
+                    <button
+                      onClick={() => setResetTarget(f)}
+                      className="flex items-center justify-center gap-1 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-bold border border-amber-200 transition-all active:scale-95"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                      <span>تصفير PIN</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
-      </div>
+
+          {/* Desktop Table (md and up) */}
+          <div className="hidden md:block bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
+                  <tr>
+                    <th className="p-4">اسم المزارع</th>
+                    <th className="p-4">رقم الهاتف</th>
+                    <th className="p-4">رمز الدخول PIN</th>
+                    <th className="p-4 text-center">تواصل سريع</th>
+                    <th className="p-4 text-center">إجراءات الحساب</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredFarmers.map((f) => {
+                    const name = f.profiles?.full_name || "بدون اسم";
+                    const phone = f.profiles?.phone || "";
+                    const whatsappUrl = phone
+                      ? `https://wa.me/2${phone}?text=${encodeURIComponent(
+                          `السلام عليكم يا حاج ${name}، بخصوص حسابك في منصة ELA الزراعية.`
+                        )}`
+                      : null;
+
+                    return (
+                      <tr key={f.profile_id} className="hover:bg-slate-50/80 transition-all">
+                        {/* Name */}
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold flex items-center justify-center text-xs shadow-2xs">
+                              {name[0]}
+                            </div>
+                            <div>
+                              <span className="font-bold text-slate-900 block text-sm">{name}</span>
+                              <span className="text-[10px] text-slate-500">حساب مزارع معتمد</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Phone */}
+                        <td className="p-4">
+                          {phone ? (
+                            <span className="font-mono font-bold text-slate-800 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200" dir="ltr">
+                              {phone}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">غير مسجل</span>
+                          )}
+                        </td>
+
+                        {/* PIN Status */}
+                        <td className="p-4">
+                          <span className="text-[11px] text-emerald-800 font-bold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                            ✓ نشط ومفعل
+                          </span>
+                        </td>
+
+                        {/* Direct WhatsApp & Call buttons in row */}
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {phone ? (
+                              <>
+                                <a
+                                  href={whatsappUrl || "#"}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold px-3 py-1.5 rounded-xl shadow-2xs transition-all active:scale-95 text-xs"
+                                  title="مراسلة عبر الواتساب"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  <span>واتساب</span>
+                                </a>
+                                <a
+                                  href={`tel:${phone}`}
+                                  className="inline-flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-700 font-bold px-3 py-1.5 rounded-xl border border-slate-300 shadow-2xs transition-all active:scale-95 text-xs"
+                                  title="اتصال مباشر"
+                                >
+                                  <Phone className="w-3.5 h-3.5 text-slate-500" />
+                                  <span>اتصال</span>
+                                </a>
+                              </>
+                            ) : (
+                              <span className="text-slate-400 text-[11px]">-</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* PIN Reset Button */}
+                        <td className="p-4 text-center">
+                          <button
+                            onClick={() => setResetTarget(f)}
+                            className="bg-white hover:bg-amber-50 text-amber-800 font-bold px-3 py-1.5 rounded-xl border border-amber-300 shadow-2xs transition-all flex items-center gap-1.5 mx-auto active:scale-95 text-[11px]"
+                          >
+                            <RotateCcw className="w-3 h-3 text-amber-600" />
+                            <span>تصفير PIN</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Reset PIN Modal */}
       {resetTarget && (
@@ -591,3 +672,4 @@ export default function FarmersPageClient({
     </div>
   );
 }
+

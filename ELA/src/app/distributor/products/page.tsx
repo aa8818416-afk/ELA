@@ -88,20 +88,20 @@ export default function DistributorProductsPage() {
   const activeFiltersCount = selectedTypes.length + selectedCrops.length;
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto" dir="rtl">
+    <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto" dir="rtl">
       {/* 1. Header */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
               <Package className="w-5 h-5 text-emerald-700" />
               دليل وكتالوج المنتجات الزراعية
             </h1>
-            <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
-              أسعار وعمولات التوزيع
+            <span className="text-[10px] sm:text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
+              أسعار التوزيع
             </span>
           </div>
-          <p className="text-slate-500 text-xs mt-1">
+          <p className="text-slate-500 text-[11px] sm:text-xs mt-1">
             تصفح أسعار البيع للفلاح وهوامش مكسبك المباشر بالجنيه على كل عبوة
           </p>
         </div>
@@ -109,22 +109,22 @@ export default function DistributorProductsPage() {
         <div className="flex items-center gap-2">
           <Link
             href="/distributor/orders"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl border border-emerald-700 shadow-xs flex items-center gap-1.5 active:scale-95 transition-all"
+            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-3 rounded-xl border border-emerald-700 shadow-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
           >
-            <ShoppingCart className="w-3.5 h-3.5" />
-            إصدار طلب جديد
+            <ShoppingCart className="w-4 h-4" />
+            <span>إصدار طلب جديد</span>
           </Link>
         </div>
       </div>
 
-      {/* 2. Top Category Filter Bar */}
-      <div className="bg-white p-3 border border-slate-200/90 rounded-2xl shadow-xs space-y-3">
+      {/* 2. Category Filter Bar */}
+      <div className="bg-white p-3 sm:p-4 border border-slate-200/90 rounded-3xl shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Quick Categories */}
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => { setSelectedTypes([]); setSelectedCrops([]); }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
                 selectedTypes.length === 0 && selectedCrops.length === 0
                   ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
                   : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
@@ -139,7 +139,7 @@ export default function DistributorProductsPage() {
                 <button
                   key={type}
                   onClick={() => toggleType(type)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
                     active
                       ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
                       : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
@@ -152,21 +152,21 @@ export default function DistributorProductsPage() {
           </div>
 
           {/* Search Box & Advanced Filter Toggle */}
-          <div className="flex items-center gap-2">
-            <div className="relative">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="relative flex-1 sm:flex-initial">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="بحث باسم المنتج أو المادة الفعالة..."
-                className="bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-1.5 text-xs text-slate-900 font-medium pl-8 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-56"
+                placeholder="بحث باسم المنتج أو المادة..."
+                className="w-full sm:w-56 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium pl-8 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3" />
             </div>
 
             <button
               onClick={() => setShowAdvanceFilter(!showAdvanceFilter)}
-              className={`flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
+              className={`flex items-center gap-1 text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-all flex-shrink-0 ${
                 showAdvanceFilter || selectedCrops.length > 0
                   ? "bg-emerald-50 border-emerald-300 text-emerald-800"
                   : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
@@ -202,7 +202,7 @@ export default function DistributorProductsPage() {
                   <button
                     key={crop}
                     onClick={() => toggleCrop(crop)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
                       active
                         ? "bg-emerald-600 text-white border-emerald-700 shadow-2xs"
                         : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
@@ -223,7 +223,7 @@ export default function DistributorProductsPage() {
         {activeFiltersCount > 0 && ` (مصفى من إجمالي ${products.length})`}
       </p>
 
-      {/* 3. Products Commercial Grid */}
+      {/* 3. Products Grid */}
       {loading ? (
         <div className="text-center py-20 text-slate-500">
           <div className="w-10 h-10 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -236,7 +236,7 @@ export default function DistributorProductsPage() {
           <p className="text-slate-500 text-xs mt-1">يرجى تعديل خيارات التصفية أو البحث</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {filteredProducts.map((p) => {
             const agentCommission = p.agent_commission || 0;
             const formattedPrice = Math.round(p.price_to_farmer || 0).toLocaleString("ar-EG");
@@ -245,7 +245,7 @@ export default function DistributorProductsPage() {
             return (
               <div
                 key={p.id}
-                className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs flex flex-col justify-between hover:border-emerald-300 hover:shadow-sm transition-all group"
+                className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col justify-between hover:border-emerald-300 transition-all group"
               >
                 <div>
                   {/* Top Image & Name */}
@@ -254,11 +254,11 @@ export default function DistributorProductsPage() {
                       <ZoomableImage
                         src={p.image_url}
                         alt={p.name_ar}
-                        className="w-16 h-16 rounded-2xl object-cover border border-slate-200 bg-slate-50 shrink-0 shadow-2xs"
+                        className="w-18 h-18 sm:w-16 sm:h-16 rounded-2xl object-cover border border-slate-200 bg-slate-50 shrink-0 shadow-2xs"
                       />
                     ) : (
-                      <div className="w-16 h-16 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0 shadow-2xs">
-                        <ImageIcon className="w-7 h-7" />
+                      <div className="w-18 h-18 sm:w-16 sm:h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0 shadow-2xs text-2xl">
+                        🧪
                       </div>
                     )}
 
@@ -275,11 +275,11 @@ export default function DistributorProductsPage() {
 
                       <div className="mt-1.5 flex items-center gap-1.5">
                         {p.stock_status ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.2 rounded-full border border-emerald-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                             ✓ متوفر بالمخزن
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-800 bg-red-50 px-2 py-0.2 rounded-full border border-red-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-800 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
                             ✗ غير متوفر
                           </span>
                         )}
@@ -314,7 +314,7 @@ export default function DistributorProductsPage() {
                 </div>
 
                 {/* Pricing & Distributor Commission Matrix */}
-                <div className="space-y-3 pt-3 border-t border-slate-100">
+                <div className="space-y-2.5 pt-3 border-t border-slate-100">
                   <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
                     <div>
                       <span className="text-[10px] text-slate-500 block">سعر البيع للمزارع:</span>
@@ -334,14 +334,14 @@ export default function DistributorProductsPage() {
                       صافي مكسبك (العمولة):
                     </span>
                     <span className="font-mono font-black text-emerald-950 text-sm">
-                      +{formattedCommission} ج.م / عبوة
+                      +{formattedCommission} ج.م
                     </span>
                   </div>
 
                   {/* Action */}
                   <Link
                     href={`/distributor/orders`}
-                    className="w-full bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs py-2 px-3 rounded-xl border border-slate-300 shadow-2xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                    className="w-full bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs py-3 px-3 rounded-xl border border-slate-300 shadow-2xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
                   >
                     <ShoppingCart className="w-3.5 h-3.5 text-emerald-700" />
                     <span>إنشاء طلب بهذا المنتج</span>
@@ -354,4 +354,5 @@ export default function DistributorProductsPage() {
       )}
     </div>
   );
+
 }

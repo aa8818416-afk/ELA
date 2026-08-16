@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Sidebar from "@/components/distributor/Sidebar";
+import DistributorMobileNav from "@/components/distributor/DistributorMobileNav";
 import { createClient } from "@/utils/supabase/server";
 
 export const metadata: Metadata = {
@@ -44,37 +45,45 @@ export default async function DistributorLayout({
 
   return (
     <div className="flex min-h-screen bg-[#f8faf9] text-slate-900 font-sans antialiased" dir="rtl">
-      {/* Sidebar - fixed on the right in RTL */}
-      <div className="fixed top-0 bottom-0 right-0 z-50">
+      {/* Desktop Sidebar - hidden on mobile, visible on lg and up */}
+      <div className="hidden lg:block fixed top-0 bottom-0 right-0 z-50">
         <Sidebar distributorName={distributorName} walletBalance={walletBalance} />
       </div>
-      
-      {/* Main Content Area - padded to account for the 64 (16rem / 256px) sidebar */}
-      <div className="flex-1 pr-64 flex flex-col min-h-screen">
-        {/* Topbar */}
-        <header className="h-16 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl flex items-center justify-between px-8 sticky top-0 z-40 shadow-xs">
-          <div className="flex items-center gap-3">
-            <h1 className="text-slate-900 font-bold text-base">بوابة سفير القرية</h1>
-            <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
-              ELA (ال اي)
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-left">
-              <p className="text-slate-900 text-xs font-bold">مرحباً بك،</p>
-              <p className="text-slate-500 text-xs">{distributorName}</p>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 font-bold text-sm shadow-xs">
+
+      {/* Main Content Area - padded right only on lg */}
+      <div className="flex-1 lg:pr-64 flex flex-col min-h-screen w-full">
+        {/* Mobile + Desktop Topbar */}
+        <header className="h-14 sm:h-16 border-b border-slate-200/80 bg-white/95 backdrop-blur-xl flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white font-bold text-sm shadow-xs flex-shrink-0">
               🌾
+            </div>
+            <div className="flex flex-col leading-none">
+              <span className="text-slate-900 font-black text-base sm:text-lg tracking-wider font-mono">ELA</span>
+              <span className="text-[9px] sm:text-[10px] text-emerald-700 font-bold -mt-0.5 tracking-tight">سفير القرية</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="text-left hidden xs:block">
+              <p className="text-slate-900 text-xs font-bold truncate max-w-[120px] sm:max-w-none">{distributorName}</p>
+              <p className="text-[10px] text-slate-500">الموزع المعتمد</p>
+            </div>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 font-bold text-xs sm:text-sm shadow-xs">
+              👨‍💼
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="p-6 md:p-8 flex-1 max-w-7xl w-full">
+        {/* Page Content with safe padding for bottom nav on mobile */}
+        <main className="p-3.5 sm:p-6 md:p-8 flex-1 max-w-7xl w-full mx-auto pb-24 lg:pb-8">
           {children}
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation Bar & Mobile Drawer */}
+      <DistributorMobileNav distributorName={distributorName} walletBalance={walletBalance} />
     </div>
   );
 }
+

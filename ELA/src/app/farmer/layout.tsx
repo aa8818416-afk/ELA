@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { signOut } from "@/app/actions/auth";
 
 const navItems = [
   { href: "/farmer", icon: "🏠", label: "الرئيسية" },
   { href: "/farmer/scanner", icon: "🌿", label: "طبيب المحاصيل" },
-  { href: "/farmer/weather", icon: "🌤️", label: "الطقس والبيئة" },
+  { href: "/farmer/weather", icon: "🌤️", label: "الطقس" },
   { href: "/farmer/products", icon: "🛒", label: "المنتجات" },
   { href: "/farmer/orders", icon: "📦", label: "طلباتي" },
 ];
@@ -29,10 +29,10 @@ export default function FarmerLayout({
   return (
     <div className="min-h-screen bg-[#f8faf9] text-slate-900 flex flex-col font-sans">
       {/* Top Header */}
-      <header className="bg-white/90 backdrop-blur-xl border-b border-slate-200/80 sticky top-0 z-50 shadow-xs">
-        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+      <header className="bg-white/95 backdrop-blur-xl border-b border-slate-200/80 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-lg mx-auto px-4 flex items-center justify-between" style={{ height: '56px' }}>
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-base shadow-sm shadow-emerald-900/20 text-white">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-base shadow-sm shadow-emerald-900/20 text-white flex-shrink-0">
               🌾
             </div>
             <div className="flex flex-col leading-none">
@@ -41,13 +41,14 @@ export default function FarmerLayout({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-emerald-800 text-xs font-bold bg-emerald-100/70 border border-emerald-200 px-2.5 py-1 rounded-full">
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-800 text-xs font-bold bg-emerald-100/70 border border-emerald-200 px-2.5 py-1 rounded-full hidden xs:inline-flex">
               مزارع
             </span>
+            {/* Logout — touch target 44×44 */}
             <button
               onClick={handleLogout}
-              className="p-1.5 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-lg transition-all active:scale-95"
+              className="w-11 h-11 flex items-center justify-center hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-xl transition-all active:scale-90 active:bg-red-50"
               title="تسجيل الخروج"
             >
               <LogOut className="w-5 h-5" />
@@ -56,27 +57,42 @@ export default function FarmerLayout({
         </div>
       </header>
 
-      {/* Page Content */}
-      <main className="flex-1 max-w-lg mx-auto w-full px-4 pb-28 pt-5">
+      {/* Page Content — pb accounts for nav + iOS home indicator */}
+      <main className="flex-1 max-w-lg mx-auto w-full px-4 pt-4 pb-[88px]">
         {children}
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-lg safe-area-pb">
-        <div className="max-w-lg mx-auto flex justify-around">
+      {/* Bottom Navigation — min 60px tap area per item */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 bg-white/97 backdrop-blur-xl border-t border-slate-200/90 shadow-lg"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        <div className="max-w-lg mx-auto flex">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-all active:scale-95 ${
-                  isActive ? "text-emerald-700 font-bold" : "text-slate-500 hover:text-slate-800 font-medium"
-                }`}
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-all active:scale-90 relative
+                  ${isActive ? "text-emerald-700" : "text-slate-400 hover:text-slate-700"}
+                `}
+                style={{ minHeight: '60px', paddingTop: '10px', paddingBottom: '10px' }}
               >
-                <span className={`text-xl transition-transform ${isActive ? "scale-110" : ""}`}>{item.icon}</span>
-                <span className="text-[11px]">{item.label}</span>
-                {isActive && <span className="w-1 h-1 rounded-full bg-emerald-600 mt-0.5"></span>}
+                {/* Active background pill */}
+                {isActive && (
+                  <span className="absolute inset-x-2 top-1.5 h-8 bg-emerald-50 rounded-xl border border-emerald-200/60" />
+                )}
+                <span
+                  className={`relative text-xl transition-transform duration-200 ${isActive ? "scale-110" : "scale-100"}`}
+                >
+                  {item.icon}
+                </span>
+                <span
+                  className={`relative text-[10px] font-bold leading-tight ${isActive ? "text-emerald-700" : "text-slate-500"}`}
+                >
+                  {item.label}
+                </span>
               </Link>
             );
           })}

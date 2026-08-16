@@ -99,7 +99,7 @@ export default function CampaignCard({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-3xl border transition-all shadow-xs ${
+      className={`overflow-hidden rounded-3xl border transition-all shadow-xs ${
         isMaxAchieved
           ? "bg-emerald-50/80 border-emerald-300 shadow-sm"
           : activeDiscount > 0
@@ -107,8 +107,16 @@ export default function CampaignCard({
           : "bg-white border-slate-200/90"
       }`}
     >
+      {/* Expiry Badge — on top full width so it doesn't overlap */}
+      {campaign.end_date && (
+        <div className="bg-red-50 border-b border-red-200 text-red-700 text-[11px] font-bold px-4 py-1.5 flex items-center gap-1.5">
+          <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>ينتهي العرض: {new Date(campaign.end_date).toLocaleDateString("ar-EG")}</span>
+        </div>
+      )}
+
       {/* Product Header */}
-      <div className="p-5">
+      <div className="p-4">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h3 className="text-slate-900 font-black text-lg leading-tight mb-1">
@@ -159,21 +167,23 @@ export default function CampaignCard({
             />
           </div>
 
-          <div className="mt-2 text-center">
+          <div className="mt-2">
             {isMaxAchieved ? (
-              <span className="text-emerald-800 text-xs font-black flex items-center justify-center gap-1 bg-emerald-100 py-1 px-3 rounded-full border border-emerald-200">
+              <div className="text-emerald-800 text-xs font-black flex items-center justify-center gap-1.5 bg-emerald-100 py-2 px-3 rounded-xl border border-emerald-200 text-center">
                 ✅ تم تفعيل الحد الأقصى للخصم {activeDiscount}% للجميع! 🎉
-              </span>
+              </div>
             ) : activeDiscount > 0 ? (
-              <span className="text-emerald-800 text-xs font-bold block bg-emerald-50 py-1 px-2.5 rounded-full border border-emerald-200">
-                مفعّل حالياً: خصم {activeDiscount}%! متبقي <strong className="text-amber-800 font-black">{remaining} عبوة</strong> للوصول للخصم التالي ({nextTargetDiscount}%)
-              </span>
+              <div className="text-emerald-800 text-xs font-bold bg-emerald-50 py-2 px-3 rounded-xl border border-emerald-200 leading-relaxed">
+                مفعّل: خصم {activeDiscount}% — متبقي{" "}
+                <strong className="text-amber-800 font-black">{remaining} عبوة</strong>{" "}
+                للخصم التالي ({nextTargetDiscount}%)
+              </div>
             ) : (
-              <span className="text-amber-900 text-xs font-medium bg-amber-50 py-1 px-2.5 rounded-full border border-amber-200 inline-block">
+              <div className="text-amber-900 text-xs font-medium bg-amber-50 py-2 px-3 rounded-xl border border-amber-200 leading-relaxed">
                 متبقي{" "}
                 <strong className="text-amber-900 font-black">{remaining} عبوة</strong>{" "}
                 للوصول للخصم الأول ({nextTargetDiscount}%)
-              </span>
+              </div>
             )}
           </div>
         </div>
@@ -229,27 +239,19 @@ export default function CampaignCard({
       </div>
 
       {/* WhatsApp Share Footer */}
-      <div className="border-t border-slate-100 px-5 py-3 bg-slate-50/50">
+      <div className="border-t border-slate-100 px-4 py-3 bg-slate-50/50">
         <button
           onClick={handleWhatsAppShare}
-          className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-xs transition-all active:scale-95 border ${
+          className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm transition-all active:scale-[0.97] border ${
             shared
               ? "bg-emerald-700 text-white border-emerald-800 shadow-sm"
               : "bg-[#25D366] hover:bg-[#20ba5a] text-white border-[#1ebc56] shadow-sm shadow-[#25D366]/20"
           }`}
         >
           <Share2 className="w-4 h-4" />
-          {shared ? "تم الإرسال! 👍" : `أقنع جارك! شارك على واتساب`}
+          {shared ? "تم الإرسال! 👍" : "أقنع جارك! شارك على واتساب"}
         </button>
       </div>
-
-      {/* Expiry Badge */}
-      {campaign.end_date && (
-        <div className="absolute top-3 left-3 bg-red-50 border border-red-200 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
-          <Calendar className="w-3 h-3" />
-          ينتهي {new Date(campaign.end_date).toLocaleDateString("ar-EG")}
-        </div>
-      )}
     </div>
   );
 }

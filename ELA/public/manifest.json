@@ -1,0 +1,50 @@
+{
+  "name": "ELA صديقك وخبير مزرعتك",
+  "short_name": "ELA",
+  "description": "هو صديقك وخبير مزرعتك - المنصة الزراعية والذكية المتكاملة",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a5c3a",
+  "dir": "rtl",
+  "lang": "ar",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512x512.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["productivity", "business", "agriculture"],
+  "shortcuts": [
+    {
+      "name": "خبير المحاصيل الذكي",
+      "short_name": "الخبير",
+      "description": "محادثة خبير المحاصيل الذكي",
+      "url": "/farmer/chat",
+      "icons": [{ "src": "/icons/icon-192x192.jpg", "sizes": "192x192", "type": "image/jpeg" }]
+    },
+    {
+      "name": "أجندة المحاصيل",
+      "short_name": "الأجندة",
+      "description": "متابعة المحاصيل والمهام الزراعية",
+      "url": "/farmer/agenda",
+      "icons": [{ "src": "/icons/icon-192x192.jpg", "sizes": "192x192", "type": "image/jpeg" }]
+    }
+  ]
+}

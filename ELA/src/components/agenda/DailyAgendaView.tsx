@@ -68,22 +68,24 @@ export function DailyAgendaView({ fieldsAgendaData, onRespond, onAddNewField }: 
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-5 text-right dir-rtl font-sans text-slate-900" dir="rtl">
+    <div className="space-y-4 text-right dir-rtl font-sans text-slate-900" dir="rtl">
       {/* Header */}
-      <div className="bg-white border border-slate-200/80 p-5 rounded-3xl shadow-xs flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-slate-900 mb-0.5">📅 الأجندة الزراعية اليومية</h1>
-          <p className="text-xs text-slate-500">تنبيهات الطقس وتوصيات المحاصيل المخصصة لحقولك اليوم</p>
+      <div className="bg-white border border-slate-200/80 p-4 rounded-3xl shadow-xs">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-black text-slate-900 mb-0.5 leading-tight">📅 الأجندة الزراعية اليومية</h1>
+            <p className="text-xs text-slate-500 leading-relaxed">تنبيهات الطقس وتوصيات المحاصيل اليومية</p>
+          </div>
+          {onAddNewField && (
+            <button
+              onClick={onAddNewField}
+              className="flex-shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700 text-xs font-black px-3.5 py-2.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 active:scale-95"
+            >
+              <span>➕</span>
+              <span>حقل جديد</span>
+            </button>
+          )}
         </div>
-        {onAddNewField && (
-          <button
-            onClick={onAddNewField}
-            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-black px-3.5 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1.5"
-          >
-            <span>➕</span>
-            <span>إضافة حقل</span>
-          </button>
-        )}
       </div>
 
       {fieldsAgendaData.length === 0 ? (
@@ -114,17 +116,18 @@ export function DailyAgendaView({ fieldsAgendaData, onRespond, onAddNewField }: 
               className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-xs hover:border-slate-300 transition-all"
             >
               {/* Field Title */}
-              <div className="p-5 bg-slate-50/70 border-b border-slate-100 flex justify-between items-center">
-                <div>
-                  <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-                    <span>🌾</span> {data.fieldName || data.cropType}
-                  </h2>
-                  <span className="text-xs text-slate-500 font-medium">
-                    العمر: {data.cropAgeDays} يوم من تاريخ الزراعة ({data.cropType})
-                  </span>
-                </div>
-                <div className="text-left">
-                  <span className={`text-xs px-3 py-1 rounded-full font-bold border ${
+              <div className="p-4 bg-slate-50/70 border-b border-slate-100">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                      <span>🌾</span>
+                      <span>{data.fieldName || data.cropType}</span>
+                    </h2>
+                    <span className="text-xs text-slate-500 font-medium block mt-0.5">
+                      العمر: <strong className="text-slate-700">{data.cropAgeDays}</strong> يوم — {data.cropType}
+                    </span>
+                  </div>
+                  <span className={`self-start sm:self-center text-xs px-3 py-1.5 rounded-xl font-bold border ${
                     isNearHarvest
                       ? 'bg-amber-100 text-amber-900 border-amber-300 font-black'
                       : 'bg-emerald-100 text-emerald-800 border-emerald-200'
@@ -176,36 +179,38 @@ export function DailyAgendaView({ fieldsAgendaData, onRespond, onAddNewField }: 
                     className="p-4 rounded-2xl bg-[#fbfdfa] border border-slate-200 space-y-3 shadow-xs"
                   >
                     {/* Badge & Risk Title */}
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between items-start gap-2">
                       {getSeverityBadge(alert.severity_snapshot)}
-                      <span className="text-[11px] text-slate-400 font-mono">الحالة: {alert.status}</span>
+                      <span className="text-[10px] text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded-full shrink-0">
+                        {alert.status}
+                      </span>
                     </div>
 
-                    <p className="text-xs text-slate-900 font-bold leading-relaxed">
+                    <p className="text-sm text-slate-900 font-bold leading-relaxed">
                       {alert.advice_text_snapshot}
                     </p>
 
                     {alert.advice_reason_snapshot && (
-                      <p className="text-[11px] text-slate-600 bg-white p-2.5 rounded-xl border border-slate-200">
+                      <p className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200 leading-relaxed">
                         🔍 سبب التنبيه: {alert.advice_reason_snapshot}
                       </p>
                     )}
 
-                    {/* Action Buttons depending on status */}
-                    <div className="pt-2 flex flex-wrap gap-2 border-t border-slate-100">
+                    {/* Action Buttons — stacked full-width for easy tapping on mobile */}
+                    <div className="pt-2 border-t border-slate-100 space-y-2">
                       {alert.status === 'SENT' && (
                         <>
                           <button
                             disabled={loadingAlertId === alert.id}
                             onClick={() => handleAction(alert.id, 'OK')}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3.5 py-2 rounded-xl font-black border border-emerald-700 shadow-xs transition-colors"
+                            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-sm py-3 rounded-xl font-black border border-emerald-700 shadow-xs transition-colors disabled:opacity-50"
                           >
                             👍 تمام (لا توجد مشكلة)
                           </button>
                           <button
                             disabled={loadingAlertId === alert.id}
                             onClick={() => handleAction(alert.id, 'PROBLEM')}
-                            className="bg-amber-500 hover:bg-amber-600 text-white text-xs px-3.5 py-2 rounded-xl font-black border border-amber-600 shadow-xs transition-colors"
+                            className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white text-sm py-3 rounded-xl font-black border border-amber-600 shadow-xs transition-colors disabled:opacity-50"
                           >
                             ⚠️ في مشكلة (تشخيص AI)
                           </button>
@@ -219,9 +224,9 @@ export function DailyAgendaView({ fieldsAgendaData, onRespond, onAddNewField }: 
                                 handleAction(alert.id, 'WANT_PRODUCT');
                               }
                             }}
-                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3.5 py-2 rounded-xl font-black border border-blue-700 shadow-xs transition-colors"
+                            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-sm py-3 rounded-xl font-black border border-blue-700 shadow-xs transition-colors disabled:opacity-50"
                           >
-                            🛒 طلب العلاج
+                            🛍️ طلب العلاج
                           </button>
                         </>
                       )}
@@ -231,28 +236,28 @@ export function DailyAgendaView({ fieldsAgendaData, onRespond, onAddNewField }: 
                           <button
                             disabled={loadingAlertId === alert.id}
                             onClick={() => handleAction(alert.id, 'IMPROVED')}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-xl font-black border border-emerald-700 shadow-xs"
+                            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-sm py-3 rounded-xl font-black border border-emerald-700 shadow-xs transition-colors disabled:opacity-50"
                           >
-                            ✅ اتصلح / اتأثر بالتحسن
+                            ✅ اتصلح / اتحسن الوضع
                           </button>
                           <button
                             disabled={loadingAlertId === alert.id}
                             onClick={() => handleAction(alert.id, 'SAME')}
-                            className="bg-white hover:bg-slate-50 text-slate-800 text-xs px-3 py-2 rounded-xl font-bold border border-slate-300 shadow-xs"
+                            className="w-full flex items-center justify-center gap-2 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-800 text-sm py-3 rounded-xl font-bold border border-slate-300 shadow-xs transition-colors disabled:opacity-50"
                           >
                             🔄 لسه زي ما هو (تصعيد للموزع)
                           </button>
                           <button
                             disabled={loadingAlertId === alert.id}
                             onClick={() => handleAction(alert.id, 'WORSE')}
-                            className="bg-orange-600 hover:bg-orange-700 text-white text-xs px-3 py-2 rounded-xl font-black border border-orange-700 shadow-xs"
+                            className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 active:scale-[0.98] text-white text-sm py-3 rounded-xl font-black border border-orange-700 shadow-xs transition-colors disabled:opacity-50"
                           >
                             🚨 زاد سوء (تصعيد عاجل)
                           </button>
                           <button
                             disabled={loadingAlertId === alert.id}
                             onClick={() => handleAction(alert.id, 'CROP_LOSS')}
-                            className="bg-red-700 hover:bg-red-800 text-white text-xs px-3 py-2 rounded-xl font-black border border-red-800 shadow-xs"
+                            className="w-full flex items-center justify-center gap-2 bg-red-700 hover:bg-red-800 active:scale-[0.98] text-white text-sm py-3 rounded-xl font-black border border-red-800 shadow-xs transition-colors disabled:opacity-50"
                           >
                             🛑 فقدت المحصول بالكامل
                           </button>
@@ -260,14 +265,14 @@ export function DailyAgendaView({ fieldsAgendaData, onRespond, onAddNewField }: 
                       )}
 
                       {alert.status === 'AWAITING_DIAGNOSIS' && (
-                        <div className="w-full bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs font-bold text-amber-900">
-                          🤖 جاري تشخيص المحاصيل تفاعلياً مع الذكاء الاصطناعي...
+                        <div className="w-full bg-amber-50 p-3.5 rounded-xl border border-amber-200 text-sm font-bold text-amber-900 text-center">
+                          🤖 جاري تشخيص المحاصيل مع الذكاء الاصطناعي...
                         </div>
                       )}
 
                       {alert.status === 'AWAITING_DISTRIBUTOR_ACTION' && (
-                        <div className="w-full bg-blue-50 p-3 rounded-xl border border-blue-200 text-xs font-bold text-blue-900">
-                          📞 تم تصعيد التنبيه للموزع المعتمد للمتابعة الميدانية.
+                        <div className="w-full bg-blue-50 p-3.5 rounded-xl border border-blue-200 text-sm font-bold text-blue-900 text-center">
+                          📞 تم تصعيد التنبيه للموزع للمتابعة الميدانية.
                         </div>
                       )}
                     </div>

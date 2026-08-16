@@ -196,40 +196,42 @@ export default function OrderForm({
   }
 
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-xs">
+    <div className="bg-white rounded-3xl p-4 sm:p-8 border border-slate-200/90 shadow-xs">
       {/* Mode Switcher */}
-      <div className="flex items-center justify-between mb-6 pb-3 border-b border-slate-100">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-3 border-b border-slate-100">
+        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setMode("quick")}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${
               mode === "quick"
                 ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
                 : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
             }`}
           >
-            <Zap className="w-3.5 h-3.5" /> طلب فردي سريع
+            <Zap className="w-3.5 h-3.5" />
+            <span>طلب سريع</span>
           </button>
           <button
             type="button"
             onClick={() => setMode("catalog")}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${
               mode === "catalog"
                 ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
                 : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
             }`}
           >
-            <Package className="w-3.5 h-3.5" /> تصفح الكتالوج والفلترة
+            <Package className="w-3.5 h-3.5" />
+            <span>تصفح الكتالوج</span>
           </button>
         </div>
 
-        <span className="text-xs text-slate-500 font-medium">
+        <span className="text-[11px] sm:text-xs text-slate-500 font-medium text-left">
           {farmers.length} مزارع متاح
         </span>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
         {/* Step 1: Farmer Selector */}
         <div ref={farmerRef} className="relative">
           <label className="block text-xs font-bold text-slate-900 mb-1.5 flex items-center gap-1">
@@ -241,8 +243,8 @@ export default function OrderForm({
             onClick={() => setShowFarmerDropdown(true)}
             className="w-full bg-slate-50 border border-slate-300 hover:border-emerald-500 rounded-2xl px-4 py-3 text-xs text-slate-900 font-medium flex items-center justify-between cursor-pointer transition-all shadow-2xs"
           >
-            <span>{selectedFarmer ? selectedFarmer.full_name : "اضغط للبحث واختيار الفلاح..."}</span>
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <span className="truncate">{selectedFarmer ? selectedFarmer.full_name : "اضغط للبحث واختيار الفلاح..."}</span>
+            <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
           </div>
 
           {showFarmerDropdown && (
@@ -254,9 +256,9 @@ export default function OrderForm({
                   onChange={(e) => setFarmerSearch(e.target.value)}
                   placeholder="اكتب اسم الفلاح للبحث..."
                   autoFocus
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 font-medium pl-8 focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium pl-8 focus:ring-2 focus:ring-emerald-500 outline-none"
                 />
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3" />
               </div>
 
               <div className="divide-y divide-slate-100">
@@ -270,7 +272,7 @@ export default function OrderForm({
                         setSelectedFarmerId(f.profile_id);
                         setShowFarmerDropdown(false);
                       }}
-                      className={`p-2.5 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center justify-between ${
+                      className={`p-3 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center justify-between ${
                         selectedFarmerId === f.profile_id
                           ? "bg-emerald-50 text-emerald-800 font-bold"
                           : "hover:bg-slate-50 text-slate-800"
@@ -278,7 +280,7 @@ export default function OrderForm({
                     >
                       <span>{f.full_name}</span>
                       {selectedFarmerId === f.profile_id && (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       )}
                     </div>
                   ))
@@ -302,7 +304,7 @@ export default function OrderForm({
                 onClick={() => setShowFiltersPanel(!showFiltersPanel)}
                 className="text-emerald-700 hover:text-emerald-800 text-[11px] font-bold flex items-center gap-1"
               >
-                <Filter className="w-3 h-3" /> فلترة المحاصيل والأنواع
+                <Filter className="w-3 h-3" /> فلترة
               </button>
             )}
           </div>
@@ -349,21 +351,21 @@ export default function OrderForm({
             onClick={() => setShowProductDropdown(true)}
             className="w-full bg-slate-50 border border-slate-300 hover:border-emerald-500 rounded-2xl px-4 py-3 text-xs text-slate-900 font-medium flex items-center justify-between cursor-pointer transition-all shadow-2xs"
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               {selectedProduct?.image_url && (
                 <ZoomableImage
                   src={selectedProduct.image_url}
                   alt={selectedProduct.name_ar}
-                  className="w-6 h-6 rounded-md object-cover"
+                  className="w-6 h-6 rounded-md object-cover flex-shrink-0"
                 />
               )}
-              <span>
+              <span className="truncate">
                 {selectedProduct
                   ? `${selectedProduct.name_ar} (${selectedProduct.price_to_farmer} ج.م)`
                   : "اضغط للبحث واختيار المنتج..."}
               </span>
             </div>
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
           </div>
 
           {showProductDropdown && (
@@ -375,9 +377,9 @@ export default function OrderForm({
                   onChange={(e) => setProductSearch(e.target.value)}
                   placeholder="ابحث باسم السماد أو المبيد..."
                   autoFocus
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 font-medium pl-8 focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium pl-8 focus:ring-2 focus:ring-emerald-500 outline-none"
                 />
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3" />
               </div>
 
               <div className="divide-y divide-slate-100">
@@ -397,21 +399,21 @@ export default function OrderForm({
                           : "hover:bg-slate-50 text-slate-800"
                       }`}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         {p.image_url ? (
                           <ZoomableImage
                             src={p.image_url}
                             alt={p.name_ar}
-                            className="w-7 h-7 rounded-md object-cover"
+                            className="w-7 h-7 rounded-md object-cover flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-7 h-7 bg-slate-100 rounded-md flex items-center justify-center text-slate-400">
+                          <div className="w-7 h-7 bg-slate-100 rounded-md flex items-center justify-center text-slate-400 flex-shrink-0">
                             📦
                           </div>
                         )}
-                        <span className="font-bold">{p.name_ar}</span>
+                        <span className="font-bold truncate">{p.name_ar}</span>
                       </div>
-                      <span className="font-bold font-mono text-emerald-800">
+                      <span className="font-bold font-mono text-emerald-800 flex-shrink-0 mr-2">
                         {Math.round(p.price_to_farmer).toLocaleString("ar-EG")} ج.م
                       </span>
                     </div>
@@ -426,20 +428,20 @@ export default function OrderForm({
         <div>
           <label className="block text-xs font-bold text-slate-900 mb-1.5">3. تحديد الكمية المطلوبة</label>
           <div className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
-            <span className="text-xs text-slate-700 font-medium">الكمية (بالعبوة / الشيكارة):</span>
+            <span className="text-xs text-slate-700 font-medium">الكمية (بالعبوة):</span>
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                className="w-8 h-8 rounded-xl bg-white border border-slate-300 text-slate-700 font-black text-sm flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all shadow-2xs"
+                className="w-10 h-10 rounded-xl bg-white border border-slate-300 text-slate-700 font-black text-base flex items-center justify-center hover:bg-slate-100 active:scale-90 transition-all shadow-2xs"
               >
                 -
               </button>
-              <span className="w-10 text-center font-black text-sm font-mono text-slate-900">{quantity}</span>
+              <span className="w-10 text-center font-black text-base font-mono text-slate-900">{quantity}</span>
               <button
                 type="button"
                 onClick={() => setQuantity((q) => q + 1)}
-                className="w-8 h-8 rounded-xl bg-emerald-600 border border-emerald-700 text-white font-black text-sm flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all shadow-2xs"
+                className="w-10 h-10 rounded-xl bg-emerald-600 border border-emerald-700 text-white font-black text-base flex items-center justify-center hover:bg-emerald-700 active:scale-90 transition-all shadow-2xs"
               >
                 +
               </button>
@@ -472,7 +474,7 @@ export default function OrderForm({
         <button
           type="submit"
           disabled={isLoading || !selectedFarmerId || !selectedProductId}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 text-white font-bold text-xs rounded-2xl py-3.5 px-4 shadow-xs border border-emerald-700 transition-all flex items-center justify-center gap-2 active:scale-95"
+          className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 text-white font-bold text-sm rounded-2xl py-3.5 px-4 shadow-xs border border-emerald-700 transition-all flex items-center justify-center gap-2 active:scale-95"
         >
           {isLoading ? (
             <>
@@ -490,3 +492,4 @@ export default function OrderForm({
     </div>
   );
 }
+

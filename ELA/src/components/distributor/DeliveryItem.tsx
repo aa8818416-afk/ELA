@@ -189,9 +189,9 @@ export default function DeliveryItem({ order, onDelivered, onMarkSeen }: Deliver
         </div>
 
         {/* Price & Primary Delivery Action */}
-        <div className="text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between items-center sm:items-end gap-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-          <div>
-            <p className="text-slate-500 text-[11px] font-medium mb-0.5">المطلوب تحصيله</p>
+        <div className="text-right w-full sm:w-auto flex flex-col sm:flex-col justify-between items-stretch sm:items-end gap-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+          <div className="flex items-baseline justify-between sm:justify-start sm:flex-col sm:items-end">
+            <p className="text-slate-500 text-xs font-medium mb-0.5">المطلوب تحصيله:</p>
             <p className="text-emerald-800 font-black text-xl font-mono">
               {Math.round(order.total_price).toLocaleString("ar-EG")} <span className="text-xs font-normal">ج.م</span>
             </p>
@@ -200,7 +200,7 @@ export default function DeliveryItem({ order, onDelivered, onMarkSeen }: Deliver
           <button
             onClick={handleMarkDelivered}
             disabled={isLoading || isSuccess}
-            className={`font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-xs border active:scale-95 ${
+            className={`w-full sm:w-auto font-bold text-xs px-4 py-3 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs border active:scale-[0.98] ${
               isSuccess
                 ? "bg-emerald-100 text-emerald-900 border-emerald-300 cursor-not-allowed"
                 : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700"
@@ -213,34 +213,34 @@ export default function DeliveryItem({ order, onDelivered, onMarkSeen }: Deliver
             ) : (
               <Check className="w-4 h-4" />
             )}
-            {isSuccess ? "تم التحصيل والتسليم" : "تأكيد التسليم والتحصيل"}
+            <span>{isSuccess ? "تم التحصيل والتسليم" : "تأكيد التسليم والتحصيل كاش"}</span>
           </button>
         </div>
       </div>
 
-      {/* Addition from Model B: Direct WhatsApp & Phone Call Action Bar */}
-      <div className="flex items-center gap-2 pt-4 mt-4 border-t border-slate-100">
+      {/* Direct WhatsApp & Phone Call Action Bar */}
+      <div className="grid grid-cols-2 gap-2 pt-3.5 mt-3.5 border-t border-slate-100">
         {order.farmer_phone ? (
           <>
             <a
               href={`https://wa.me/2${order.farmer_phone}?text=${whatsappMessage}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold text-xs py-2 px-3 rounded-xl border border-emerald-200 flex items-center justify-center gap-1.5 transition-all shadow-2xs active:scale-95"
+              className="bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs active:scale-95"
             >
-              <MessageCircle className="w-3.5 h-3.5 text-emerald-700" />
-              واتساب الفلاح
+              <MessageCircle className="w-3.5 h-3.5" />
+              <span>واتساب</span>
             </a>
             <a
               href={`tel:${order.farmer_phone}`}
-              className="flex-1 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs py-2 px-3 rounded-xl border border-slate-300 flex items-center justify-center gap-1.5 transition-all shadow-2xs active:scale-95"
+              className="bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs py-2.5 px-3 rounded-xl border border-slate-300 flex items-center justify-center gap-1.5 transition-all shadow-2xs active:scale-95"
             >
               <Phone className="w-3.5 h-3.5 text-slate-500" />
-              اتصال هاتف
+              <span>اتصال</span>
             </a>
           </>
         ) : (
-          <div className="text-[11px] text-slate-400">لا يوجد رقم هاتف مسجل لهذا المزارع</div>
+          <div className="col-span-2 text-[11px] text-slate-400 text-center py-1">لا يوجد رقم هاتف مسجل لهذا المزارع</div>
         )}
       </div>
 
@@ -252,3 +252,4 @@ export default function DeliveryItem({ order, onDelivered, onMarkSeen }: Deliver
     </div>
   );
 }
+
