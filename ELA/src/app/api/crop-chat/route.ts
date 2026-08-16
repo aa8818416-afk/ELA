@@ -174,7 +174,8 @@ async function getCandidateGemmaKeys(
                 km.daily_usage < km.daily_limit &&
                 km.model_name &&
                 km.model_name.toLowerCase().includes("gemma") &&
-                km.api_keys?.api_key
+                km.api_keys?.api_key &&
+                (km.api_keys?.project_name === "gemini" || !km.api_keys?.project_name)
         );
     }
 
@@ -186,6 +187,7 @@ async function getCandidateGemmaKeys(
             .select("id, model_name, daily_usage, daily_limit, status, api_keys!inner(id, api_key, status, project_name)")
             .eq("status", "active")
             .eq("api_keys.status", "active")
+            .eq("api_keys.project_name", "gemini")
             .ilike("model_name", "%gemma%")
             .order("daily_usage", { ascending: true });
 
@@ -202,13 +204,13 @@ async function getCandidateGemmaKeys(
                 id: null,
                 model_name: "gemma-4-31b-it",
                 daily_usage: 0,
-                api_keys: { api_key: primaryApiKey },
+                api_keys: { api_key: primaryApiKey, project_name: "gemini" },
             },
             {
                 id: null,
                 model_name: "gemma-4-26b-a4b-it",
                 daily_usage: 0,
-                api_keys: { api_key: primaryApiKey },
+                api_keys: { api_key: primaryApiKey, project_name: "gemini" },
             },
         ];
     }
@@ -2154,6 +2156,7 @@ ${pendingActivitiesContext}
             .select("id, model_name, daily_usage, daily_limit, status, thinking_level, api_keys!inner(id, api_key, status, project_name)")
             .eq("status", "active")
             .eq("api_keys.status", "active")
+            .eq("api_keys.project_name", "gemini")
             .order("daily_usage", { ascending: true });
 
         if (excludedIds.length > 0) {
@@ -2249,13 +2252,18 @@ ${pendingActivitiesContext}
 
         if (!response.ok) {
             const errorBody = await response.text();
-            console.error(`[crop-chat] API ERROR | HTTP ${response.status} | Key: ${keyData.api_keys.id.slice(0, 6)}... | Body:`, errorBody);
+            console.error(`[crop-chat] API ERROR | HTTP ${response.status} | Key: ${keyData.api_keys.id.slice(0, 6)}... | Model: ${modelName} | Body:`, errorBody);
             if (response.status === 429) {
                 await (supabaseAdmin as any).from("api_key_models").update({ status: "rate_limited" }).eq("id", keyData.id);
                 return attemptChat(attemptCount + 1, [...excludedIds, keyData.id]);
             }
             if (response.status === 503) {
                 await new Promise((r) => setTimeout(r, 3000));
+                return attemptChat(attemptCount + 1, [...excludedIds, keyData.id]);
+            }
+            // If the key failed with 400 (invalid key), 404 (model not found), etc., try other available keys if available
+            if (attemptCount < 5 && keyModels.length > excludedIds.length + 1) {
+                console.warn(`[crop-chat] Retrying with next available Gemini key due to HTTP ${response.status}...`);
                 return attemptChat(attemptCount + 1, [...excludedIds, keyData.id]);
             }
             return NextResponse.json(
