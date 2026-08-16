@@ -175,7 +175,7 @@ async function getCandidateGemmaKeys(
                 km.model_name &&
                 km.model_name.toLowerCase().includes("gemma") &&
                 km.api_keys?.api_key &&
-                (km.api_keys?.project_name === "gemini" || !km.api_keys?.project_name)
+                km.api_keys?.project_name === "gemini"
         );
     }
 
@@ -193,7 +193,10 @@ async function getCandidateGemmaKeys(
 
         if (dbGemmaModels && dbGemmaModels.length > 0) {
             candidateGemmaKeys = dbGemmaModels.filter(
-                (km: any) => km.daily_usage < km.daily_limit && km.api_keys?.api_key
+                (km: any) =>
+                    km.daily_usage < km.daily_limit &&
+                    km.api_keys?.api_key &&
+                    km.api_keys?.project_name === "gemini"
             );
         }
     }
@@ -2173,19 +2176,29 @@ ${pendingActivitiesContext}
             );
         }
 
-        const validKeys = keyModels.filter((km: any) => km.daily_usage < km.daily_limit);
+        // Strictly filter in JS to only allow active Gemini keys with daily_usage < daily_limit
+        const validKeys = keyModels.filter(
+            (km: any) =>
+                km.status === "active" &&
+                km.daily_usage < km.daily_limit &&
+                km.api_keys?.status === "active" &&
+                km.api_keys?.project_name === "gemini" &&
+                km.api_keys?.api_key
+        );
 
         if (validKeys.length === 0) {
-            console.error("[crop-chat] All active keys have exceeded their daily limits.");
+            console.error("[crop-chat] All active Gemini keys have exceeded their daily limits or none available.");
             return NextResponse.json(
                 { error: "نظام الذكاء الاصطناعي غير متاح حالياً (تم تجاوز حد الاستخدام)" },
                 { status: 503 }
             );
         }
 
-        // Orchestrator uses non-Gemma keys (Gemini models)
+        // Orchestrator uses non-Gemma keys (Gemini models only)
         const nonGemmaKeys = validKeys.filter(
-            (km: any) => !km.model_name || !km.model_name.toLowerCase().includes("gemma")
+            (km: any) =>
+                km.model_name &&
+                !km.model_name.toLowerCase().includes("gemma")
         );
         const primaryValidKeys = nonGemmaKeys.length > 0 ? nonGemmaKeys : validKeys;
 
