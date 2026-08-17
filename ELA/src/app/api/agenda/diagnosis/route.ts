@@ -1,9 +1,21 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { processEvent } from '@/lib/agenda/state-machine';
+import { EGYPT_CENTERS_COORDINATES } from '@/data/egyptCenters';
+import { getOrFetchCenterWeather } from '@/lib/weatherLogic';
 import type { AlertInstance, WeatherSnapshot } from '@/lib/agenda/types';
 
 export const dynamic = 'force-dynamic';
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 interface DiagnosisRequestBody {
   alertInstanceId: string;
@@ -51,12 +63,34 @@ export async function POST(req: Request) {
       });
     }
 
-    // FINAL DECISION REACHED — capture weather snapshot ONCE here (§8)
+    // FINAL DECISION REACHED — capture real weather snapshot ONCE here (§8)
+    const { data: fieldData } = await (supabase as any)
+      .from('farmer_fields')
+      .select('latitude, longitude')
+      .eq('id', alertInstance.farmer_field_id)
+      .maybeSingle();
+
+    const fieldLat = fieldData?.latitude ?? 30.0444;
+    const fieldLng = fieldData?.longitude ?? 31.2357;
+
+    const nearestCenter = EGYPT_CENTERS_COORDINATES.reduce(
+      (best, c) => {
+        const d = haversineKm(fieldLat, fieldLng, c.lat, c.lng);
+        return d < best.dist ? { center: c, dist: d } : best;
+      },
+      { center: EGYPT_CENTERS_COORDINATES[0], dist: Infinity }
+    ).center;
+
+    const weatherData = await getOrFetchCenterWeather(nearestCenter, supabase);
+
     const finalDecisionWeather: WeatherSnapshot = {
-      temperature: 23,
-      humidity: 80,
-      source_timestamp: nowIso,
+      temperature: weatherData?.temperature_2m ?? 24,
+      humidity: weatherData?.relative_humidity_2m ?? 55,
+      wind_speed: weatherData?.wind_speed_10m ?? 10,
+      radiation: weatherData?.et0_fao_evapotranspiration ?? 15,
+      source_timestamp: weatherData?.fetched_at ?? nowIso,
       captured_at_final_diagnosis: true,
+      stale: !weatherData,
     };
 
     let transitionResult;

@@ -1,9 +1,21 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { processEvent } from '@/lib/agenda/state-machine';
+import { EGYPT_CENTERS_COORDINATES } from '@/data/egyptCenters';
+import { getOrFetchCenterWeather } from '@/lib/weatherLogic';
 import type { AlertEvent, AlertInstance, WeatherSnapshot } from '@/lib/agenda/types';
 
 export const dynamic = 'force-dynamic';
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 interface RespondRequestBody {
   alertInstanceId: string;
@@ -22,7 +34,7 @@ interface RespondRequestBody {
 /**
  * POST /api/agenda/respond
  * Handles farmer feedback on alerts and triggers state machine transitions.
- * Captures weather_snapshot_at_response upon response (§5.0).
+ * Captures real weather_snapshot_at_response upon response.
  */
 export async function POST(req: Request) {
   try {
@@ -47,12 +59,34 @@ export async function POST(req: Request) {
 
     const alertInstance: AlertInstance = alert;
 
-    // 2. Capture current weather snapshot at response time
+    // 2. Fetch real weather snapshot at response time for farmer's field location
+    const { data: fieldData } = await (supabase as any)
+      .from('farmer_fields')
+      .select('latitude, longitude')
+      .eq('id', alertInstance.farmer_field_id)
+      .maybeSingle();
+
+    const fieldLat = fieldData?.latitude ?? 30.0444;
+    const fieldLng = fieldData?.longitude ?? 31.2357;
+
+    const nearestCenter = EGYPT_CENTERS_COORDINATES.reduce(
+      (best, c) => {
+        const d = haversineKm(fieldLat, fieldLng, c.lat, c.lng);
+        return d < best.dist ? { center: c, dist: d } : best;
+      },
+      { center: EGYPT_CENTERS_COORDINATES[0], dist: Infinity }
+    ).center;
+
+    const weatherData = await getOrFetchCenterWeather(nearestCenter, supabase);
+
     const currentResponseWeather: WeatherSnapshot = {
-      temperature: 24,
-      humidity: 78,
-      source_timestamp: nowIso,
+      temperature: weatherData?.temperature_2m ?? 24,
+      humidity: weatherData?.relative_humidity_2m ?? 55,
+      wind_speed: weatherData?.wind_speed_10m ?? 10,
+      radiation: weatherData?.et0_fao_evapotranspiration ?? 15,
+      source_timestamp: weatherData?.fetched_at ?? nowIso,
       captured_at_response: true,
+      stale: !weatherData,
     };
 
     // 3. Map request responseType to AlertEvent

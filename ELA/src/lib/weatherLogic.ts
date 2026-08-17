@@ -54,20 +54,214 @@ export interface DayPeriodSummary {
 }
 
 /**
- * Open-Meteo WMO Weather Code Translator
+ * Determines if a given hour or date string is daytime.
+ * Accurately extracts the hour (0-23) in Egypt/local time.
+ * If sunrise/sunset are provided, it extracts their time-of-day (hour:minute)
+ * so that both today and future dates are evaluated correctly by their time-of-day.
  */
-export function getWeatherDescription(code: number | null): { label: string; emoji: string; color: string } {
-  if (code === null) return { label: 'غير متاح', emoji: '❓', color: 'text-slate-400' };
-  if (code === 0) return { label: 'صحو تام', emoji: '☀️', color: 'text-amber-400' };
-  if (code <= 2) return { label: 'غائم جزئياً', emoji: '⛅', color: 'text-amber-300' };
-  if (code === 3) return { label: 'غائم', emoji: '☁️', color: 'text-slate-300' };
-  if (code <= 49) return { label: 'ضباب', emoji: '🌫️', color: 'text-slate-400' };
-  if (code <= 59) return { label: 'رذاذ خفيف', emoji: '🌦️', color: 'text-blue-300' };
-  if (code <= 69) return { label: 'أمطار', emoji: '🌧️', color: 'text-blue-400' };
-  if (code <= 79) return { label: 'ثلج', emoji: '❄️', color: 'text-blue-200' };
-  if (code <= 82) return { label: 'أمطار غزيرة', emoji: '⛈️', color: 'text-blue-500' };
-  if (code <= 99) return { label: 'عاصفة رعدية', emoji: '🌩️', color: 'text-violet-400' };
-  return { label: 'غير معروف', emoji: '🌡️', color: 'text-slate-400' };
+export function isDaytime(hourOrDate?: number | string | Date, sunrise?: string | null, sunset?: string | null): boolean {
+  let targetHour: number;
+  let targetMinute = 0;
+
+  if (typeof hourOrDate === 'number') {
+    targetHour = hourOrDate;
+  } else if (typeof hourOrDate === 'string' || hourOrDate instanceof Date) {
+    const d = new Date(hourOrDate);
+    targetHour = d.getHours();
+    targetMinute = d.getMinutes();
+  } else {
+    const now = new Date();
+    targetHour = now.getHours();
+    targetMinute = now.getMinutes();
+  }
+
+  if (sunrise && sunset) {
+    const sr = new Date(sunrise);
+    const ss = new Date(sunset);
+    if (!isNaN(sr.getTime()) && !isNaN(ss.getTime())) {
+      const srMinutes = sr.getHours() * 60 + sr.getMinutes();
+      const ssMinutes = ss.getHours() * 60 + ss.getMinutes();
+      const currentMinutes = targetHour * 60 + targetMinute;
+      return currentMinutes >= srMinutes && currentMinutes < ssMinutes;
+    }
+  }
+
+  return targetHour >= 6 && targetHour < 19;
+}
+
+export type WeatherIconType =
+  | 'clear'
+  | 'mostly_clear'
+  | 'partly_cloudy'
+  | 'overcast'
+  | 'fog'
+  | 'rime_fog'
+  | 'drizzle_light'
+  | 'drizzle_moderate'
+  | 'drizzle_dense'
+  | 'freezing_drizzle'
+  | 'rain_light'
+  | 'rain_moderate'
+  | 'rain_heavy'
+  | 'freezing_rain'
+  | 'snow_light'
+  | 'snow_moderate'
+  | 'snow_heavy'
+  | 'snow_grains'
+  | 'rain_showers_light'
+  | 'rain_showers_moderate'
+  | 'rain_showers_heavy'
+  | 'snow_showers'
+  | 'thunderstorm'
+  | 'thunderstorm_hail'
+  | 'unknown';
+
+export interface WeatherConditionDetails {
+  label: string;
+  emoji: string;
+  color: string;
+  iconType: WeatherIconType;
+  isDay: boolean;
+}
+
+/**
+ * Open-Meteo WMO Weather Code Translator (Comprehensive 28 codes with Google Weather accuracy)
+ */
+export function getWeatherDescription(
+  code: number | null,
+  isDay: boolean = true
+): WeatherConditionDetails {
+  if (code === null || code === undefined) {
+    return { label: 'غير متاح', emoji: '❓', color: 'text-slate-400', iconType: 'unknown', isDay };
+  }
+
+  // WMO 0: Clear Sky
+  if (code === 0) {
+    return isDay
+      ? { label: 'صحو تام', emoji: '☀️', color: 'text-amber-500', iconType: 'clear', isDay }
+      : { label: 'صافٍ ليلاً', emoji: '🌙', color: 'text-indigo-300', iconType: 'clear', isDay };
+  }
+
+  // WMO 1: Mainly Clear
+  if (code === 1) {
+    return isDay
+      ? { label: 'مشمس غالباً', emoji: '🌤️', color: 'text-amber-400', iconType: 'mostly_clear', isDay }
+      : { label: 'صافٍ غالباً', emoji: '✨', color: 'text-indigo-200', iconType: 'mostly_clear', isDay };
+  }
+
+  // WMO 2: Partly Cloudy
+  if (code === 2) {
+    return isDay
+      ? { label: 'غائم جزئياً', emoji: '⛅', color: 'text-amber-300', iconType: 'partly_cloudy', isDay }
+      : { label: 'غائم جزئياً ليلاً', emoji: '☁️🌙', color: 'text-slate-300', iconType: 'partly_cloudy', isDay };
+  }
+
+  // WMO 3: Overcast
+  if (code === 3) {
+    return { label: 'غائم كلياً', emoji: '☁️', color: 'text-slate-400', iconType: 'overcast', isDay };
+  }
+
+  // WMO 45: Fog
+  if (code === 45) {
+    return { label: 'ضباب', emoji: '🌫️', color: 'text-slate-400', iconType: 'fog', isDay };
+  }
+
+  // WMO 48: Depositing Rime Fog
+  if (code === 48) {
+    return { label: 'ضباب جليدي وشبورة', emoji: '🌫️❄️', color: 'text-slate-400', iconType: 'rime_fog', isDay };
+  }
+
+  // WMO 51: Light Drizzle
+  if (code === 51) {
+    return { label: 'رذاذ خفيف', emoji: isDay ? '🌦️' : '🌧️', color: 'text-blue-300', iconType: 'drizzle_light', isDay };
+  }
+
+  // WMO 53: Moderate Drizzle
+  if (code === 53) {
+    return { label: 'رذاذ معتدل', emoji: '🌧️', color: 'text-blue-300', iconType: 'drizzle_moderate', isDay };
+  }
+
+  // WMO 55: Dense Drizzle
+  if (code === 55) {
+    return { label: 'رذاذ كثيف', emoji: '🌧️', color: 'text-blue-400', iconType: 'drizzle_dense', isDay };
+  }
+
+  // WMO 56, 57: Freezing Drizzle
+  if (code === 56 || code === 57) {
+    return { label: 'رذاذ متجمد', emoji: '🌨️', color: 'text-blue-200', iconType: 'freezing_drizzle', isDay };
+  }
+
+  // WMO 61: Slight Rain
+  if (code === 61) {
+    return { label: 'أمطار خفيفة', emoji: isDay ? '🌦️' : '🌧️', color: 'text-blue-400', iconType: 'rain_light', isDay };
+  }
+
+  // WMO 63: Moderate Rain
+  if (code === 63) {
+    return { label: 'أمطار معتدلة', emoji: '🌧️', color: 'text-blue-500', iconType: 'rain_moderate', isDay };
+  }
+
+  // WMO 65: Heavy Rain
+  if (code === 65) {
+    return { label: 'أمطار غزيرة', emoji: '🌧️🌧️', color: 'text-blue-600', iconType: 'rain_heavy', isDay };
+  }
+
+  // WMO 66, 67: Freezing Rain
+  if (code === 66 || code === 67) {
+    return { label: 'أمطار متجمدة', emoji: '🌨️', color: 'text-cyan-300', iconType: 'freezing_rain', isDay };
+  }
+
+  // WMO 71: Slight Snow
+  if (code === 71) {
+    return { label: 'تساقط ثلوج خفيف', emoji: '❄️', color: 'text-blue-200', iconType: 'snow_light', isDay };
+  }
+
+  // WMO 73: Moderate Snow
+  if (code === 73) {
+    return { label: 'تساقط ثلوج معتدل', emoji: '❄️', color: 'text-blue-200', iconType: 'snow_moderate', isDay };
+  }
+
+  // WMO 75: Heavy Snow
+  if (code === 75) {
+    return { label: 'تساقط ثلوج كثيف', emoji: '❄️❄️', color: 'text-blue-100', iconType: 'snow_heavy', isDay };
+  }
+
+  // WMO 77: Snow Grains
+  if (code === 77) {
+    return { label: 'حبيبات ثلجية', emoji: '🌨️', color: 'text-blue-200', iconType: 'snow_grains', isDay };
+  }
+
+  // WMO 80: Slight Rain Showers
+  if (code === 80) {
+    return { label: 'زخات مطر خفيفة', emoji: isDay ? '🌦️' : '🌧️', color: 'text-blue-400', iconType: 'rain_showers_light', isDay };
+  }
+
+  // WMO 81: Moderate Rain Showers
+  if (code === 81) {
+    return { label: 'زخات مطر متوسطة', emoji: '🌧️', color: 'text-blue-500', iconType: 'rain_showers_moderate', isDay };
+  }
+
+  // WMO 82: Violent Rain Showers
+  if (code === 82) {
+    return { label: 'زخات مطر غزيرة جداً', emoji: '⛈️', color: 'text-blue-600', iconType: 'rain_showers_heavy', isDay };
+  }
+
+  // WMO 85, 86: Snow Showers
+  if (code === 85 || code === 86) {
+    return { label: 'زخات ثلجية', emoji: '🌨️', color: 'text-blue-200', iconType: 'snow_showers', isDay };
+  }
+
+  // WMO 95: Thunderstorm
+  if (code === 95) {
+    return { label: 'عاصفة رعدية', emoji: '🌩️', color: 'text-violet-400', iconType: 'thunderstorm', isDay };
+  }
+
+  // WMO 96, 99: Thunderstorm with Hail
+  if (code === 96 || code === 99) {
+    return { label: 'عاصفة رعدية وبَرَد', emoji: '⛈️⚡', color: 'text-violet-500', iconType: 'thunderstorm_hail', isDay };
+  }
+
+  return { label: 'معتدل', emoji: '🌤️', color: 'text-slate-400', iconType: 'clear', isDay };
 }
 
 /**
@@ -81,8 +275,25 @@ export function calcVPD(tempC: number, rhPct: number): number {
 
 /**
  * Spray readiness indicator (مؤشر الرش)
+ * Returns null at nighttime (21:00–05:59) → card hidden entirely.
+ * Wind & rain checks are top priority regardless of time.
+ * @param currentHour - hour of day (0-23) in local time. Defaults to current hour.
  */
-export function calcSprayStatus(wind: number, precipProb: number, vpd: number, heatWarningActive = false): SprayStatus {
+export function calcSprayStatus(
+  wind: number,
+  precipProb: number,
+  vpd: number,
+  heatWarningActive = false,
+  currentHour?: number,
+): SprayStatus | null {
+  const hour = currentHour ?? new Date().getHours();
+
+  // ① الليل (9 مساءً → 5 الفجر): الكارد بيختفي خالص
+  if (hour >= 21 || hour < 6) {
+    return null;
+  }
+
+  // ② الرياح والمطر — أعلى أولوية (تتغلب على الوقت)
   if (wind > 20) {
     return { badge: 'red', message: 'تجنب الرش دلوقتي', reason: 'الرياح شديدة' };
   }
@@ -92,10 +303,22 @@ export function calcSprayStatus(wind: number, precipProb: number, vpd: number, h
   if (wind >= 10) {
     return { badge: 'yellow', message: 'ممكن ترش، بس خد بالك من الرياح' };
   }
-  // الجو مناسب للرش — لكن لو تحذير الحر نشط، نوضح التعارض في نفس الجملة
+
+  // ③ ساعات الحر الشديد (11 الصبح → 4 العصر): تجنب الرش
+  if (hour >= 11 && hour < 16) {
+    return { badge: 'red', message: 'تجنب الرش في الحر', reason: 'المبيد بيتبخر وبيأذي النبات' };
+  }
+
+  // ④ قرب الليل (7 → 9 مساءً): رطوبة عالية
+  if (hour >= 19) {
+    return { badge: 'red', message: 'قرب من الليل، الرطوبة هترتفع وتضر الزرع' };
+  }
+
+  // ⑤ الأوقات الكويسة — لو تحذير الحر نشط، نوضح التعارض
   if (heatWarningActive) {
     return { badge: 'green', message: 'دلوقتي وقت كويس للرش، ولكن تجنب الرش في ساعات الحر كما في التحذير أعلاه' };
   }
+
   return { badge: 'green', message: 'دلوقتي وقت كويس للرش' };
 }
 
@@ -235,8 +458,15 @@ export function splitDayPeriods(hourlyData: HourlyPoint[]) {
 }
 
 /**
+ * 1-Hour Cache Time To Live (TTL) in milliseconds.
+ * Prevents redundant external Open-Meteo API requests and guarantees
+ * fresh updates every hour while safely staying well within free quota limits.
+ */
+const WEATHER_CACHE_TTL_MS = 60 * 60 * 1000; // 1 Hour
+
+/**
  * Retrieves weather from cache or fetches fresh from Open-Meteo
- * if cache is missing or contains incomplete hourly data (< 24 hours).
+ * if cache is missing, expired (> 1 hour old), or contains incomplete data.
  */
 export async function getOrFetchCenterWeather(
   center: { governorate: string; center: string; lat: number; lng: number },
@@ -252,9 +482,14 @@ export async function getOrFetchCenterWeather(
       .eq('longitude', center.lng)
       .maybeSingle();
 
-    // If cache exists and has full 24h per day data (e.g. >= 24 hourly points)
-    if (
+    // Check if cache exists, is complete, and is less than 1 hour old
+    const isCacheFresh =
       cached &&
+      cached.fetched_at &&
+      Date.now() - new Date(cached.fetched_at).getTime() < WEATHER_CACHE_TTL_MS;
+
+    if (
+      isCacheFresh &&
       Array.isArray(cached.hourly_today) &&
       cached.hourly_today.length >= 24 &&
       Array.isArray(cached.daily_forecast) &&
@@ -276,12 +511,14 @@ export async function getOrFetchCenterWeather(
       'wind_speed_10m',
       'precipitation',
       'dew_point_2m',
+      'is_day',
     ].join(','));
     url.searchParams.set('hourly', [
       'temperature_2m',
       'wind_speed_10m',
       'precipitation_probability',
       'weather_code',
+      'is_day',
     ].join(','));
     url.searchParams.set('daily', [
       'temperature_2m_max',

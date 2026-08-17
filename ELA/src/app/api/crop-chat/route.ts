@@ -221,6 +221,68 @@ async function getCandidateGemmaKeys(
     return candidateGemmaKeys;
 }
 
+// ── Gemini / Flash Lite Key Selection Helper (Least-Used Gemini Model) ──────────
+async function getCandidateGeminiKeys(
+    primaryApiKey: string,
+    keyModels?: any[],
+    supabaseAdmin?: any
+): Promise<any[]> {
+    let candidateKeys: any[] = [];
+
+    if (keyModels && keyModels.length > 0) {
+        candidateKeys = keyModels.filter(
+            (km: any) =>
+                km.status === "active" &&
+                km.daily_usage < km.daily_limit &&
+                km.model_name &&
+                !km.model_name.toLowerCase().includes("gemma") &&
+                km.api_keys?.api_key &&
+                km.api_keys?.project_name === "gemini"
+        );
+    }
+
+    candidateKeys.sort((a, b) => (a.daily_usage || 0) - (b.daily_usage || 0));
+
+    if (candidateKeys.length === 0 && supabaseAdmin) {
+        const { data: dbGeminiModels } = await (supabaseAdmin as any)
+            .from("api_key_models")
+            .select("id, model_name, daily_usage, daily_limit, status, thinking_level, api_keys!inner(id, api_key, status, project_name)")
+            .eq("status", "active")
+            .eq("api_keys.status", "active")
+            .eq("api_keys.project_name", "gemini")
+            .not("model_name", "ilike", "%gemma%")
+            .order("daily_usage", { ascending: true });
+
+        if (dbGeminiModels && dbGeminiModels.length > 0) {
+            candidateKeys = dbGeminiModels.filter(
+                (km: any) =>
+                    km.daily_usage < km.daily_limit &&
+                    km.api_keys?.api_key &&
+                    km.api_keys?.project_name === "gemini"
+            );
+        }
+    }
+
+    if (candidateKeys.length === 0) {
+        candidateKeys = [
+            {
+                id: null,
+                model_name: "gemini-3.5-flash-lite",
+                daily_usage: 0,
+                api_keys: { api_key: primaryApiKey, project_name: "gemini" },
+            },
+            {
+                id: null,
+                model_name: "gemini-3.1-flash-lite",
+                daily_usage: 0,
+                api_keys: { api_key: primaryApiKey, project_name: "gemini" },
+            },
+        ];
+    }
+
+    return candidateKeys;
+}
+
 // ── Web Search Sub-Agent (Gemma with google_search) ────────────────────────────
 interface GemmaSearchResult {
     success: boolean;
@@ -1169,6 +1231,7 @@ interface ActivitySubagentResponse {
         action: string;
         fields: Record<string, any>;
     };
+    agent_note?: string;
 }
 
 async function executeActivitySubagent(
@@ -1204,28 +1267,21 @@ async function executeActivitySubagent(
   "operations": [ { "type": "...", "tool_result": {...} | null } ],
   "missing_fields": [...],
   "ambiguous_matches": [...],
-  "confirmation_summary": { "action": "...", "fields": {...} }
+  "confirmation_summary": { "action": "...", "fields": {...} },
+  "agent_note": "ملاحظة أو استفسار أو توضيح مفتوح للأوركستريتور (اختياري)"
 }
 - استخدم فقط الحقل (missing_fields / ambiguous_matches / confirmation_summary) المناسب لحالة status، واحذف الباقي أو اتركها فارغة.
+- حقل \`agent_note\`: قناة تواصل مباشرة ومفتوحة مع الأوركستريتور. يمكنك كتابة أي ملاحظة داخلية، استفسار، مشكلة واجهتها في استخراج البيانات، تناقض لاحظته في كلام الفلاح، أو معلومة إضافية تراها مهمة لمساعدة الأوركستريتور في توجيه الحوار. هذا الحقل داخلي بينك وبين الأوركستريتور ولا يصل للفلاح مباشرة.
 - لو النص يحتوي أكثر من عملية منفصلة (حتى لو أنواعها مختلفة، زي رشة وعمالة سوا)، أرجعهم كلهم كعناصر منفصلة في operations، وكل عنصر بحالته الخاصة إن اختلفت.
 - ممنوع منعاً باتاً كتابة أي جملة عامية أو موجهة للفلاح في أي حقل من حقول الناتج؛ كل الحقول بيانات هيكلية بحتة.
 </output_contract>
 
 <domain_context>
-بيانات الأراضي المسجلة حالياً للفلاح:
-${domainContext.activeFieldsContext}
-
-الأنشطة المعلقة:
-${domainContext.pendingActivitiesContext || "لا توجد أنشطة معلقة"}
-
-قاعدة المنتجات (للمطابقة):
-${domainContext.productsContext}
-
-العملية المعلقة من رسالة سابقة لم تكتمل بعد (إن وجدت):
-${pendingOperationFromSession ? JSON.stringify(pendingOperationFromSession) : "لا توجد"}
-
-آخر جولة من المحادثة (للسياق فقط):
-${lastTurn ? JSON.stringify(lastTurn) : "لا توجد"}
+بيانات الأراضي المسجلة حالياً للفلاح: ${domainContext.activeFieldsContext}
+الأنشطة المعلقة: ${domainContext.pendingActivitiesContext || "لا توجد أنشطة معلقة"}
+قاعدة المنتجات (للمطابقة): ${domainContext.productsContext}
+العملية المعلقة من رسالة سابقة لم تكتمل بعد (إن وجدت): ${pendingOperationFromSession ? JSON.stringify(pendingOperationFromSession) : "null"}
+آخر جولة من المحادثة (للسياق فقط): ${lastTurn ? JSON.stringify(lastTurn) : "null"}
 </domain_context>
 
 <golden_rule_no_invention>
@@ -1237,9 +1293,17 @@ ${lastTurn ? JSON.stringify(lastTurn) : "لا توجد"}
 
 2. إذا كان اسم الأرض المذكور مطابقاً مباشرة لاسم المحصول الحالي (وليس اسماً تقليدياً عاماً مثل "أرض الغلة" أو "أرض النبع")، ضع status="incomplete" مع missing_fields=["field_name_confirmation"] لتوليد سؤال تمييزي حول كون هذا الاسم حقيقياً أم وصفاً مؤقتاً للموسم. اقبل الأسماء التقليدية العامة دون أي سؤال حتى لو اختلف المحصول عن معنى الاسم.
 
+   مثال (يستوجب التوقف):
+   الفلاح: "عندي أرض اسمها أرض الرز، وزرعتها رز من شهرين، ومساحتها فدان"
+   → status="incomplete", missing_fields=["field_name_confirmation"]
+
+   مثال (يُقبل مباشرة):
+   الفلاح: "عندي أرض اسمها أرض الغلة، زرعتها بطاطس من شهر، مساحتها فدانين"
+   → البيانات الأربعة مكتملة ولا يوجد تعارض اسم/محصول → تابع للخطوة 3.
+
 3. عند اكتمال المعلومات الأربعة فعلياً وعدم وجود تعارض اسم/محصول يستوجب سؤالاً، ولم يسبق أن أكّد الفلاح على نفس هذه البيانات بالضبط في pending_operation الممرر إليك: أرجع status="awaiting_confirmation" مع confirmation_summary يحتوي كل الحقول الأربعة. لا تستدعِ الأداة بعد.
 
-4. عندما يصل إليك تأكيد صريح من الفلاح على pending_operation ممرر إليك (مثل "آه صح، سجلها" أو "تمام سجلها")، استدعِ manage_farmer_field بـ action="register_field" فعلياً، وأرجع status="complete" مع tool_result الفعلي.
+4. عندما يصل إليك تأكيد صريح من الفلاح على pending_operation ممرر إليك (مثل "آه صح، سجلها")، استدعِ manage_farmer_field بـ action="register_field" فعلياً، وأرجع status="complete" مع tool_result الفعلي.
 
 5. إذا كان لدى الفلاح أرض مسجلة بنفس الاسم والمحصول، لا تسجل مباشرة. أرجع status="incomplete" مع missing_fields=["disambiguation_note"] لطلب صفة مميزة (قبلي/بحري/إلخ)، وعند وصولها استدعِ manage_farmer_field بـ action="disambiguate".
 
@@ -1260,12 +1324,23 @@ ${lastTurn ? JSON.stringify(lastTurn) : "لا توجد"}
 </field_registration_rules>
 
 <field_id_resolution>
-هذا القسم لتحديد field_id الفعلي المستخدم في استدعاء أي أداة:
+هذا القسم لتحديد field_id الفعلي المستخدم في استدعاء أي أداة، وهو أدق من أي تخمين لأن ربط نشاط بأرض خاطئة يفسد كل تحليل مستقبلي.
+
 عندما يذكر الفلاح نشاطاً أو تسجيلاً مرتبطاً بموقف فعلي، وذكر صفة أو أكثر (محصول/مساحة/تاريخ) دون اسم الأرض صراحة:
 1. كم أرضاً من أراضي الفلاح المسجلة تطابق هذه الصفات مجتمعة؟
    - صفر: لا ترتبط بأي field_id. لو العملية تسجيل نشاط، أرجع status="incomplete" مع missing_fields=["field_name"] لطلب الاسم أو اقتراح تسجيلها كأرض جديدة.
    - أرض واحدة فقط: هذا هو field_id المقصود، استخدمه مباشرة دون سؤال.
    - أكثر من أرض: أرجع status="ambiguous" مع ambiguous_matches بأسماء الأراضي المتطابقة، ولا تستدعِ أي أداة.
+
+مثال (تطابق فريد):
+بيانات الفلاح: أرض واحدة "أرض خضر" محصولها "الغلة" مساحتها فدانين.
+الفلاح: "عاوزين نرش فدانين الغلة، فيهم دودة، رشيت مبيد كذا"
+→ field_id = أرض خضر (تطابق فريد)، تابع للتسجيل مباشرة.
+
+مثال (تطابق متعدد):
+بيانات الفلاح: أرضان بمحصول "قمح" ومساحة فدان.
+الفلاح: "عندي فدان قمح فيه صدأ، رشيت دواء كذا"
+→ status="ambiguous", ambiguous_matches=["اسم الأرض 1", "اسم الأرض 2"]
 </field_id_resolution>
 
 <field_activity_logging_rules>
@@ -1273,32 +1348,44 @@ ${lastTurn ? JSON.stringify(lastTurn) : "لا توجد"}
 بمجرد أن يذكر الفلاح نشاطاً زراعياً وقع فعلياً (وليس نية مستقبلية)، استدعِ log_field_activity فوراً بكل ما ذكره، بعد تحديد field_id وفق <field_id_resolution>. لا تنتظر اكتمال كل التفاصيل قبل التسجيل.
 
 عند activity_type=treatment، استنتج category مباشرة دون سؤال:
-- "رشيت" أو ذكر مبيد/دواء لآفة -> category="مبيد"
-- "سمّدت" أو ذكر سماد/كيماوي/تغذية -> category="سماد"
+- "رشيت" أو ذكر مبيد/دواء لآفة → category="مبيد"
+- "سمّدت" أو ذكر سماد/كيماوي/تغذية → category="سماد"
 - إذا ذكر اسم منتج موجود في productsContext، استخدم تصنيف المنتج المسجل هناك مباشرة.
 ممنوع منعاً باتاً وضع status="incomplete" لمجرد طلب تحديد مبيد أم سماد إذا كان الاستنتاج ممكناً من السياق.
 </golden_rule_log_immediately>
 
 <matching_reference_lists>
-عند تسجيل اسم منتج أو سبب الرش، طابق اسم المنتج مع productsContext. استخدم product_id المطابق إذا وجدت تطابقاً واضحاً وموثوقاً. إذا لم تجد تطابقاً واضحاً، لا تخترع معرفاً، واكتفِ بتسجيل النص كما قاله الفلاح حرفياً في الحقول النصية (product_name_text / symptom_description / notes).
+عند تسجيل اسم منتج أو سبب الرش، طابق كلام الفلاح مع productsContext. استخدم الـ id المطابق إذا وجدت تطابقاً واضحاً وموثوقاً. إذا لم تجد تطابقاً واضحاً، لا تخترع معرفاً، واكتفِ بتسجيل النص كما قاله الفلاح حرفياً في الحقل النصي.
 </matching_reference_lists>
 
 <pending_vs_new_activity_rules>
 قبل تحديد log_field_activity (جديد) أم update_field_activity (تحديث معلق)، قارن مع pending_activities الممررة في domain_context:
+
 1. أرض مختلفة عن أرض النشاط المعلق: استدعِ log_field_activity فوراً (نشاط مستقل).
 2. نفس الأرض لكن بفارق أكثر من 5 أيام عن activity_date المعلق: استدعِ log_field_activity فوراً (نشاط مستقل).
 3. نفس الأرض وخلال 5 أيام أو أقل:
-   - لو الكلام تفاصيل مكملة واضحة: استدعِ update_field_activity بالـ activity_id.
+   - لو الكلام تفاصيل مكملة واضحة (عدد رشاشات، تأكيد نفس المنتج): استدعِ update_field_activity بالـ activity_id.
    - لو مبهم ومحتمل: أرجع status="incomplete" مع missing_fields=["same_activity_confirmation"] لطلب توضيح هل هي نفس الرشة أم جديدة.
+
+مثال (أرض مختلفة، تسجيل فوري):
+المعلق: رشة "كيمازد" في "أرض خضر" أمس.
+الفلاح: "رشيت أرض النبع النهاردة"
+→ log_field_activity فوري لأرض النبع (بلا سؤال عن المعلق).
 </pending_vs_new_activity_rules>
 
 <golden_rule_update_immediately>
-أي معلومة جديدة يذكرها الفلاح تنطبق على نشاط معلق موضح في domain_context، استدعِ update_field_activity فوراً بالـ activity_id. لا تحوّل mark_completed إلى صحيح إلا إذا ذكر الفلاح أيضاً outcome_rating بنفسه.
+أي معلومة جديدة يذكرها الفلاح تنطبق على نشاط معلق موضح في domain_context — سواء من الأعمدة المطلوبة أو تفصيل إضافي تطوع بذكره — استدعِ update_field_activity فوراً بالـ activity_id، وأدخل المعلومة في حقلها. لا تنشئ نشاطاً جديداً بالخطأ بدلاً من التحديث.
+
+لا تحوّل mark_completed إلى صحيح إلا إذا ذكر الفلاح أيضاً outcome_rating بنفسه.
 </golden_rule_update_immediately>
 </field_activity_logging_rules>
+
+<execution_note>
+عند اكتمال الشروط لأي عملية (تسجيل، تحديث، أو تنفيذ بعد تأكيد)، استدعِ الأداة المناسبة فعلياً في نفس هذا الاستدعاء، وضع ناتجها الحقيقي في tool_result. لا ترجع status="complete" أبداً بدون tool_result فعلي مطابق. إذا فشل تنفيذ عملية من ضمن عدة عمليات، وضّح ذلك في tool_result الخاص بها بينما تكمل باقي العمليات الناجحة بشكل مستقل.
+</execution_note>
 `;
 
-    const candidateGemmaKeys = await getCandidateGemmaKeys(primaryApiKey, keyModels, supabaseAdmin);
+    const candidateGeminiKeys = await getCandidateGeminiKeys(primaryApiKey, keyModels, supabaseAdmin);
 
     const inputPayload = {
         current_message: rawFarmerText,
@@ -1307,13 +1394,13 @@ ${lastTurn ? JSON.stringify(lastTurn) : "لا توجد"}
         last_turn: lastTurn || null
     };
 
-    for (const selectedKey of candidateGemmaKeys) {
-        const gemmaApiKey = selectedKey.api_keys?.api_key || primaryApiKey;
-        const gemmaModel = selectedKey.model_name || "gemma-4-31b-it";
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${gemmaModel}:generateContent?key=${gemmaApiKey}`;
+    for (const selectedKey of candidateGeminiKeys) {
+        const geminiApiKey = selectedKey.api_keys?.api_key || primaryApiKey;
+        const geminiModel = selectedKey.model_name || "gemini-3.5-flash-lite";
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
 
         const inputPayloadStr = JSON.stringify(inputPayload);
-        console.log(`[crop-chat] 🚜 [Activity Sub-Agent] Invoking model "${gemmaModel}" (ID: ${selectedKey.id}) | daily_usage: ${selectedKey.daily_usage}/${selectedKey.daily_limit}`);
+        console.log(`[crop-chat] 🚜 [Activity Sub-Agent] Invoking Flash Lite model "${geminiModel}" (ID: ${selectedKey.id}) | daily_usage: ${selectedKey.daily_usage}/${selectedKey.daily_limit}`);
         console.log(`[crop-chat] 📥 [Activity Sub-Agent Input] message: "${rawFarmerText}" | payload_size: ${inputPayloadStr.length} chars | pending_op: ${inputPayload.pending_operation ? 'YES' : 'none'} | last_turn: ${inputPayload.last_turn ? 'YES' : 'none'}`);
 
         const requestBody = {
@@ -1334,6 +1421,9 @@ ${lastTurn ? JSON.stringify(lastTurn) : "لا توجد"}
                 temperature: 0,
                 maxOutputTokens: 2500,
                 responseMimeType: "application/json",
+                thinkingConfig: selectedKey.thinking_level ? {
+                    thinkingLevel: selectedKey.thinking_level.toUpperCase()
+                } : undefined,
             },
         };
 
@@ -1351,7 +1441,7 @@ ${lastTurn ? JSON.stringify(lastTurn) : "لا توجد"}
 
             if (!res.ok) {
                 const errText = await res.text();
-                console.error(`[crop-chat] ❌ Activity subagent call failed HTTP ${res.status} on ${gemmaModel}:`, errText);
+                console.error(`[crop-chat] ❌ Activity subagent call failed HTTP ${res.status} on ${geminiModel}:`, errText);
                 if (res.status === 429 && selectedKey.id && supabaseAdmin) {
                     await (supabaseAdmin as any).from("api_key_models").update({ status: "rate_limited" }).eq("id", selectedKey.id);
                 }
@@ -1366,7 +1456,7 @@ ${lastTurn ? JSON.stringify(lastTurn) : "لا توجد"}
             // ── Token Usage Logging ─────────────────────────────────────────────
             const usage = data.usageMetadata;
             if (usage) {
-                console.log(`[crop-chat] 🔢 [Activity Sub-Agent Tokens] model: ${gemmaModel} | prompt: ${usage.promptTokenCount ?? '?'} | output: ${usage.candidatesTokenCount ?? '?'} | total: ${usage.totalTokenCount ?? '?'} | latency: ${activityElapsed}ms`);
+                console.log(`[crop-chat] 🔢 [Activity Sub-Agent Tokens] model: ${geminiModel} | prompt: ${usage.promptTokenCount ?? '?'} | output: ${usage.candidatesTokenCount ?? '?'} | total: ${usage.totalTokenCount ?? '?'} | latency: ${activityElapsed}ms`);
             } else {
                 console.log(`[crop-chat] ⏱️ [Activity Sub-Agent] Latency: ${activityElapsed}ms | no usage metadata`);
             }
@@ -1495,7 +1585,7 @@ ${lastTurn ? JSON.stringify(lastTurn) : "لا توجد"}
                     const cleanJson = textParts.replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
                     const parsed = JSON.parse(cleanJson);
                     if (parsed.status) {
-                        console.log(`[crop-chat] ✅ [Activity Sub-Agent Contract] status: "${parsed.status}" | ops: ${parsed.operations?.length ?? 0} | missing: ${JSON.stringify(parsed.missing_fields ?? [])} | ambiguous: ${JSON.stringify(parsed.ambiguous_matches ?? [])}`);
+                        console.log(`[crop-chat] ✅ [Activity Sub-Agent Contract] status: "${parsed.status}" | ops: ${parsed.operations?.length ?? 0} | note: "${parsed.agent_note || 'none'}" | missing: ${JSON.stringify(parsed.missing_fields ?? [])} | ambiguous: ${JSON.stringify(parsed.ambiguous_matches ?? [])}`);
                         return parsed as ActivitySubagentResponse;
                     }
                 } catch (jsonErr) {
@@ -1508,7 +1598,7 @@ ${lastTurn ? JSON.stringify(lastTurn) : "لا توجد"}
                 operations: []
             };
         } catch (fetchErr) {
-            console.error(`[crop-chat] Activity subagent request failed for model ${gemmaModel}:`, fetchErr);
+            console.error(`[crop-chat] Activity subagent request failed for model ${geminiModel}:`, fetchErr);
             continue;
         }
     }
@@ -1548,19 +1638,12 @@ async function executeProfileMemorySubagent(
 </output_contract>
 
 <domain_context>
-ملف المزرعة الحالي:
-${JSON.stringify(currentFarmProfile, null, 2)}
-
-الأراضي المسجلة حالياً للفلاح:
-${activeFieldsContext}
-
-فئات الذاكرة المسجلة سابقاً:
-${existingMemoryCategories.length > 0 ? existingMemoryCategories.join("، ") : "لا توجد"}
+ملف المزرعة الحالي: ${JSON.stringify(currentFarmProfile, null, 2)}
+فئات الذاكرة المسجلة سابقاً: ${existingMemoryCategories.length > 0 ? existingMemoryCategories.join("، ") : "لا توجد"}
 </domain_context>
 
 <stealth_profile_update_rules>
 إذا ذكر النص معلومة جديدة أو دائمة عن أرض الفلاح أو معداته أو ريه أو محصوله (مثل سعة رشاشة، نوع تربة، طريقة ري، مساحة عامة، تقاوي)، استدعِ update_farm_profile فوراً بالحقل المطابق. إذا ذكر محصولاً غير موجود في قائمة الاختيارات المغلقة، اختر 'other_crop'.
-استعن بقائمة الأراضي المسجلة لفهم سياق أراضيه، وتجنب تسجيل بيانات متعارضة مع أراضيه القائمة إلا إذا صرّح بتعديل عام في مزرعته.
 </stealth_profile_update_rules>
 
 <memory_categories>
@@ -1568,25 +1651,31 @@ ${existingMemoryCategories.length > 0 ? existingMemoryCategories.join("، ") : "
   - budget_level: قدرته المالية وميله للحلول الاقتصادية أو المرتفعة الثمن (قيمة واحدة تمثل حالته الحالية).
   - risk_tolerance: مدى استعداده لتجربة منتجات أو طرق جديدة (قيمة واحدة).
   - communication_style: طريقته المفضلة في تلقي المعلومة (قيمة واحدة).
-  - crop_preference: المحاصيل التي يفضل زراعتها عموماً أو يميل لها كشغف/تفضيل دائم (قيم متعددة - لا تسجل مجرد محصول موسم عادي مذكور كنشاط أرض، بل سجّل ما يعبّر عن تفضيل أو حب لمحصول معين).
+  - crop_preference: المحاصيل التي يفضل زراعتها (قيم متعددة).
   - trusted_source: الجهات التي يثق برأيها الزراعي (قيم متعددة).
+
 إذا لم تنطبق الحقيقة بوضوح على أي تصنيف، لا تسجلها إطلاقاً.
 </memory_categories>
 
 <how_to_log>
 استخدم log_farmer_memory فوراً بمجرد استنتاج حقيقة بثقة عالية.
+
 تصنيفات القيمة الواحدة (budget_level, risk_tolerance, communication_style): لو الفلاح قال ما يناقض حقيقة مسجلة سابقاً لنفس التصنيف، سجّل الحقيقة الجديدة (ستحل تلقائياً محل القديمة).
-تصنيفات القيم المتعددة (crop_preference, trusted_source): كل ذكر جديد يُضاف كحقيقة مستقلة.
-لا تسجل ملاحظة عابرة أو مبنية على تخمين؛ سجّل فقط ما صرّح به الفلاح فعلياً.
+
+تصنيفات القيم المتعددة (crop_preference, trusted_source): كل ذكر جديد يُضاف كحقيقة مستقلة، ولا يُفترض أنه يلغي ما قبله إلا بتصريح صريح بالتراجع (مثل "بطلت أزرع كذا").
+
+لا تسجل ملاحظة عابرة أو مبنية على تخمين؛ سجّل فقط ما صرّح به الفلاح فعلياً أو استنتجته بثقة عالية من سياق واضح ومتكرر.
 </how_to_log>
 `;
 
-        const candidateGemmaKeys = await getCandidateGemmaKeys(primaryApiKey, keyModels, supabaseAdmin);
+        const candidateGeminiKeys = await getCandidateGeminiKeys(primaryApiKey, keyModels, supabaseAdmin);
 
-        for (const selectedKey of candidateGemmaKeys) {
-            const gemmaApiKey = selectedKey.api_keys?.api_key || primaryApiKey;
-            const gemmaModel = selectedKey.model_name || "gemma-4-31b-it";
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${gemmaModel}:generateContent?key=${gemmaApiKey}`;
+        for (const selectedKey of candidateGeminiKeys) {
+            const geminiApiKey = selectedKey.api_keys?.api_key || primaryApiKey;
+            const geminiModel = selectedKey.model_name || "gemini-3.5-flash-lite";
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
+
+            console.log(`[crop-chat] 🧠 [Profile/Memory Sub-Agent (Background)] Invoking Flash Lite model "${geminiModel}" (ID: ${selectedKey.id}) | daily_usage: ${selectedKey.daily_usage}/${selectedKey.daily_limit}`);
 
             const requestBody = {
                 contents: [
@@ -1606,6 +1695,9 @@ ${existingMemoryCategories.length > 0 ? existingMemoryCategories.join("، ") : "
                     temperature: 0,
                     maxOutputTokens: 2000,
                     responseMimeType: "application/json",
+                    thinkingConfig: selectedKey.thinking_level ? {
+                        thinkingLevel: selectedKey.thinking_level.toUpperCase()
+                    } : undefined,
                 },
             };
 
@@ -1622,7 +1714,10 @@ ${existingMemoryCategories.length > 0 ? existingMemoryCategories.join("، ") : "
 
                 if (!res.ok) {
                     const errText = await res.text();
-                    console.error(`[crop-chat] ❌ Profile/Memory Sub-Agent failed HTTP ${res.status} on ${gemmaModel}:`, errText);
+                    console.error(`[crop-chat] ❌ Profile/Memory Sub-Agent failed HTTP ${res.status} on ${geminiModel}:`, errText);
+                    if (res.status === 429 && selectedKey.id && supabaseAdmin) {
+                        await (supabaseAdmin as any).from("api_key_models").update({ status: "rate_limited" }).eq("id", selectedKey.id);
+                    }
                     continue;
                 }
 
@@ -1634,7 +1729,7 @@ ${existingMemoryCategories.length > 0 ? existingMemoryCategories.join("، ") : "
                 // ── Token Usage for Memory Sub-Agent ───────────────────────────
                 const memUsage = data.usageMetadata;
                 if (memUsage) {
-                    console.log(`[crop-chat] 🔢 [Profile/Memory Sub-Agent Tokens] model: ${gemmaModel} | prompt: ${memUsage.promptTokenCount ?? '?'} | output: ${memUsage.candidatesTokenCount ?? '?'} | total: ${memUsage.totalTokenCount ?? '?'} | latency: ${memElapsed}ms`);
+                    console.log(`[crop-chat] 🔢 [Profile/Memory Sub-Agent Tokens] model: ${geminiModel} | prompt: ${memUsage.promptTokenCount ?? '?'} | output: ${memUsage.candidatesTokenCount ?? '?'} | total: ${memUsage.totalTokenCount ?? '?'} | latency: ${memElapsed}ms`);
                 } else {
                     console.log(`[crop-chat] ⏱️ [Profile/Memory Sub-Agent] Latency: ${memElapsed}ms`);
                 }
@@ -1694,7 +1789,7 @@ ${existingMemoryCategories.length > 0 ? existingMemoryCategories.join("، ") : "
                 console.log(`[crop-chat] 🧠 [Profile/Memory Sub-Agent (Background)] Completed successfully.`);
                 return;
             } catch (err) {
-                console.error(`[crop-chat] Background profile memory subagent fetch error for model ${gemmaModel}:`, err);
+                console.error(`[crop-chat] Background profile memory subagent fetch error for model ${geminiModel}:`, err);
                 continue;
             }
         }
@@ -1774,12 +1869,19 @@ export async function POST(request: Request) {
         serviceRoleKey
     );
 
-    // 2. Fetch fresh farmer profile and active fields
-    const [farmerRowRes, farmerFieldsRes, farmerMemoryRes] = await Promise.all([
-        (supabaseAdmin as any).from("farmers").select("farm_profile").eq("profile_id", userId).maybeSingle(),
-        (supabaseAdmin as any).from("farmer_fields").select("id, field_name, crop_type, planting_date, area_feddan, area_unit, is_active").eq("farmer_id", userId).eq("is_active", true).order("created_at", { ascending: false }),
+    // 2. Fetch fresh farmer profile, location, active fields, memory, and active agenda alerts
+    const [farmerRowRes, farmerFieldsRes, farmerMemoryRes, weatherCacheRes] = await Promise.all([
+        (supabaseAdmin as any).from("farmers").select("governorate, center, village, farm_profile").eq("profile_id", userId).maybeSingle(),
+        (supabaseAdmin as any).from("farmer_fields").select("id, field_name, crop_type, planting_date, area_feddan, area_unit, latitude, longitude, is_active").eq("farmer_id", userId).eq("is_active", true).order("created_at", { ascending: false }),
         (supabaseAdmin as any).from("farmer_memory").select("category, fact").eq("farmer_id", userId).eq("is_active", true),
+        (supabaseAdmin as any).from("weather_cache").select("location_name, temperature_2m, relative_humidity_2m, wind_speed_10m, weather_code, daily_forecast").order("fetched_at", { ascending: false }).limit(10),
     ]);
+
+    const farmerLocationText = [
+        farmerRowRes.data?.village ? `قرية ${farmerRowRes.data.village}` : null,
+        farmerRowRes.data?.center ? `مركز ${farmerRowRes.data.center}` : null,
+        farmerRowRes.data?.governorate ? `محافظة ${farmerRowRes.data.governorate}` : null,
+    ].filter(Boolean).join("، ") || "غير مسجل بدقة";
 
     const farmerProfile = (farmerRowRes.data?.farm_profile as Record<string, any>) || {};
     const farmerProfileFormatted = Object.keys(farmerProfile).length > 0
@@ -1792,6 +1894,34 @@ export async function POST(request: Request) {
             `- المعرف: ${f.id} | اسم الأرض: ${f.field_name || "بدون اسم"} | المحصول: ${f.crop_type || "غير محدد"} | المساحة: ${displayArea(f.area_feddan || 1, f.area_unit || "فدان")} | تاريخ الزراعة: ${f.planting_date || "غير محدد"}`
         ).join("\n")
         : "لا توجد أراضٍ مسجلة حالياً للفلاح.";
+
+    // Fetch active open agenda alerts for these fields
+    const fieldIds = activeFields.map((f: any) => f.id);
+    let openAlertsContext = "لا توجد تنبيهات مخاطر نشطة اليوم على حقولك.";
+    if (fieldIds.length > 0) {
+        const { data: openAlerts } = await (supabaseAdmin as any)
+            .from("alert_instances")
+            .select("risk_type, severity_snapshot, advice_text_snapshot, advice_reason_snapshot, farmer_field_id")
+            .in("farmer_field_id", fieldIds)
+            .not("status", "in", '("CLOSED_FALSE_ALARM","AUTO_CLOSED_NO_RESPONSE","RESOLVED","CROP_LOSS","CLOSED_SEASON_END","MISDIAGNOSED_ORIGINAL")');
+
+        if (openAlerts && openAlerts.length > 0) {
+            openAlertsContext = openAlerts.map((a: any) => {
+                const field = activeFields.find((f: any) => f.id === a.farmer_field_id);
+                const fieldName = field?.field_name || field?.crop_type || "الحقل";
+                return `- [تنبيه خطر (${a.severity_snapshot}) على ${fieldName}]: نوع الخطر: ${a.risk_type} | التوجيه الفني: ${a.advice_text_snapshot}${a.advice_reason_snapshot ? ` (السبب: ${a.advice_reason_snapshot})` : ""}`;
+            }).join("\n");
+        }
+    }
+
+    // Determine nearest weather context
+    const weatherRows = (weatherCacheRes.data as any[]) || [];
+    let weatherSummaryContext = "بيانات الطقس غير متوفرة حالياً.";
+    if (weatherRows.length > 0) {
+        const farmerGov = farmerProfile.governorate || farmerProfile.center || "";
+        const matched = farmerGov ? weatherRows.find((w: any) => w.location_name?.includes(farmerGov)) || weatherRows[0] : weatherRows[0];
+        weatherSummaryContext = `المنطقة: ${matched.location_name} | درجة الحرارة: ${matched.temperature_2m}°C | الرطوبة النسبية: ${matched.relative_humidity_2m}% | سرعة الرياح: ${matched.wind_speed_10m} كم/س`;
+    }
 
     const existingMemoryCategories = Array.from(new Set(((farmerMemoryRes.data as any[]) || []).map((m: any) => m.category).filter(Boolean)));
     const farmerMemories = (farmerMemoryRes.data as any[]) || [];
@@ -1916,6 +2046,7 @@ export async function POST(request: Request) {
     // 5. Main Orchestrator System Prompt
     const mainSystemPrompt = `<context>
 التاريخ والوقت الحالي في مصر: ${nowCairo}
+موقع المزارع الجغرافي: ${farmerLocationText}
 </context>
 
 <role>
@@ -1964,6 +2095,20 @@ ${activeFieldsContext}
 
 عند سؤال الفلاح عن أراضيه، اذكرها كلها بالترتيب بالاسم والمحصول والمساحة. لا تكتفِ بذكر بعضها.
 </active_fields>
+
+<regional_weather_context>
+حالة الطقس الحالية المسجلة لمنطقة الفلاح وحقوله:
+${weatherSummaryContext}
+
+استخدم هذه البيانات لإرشاد الفلاح حول ملاءمة الطقس للرش (سرعة الرياح < 15 كم/س، عدم وجود أمطار أو رطوبة مفرطة تسبب غسيل المبيد)، ومواعيد الري المناسبة وفقاً لدرجات الحرارة.
+</regional_weather_context>
+
+<active_agenda_alerts>
+تنبيهات ومخاطر الأجندة اليومية الصادرة لحقول الفلاح:
+${openAlertsContext}
+
+إذا سأل الفلاح عن مشاكل أو أمراض أو ما إذا كان هناك خطر يهدد أرضه اليوم، استشهد بهذه التنبيهات المعتمدة ووجّهه بحسب النصيحة الفنية المسجلة.
+</active_agenda_alerts>
 
 <farmer_behavioral_memory>
 إليك الملاحظات والحقائق السلوكية المسجلة عن هذا الفلاح:
@@ -2086,6 +2231,8 @@ ${farmerMemoryContext}
 - \`status: "ambiguous"\` مع \`ambiguous_matches\`: اسأل الفلاح تحديداً عن أنهي أرض يقصد من القائمة المرجعة، ولا تكمل أي استشارة أو تعليق إضافي قبل إجابته.
 
 - \`status: "complete"\` مع \`operations\` تحتوي \`tool_result\` ناجحة: طبّق <acknowledging_farmer_answers>, واذكر النجاح بدقة تامة بناءً على tool_result فقط. إذا نجح جزء وفشل جزء آخر (في حالة عمليات متعددة)، وضّح ذلك بدقة. يُمنع منعاً باتاً الادعاء بتسجيل أي عملية لم يرجع لها tool_result ناجح صراحة.
+
+- إذا تضمنت نتيجة activity_subagent حقلاً باسم \`agent_note\`: هذه قناة تواصل وملاحظة داخلية أو استفسار أو تنبيه موجه لك من المتخصص لمساعدتك في فهم الموقف، أو توضيح أي مشكلة أو تناقض واجهه في استخراج البيانات. استفد منها في فهم الصورة وتوجيه ردك للفلاح، لكن لا تذكر نص \`agent_note\` الحرفي أو التقني للفلاح.
 
 اجمع استدعاء activity_subagent واستدعاء profile_memory_subagent في نفس الرد الواحد دائماً كلما أمكن (يعملان بالتوازي)، بدلاً من الانتظار وتنفيذهما على التوالي.
 </subagent_orchestration>

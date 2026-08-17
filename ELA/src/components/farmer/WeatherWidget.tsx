@@ -1,5 +1,9 @@
+'use client';
+
+import { useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { Wind, Droplets, Thermometer, ShieldAlert, ArrowLeft, ChevronLeft } from 'lucide-react';
+import WeatherIcon from '@/components/farmer/WeatherIcon';
 import {
   calcVPD,
   calcSprayStatus,
@@ -7,6 +11,7 @@ import {
   calcHeatWarning,
   calcFrostWarning,
   getWeatherDescription,
+  isDaytime,
   HourlyPoint,
   DayForecast,
 } from '@/lib/weatherLogic';
@@ -52,8 +57,9 @@ function formatTime(iso: string): string {
   }
 }
 
-function getHourIcon(hour: number, wmo?: number): string {
-  if (wmo !== undefined) return getWeatherDescription(wmo).emoji;
+function getHourIcon(hour: number, wmo?: number, timeIso?: string, sunrise?: string | null, sunset?: string | null): string {
+  const isDay = isDaytime(timeIso || hour, sunrise, sunset);
+  if (wmo !== undefined) return getWeatherDescription(wmo, isDay).emoji;
   if (hour >= 5 && hour < 7)   return '🌅';
   if (hour >= 7 && hour < 18)  return '☀️';
   if (hour >= 18 && hour < 20) return '🌇';
@@ -61,6 +67,21 @@ function getHourIcon(hour: number, wmo?: number): string {
 }
 
 export default function WeatherWidget({ weather, cropType, latestAlert }: WeatherWidgetProps) {
+  const currentHourRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (currentHourRef.current) {
+        currentHourRef.current.scrollIntoView({
+          behavior: 'smooth',
+          inline: 'center',
+          block: 'nearest',
+        });
+      }
+    }, 150);
+    return () => clearTimeout(t);
+  }, []);
+
   if (!weather) {
     return (
       <div className="bg-white/[0.04] backdrop-blur-md border border-white/[0.08] rounded-3xl p-6 text-center">
@@ -80,15 +101,17 @@ export default function WeatherWidget({ weather, cropType, latestAlert }: Weathe
   const todayForecast = weather.daily_forecast?.[0];
   const precipProb24h = todayForecast ? todayForecast.precip_prob : (weather.precipitation && weather.precipitation > 0 ? 50 : 0);
 
-  const vpd        = temp !== null ? calcVPD(temp, rh) : 1.0;
-  const heatWarn   = calcHeatWarning(weather.hourly_today, weather.apparent_temperature);
-  const spray      = calcSprayStatus(wind, precipProb24h, vpd, heatWarn.show);
-  const irriAdvice = calcIrrigationAdvice(et0, precipProb24h);
-  const frostWarn  = calcFrostWarning(todayForecast ? todayForecast.temp_min : null, cropType);
-  const condition  = getWeatherDescription(weather.weather_code);
-
   const now         = new Date();
   const currentHour = now.getHours();
+
+  const vpd        = temp !== null ? calcVPD(temp, rh) : 1.0;
+  const heatWarn   = calcHeatWarning(weather.hourly_today, weather.apparent_temperature);
+  const spray      = calcSprayStatus(wind, precipProb24h, vpd, heatWarn.show, currentHour);
+  const irriAdvice = calcIrrigationAdvice(et0, precipProb24h);
+  const frostWarn  = calcFrostWarning(todayForecast ? todayForecast.temp_min : null, cropType);
+  const isNowDay   = isDaytime(undefined, weather.sunrise, weather.sunset);
+  const condition  = getWeatherDescription(weather.weather_code, isNowDay);
+
   const hourlyList  = weather.hourly_today || [];
 
   return (
@@ -113,18 +136,24 @@ export default function WeatherWidget({ weather, cropType, latestAlert }: Weathe
 
         {/* Temp & Status */}
         <div className="flex items-end justify-between my-3">
-          <div className="flex items-end gap-3">
+          <div className="flex items-center gap-3">
             <span className="text-6xl font-bold text-white tabular-nums leading-none">
               {temp !== null ? temp : '--'}°
             </span>
-            <div className="pb-1">
-              <span className="text-3xl block leading-none mb-1">{condition.emoji}</span>
-              <p className={`text-xs font-semibold ${condition.color}`}>{condition.label}</p>
+            <div className="flex items-center gap-2">
+              <WeatherIcon
+                code={weather.weather_code}
+                isDay={isNowDay}
+                size={44}
+              />
+              <div>
+                <p className={`text-xs font-semibold ${condition.color}`}>{condition.label}</p>
+                <p className="text-[10px] text-slate-400">يبان زي {apparent}°</p>
+              </div>
             </div>
           </div>
           <div className="text-left text-xs text-slate-400 pb-1">
-            <p>يبان زي {apparent}°</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <p className="text-[11px] text-slate-400 font-mono">
               ↑{todayForecast ? Math.round(todayForecast.temp_max) : '--'}° ↓{todayForecast ? Math.round(todayForecast.temp_min) : '--'}°
             </p>
           </div>
@@ -194,32 +223,34 @@ export default function WeatherWidget({ weather, cropType, latestAlert }: Weathe
           </Link>
         )}
 
-        {/* Spray Status */}
-        <div className={`rounded-2xl p-3 flex items-start gap-2.5 border ${
-          spray.badge === 'green'
-            ? 'bg-emerald-950/50 border-emerald-500/20'
-            : spray.badge === 'yellow'
-            ? 'bg-amber-950/50 border-amber-500/20'
-            : 'bg-red-950/50 border-red-500/20'
-        }`}>
-          <span className="text-xl flex-shrink-0">
-            {spray.badge === 'green' ? '✅' : spray.badge === 'yellow' ? '⚠️' : '🚫'}
-          </span>
-          <div>
-            <p className={`font-bold text-xs ${
-              spray.badge === 'green'
-                ? 'text-emerald-300'
-                : spray.badge === 'yellow'
-                ? 'text-amber-300'
-                : 'text-red-300'
-            }`}>
-              {spray.message}
-            </p>
-            {spray.reason && (
-              <p className="text-slate-400 text-[10px] mt-0.5">{spray.reason}</p>
-            )}
+        {/* Spray Status — مخفي بالليل (21:00–05:59) */}
+        {spray && (
+          <div className={`rounded-2xl p-3 flex items-start gap-2.5 border ${
+            spray.badge === 'green'
+              ? 'bg-emerald-950/50 border-emerald-500/20'
+              : spray.badge === 'yellow'
+              ? 'bg-amber-950/50 border-amber-500/20'
+              : 'bg-red-950/50 border-red-500/20'
+          }`}>
+            <span className="text-xl flex-shrink-0">
+              {spray.badge === 'green' ? '✅' : spray.badge === 'yellow' ? '⚠️' : '🚫'}
+            </span>
+            <div>
+              <p className={`font-bold text-xs ${
+                spray.badge === 'green'
+                  ? 'text-emerald-300'
+                  : spray.badge === 'yellow'
+                  ? 'text-amber-300'
+                  : 'text-red-300'
+              }`}>
+                {spray.message}
+              </p>
+              {spray.reason && (
+                <p className="text-slate-400 text-[10px] mt-0.5">{spray.reason}</p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Irrigation Advice */}
         {irriAdvice && (
@@ -261,6 +292,7 @@ export default function WeatherWidget({ weather, cropType, latestAlert }: Weathe
               return (
                 <div
                   key={h.time}
+                  ref={isCurrentHour ? currentHourRef : undefined}
                   className={`flex-shrink-0 snap-start rounded-2xl p-2 w-[54px] text-center flex flex-col items-center gap-1 transition-all ${
                     isCurrentHour
                       ? 'bg-white shadow-md shadow-white/10 scale-[1.04]'
@@ -274,9 +306,13 @@ export default function WeatherWidget({ weather, cropType, latestAlert }: Weathe
                   }`}>
                     {isCurrentHour ? 'الآن' : `${hour}:00`}
                   </span>
-                  <span className="text-sm leading-none">
-                    {getHourIcon(hour, h.wmo)}
-                  </span>
+                  <div className="w-6 h-6 flex items-center justify-center my-0.5">
+                    <WeatherIcon
+                      code={h.wmo}
+                      isDay={isDaytime(h.time, weather.sunrise, weather.sunset)}
+                      size={22}
+                    />
+                  </div>
                   <span className={`text-xs font-bold tabular-nums ${
                     isCurrentHour ? 'text-slate-900' : 'text-slate-200'
                   }`}>

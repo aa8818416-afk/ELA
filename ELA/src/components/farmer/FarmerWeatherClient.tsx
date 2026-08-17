@@ -10,6 +10,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import Link from 'next/link';
+import WeatherIcon from '@/components/farmer/WeatherIcon';
 import {
   calcVPD,
   calcSprayStatus,
@@ -18,6 +19,7 @@ import {
   calcFrostWarning,
   getWeatherDescription,
   getArabicDayName,
+  isDaytime,
   HourlyPoint,
   DayForecast,
 } from '@/lib/weatherLogic';
@@ -65,8 +67,9 @@ function formatTime(iso: string): string {
   }
 }
 
-function getHourIcon(hour: number, wmo?: number): string {
-  if (wmo !== undefined) return getWeatherDescription(wmo).emoji;
+function getHourIcon(hour: number, wmo?: number, timeIso?: string, sunrise?: string | null, sunset?: string | null): string {
+  const isDay = isDaytime(timeIso || hour, sunrise, sunset);
+  if (wmo !== undefined) return getWeatherDescription(wmo, isDay).emoji;
   if (hour >= 5 && hour < 7)   return '🌅';
   if (hour >= 7 && hour < 18)  return '☀️';
   if (hour >= 18 && hour < 20) return '🌇';
@@ -143,16 +146,17 @@ export default function FarmerWeatherClient({
   const hourScrollRef  = useRef<HTMLDivElement>(null);
   const currentHourRef = useRef<HTMLDivElement>(null);
 
-  /* Auto-scroll hourly row to current hour */
+  /* Auto-scroll hourly row to current hour smoothly & reliably in RTL */
   useEffect(() => {
     const t = setTimeout(() => {
-      if (currentHourRef.current && hourScrollRef.current) {
-        const el        = currentHourRef.current;
-        const container = hourScrollRef.current;
-        const offset    = el.offsetLeft - container.clientWidth / 2 + el.clientWidth / 2;
-        container.scrollTo({ left: Math.max(0, offset), behavior: 'smooth' });
+      if (currentHourRef.current) {
+        currentHourRef.current.scrollIntoView({
+          behavior: 'smooth',
+          inline: 'center',
+          block: 'nearest',
+        });
       }
-    }, 120);
+    }, 150);
     return () => clearTimeout(t);
   }, [selectedDayIndex]);
 
@@ -179,23 +183,24 @@ export default function FarmerWeatherClient({
   const et0      = weather.et0_fao_evapotranspiration !== null
     ? Number(weather.et0_fao_evapotranspiration) : 0;
 
+  const now         = new Date();
+  const currentHour = now.getHours();
+
   const todayForecast = dailyList[0];
   const precipProb24h = todayForecast ? todayForecast.precip_prob : 0;
   const vpd           = temp !== null ? calcVPD(temp, rh) : 1.0;
   const heatWarn      = calcHeatWarning(weather.hourly_today, weather.apparent_temperature);
-  const spray         = calcSprayStatus(wind, precipProb24h, vpd, heatWarn.show);
+  const spray         = calcSprayStatus(wind, precipProb24h, vpd, heatWarn.show, currentHour);
   const irriAdvice    = calcIrrigationAdvice(et0, precipProb24h);
   const frostWarn     = calcFrostWarning(todayForecast ? todayForecast.temp_min : null, cropType);
-  const condition     = getWeatherDescription(weather.weather_code);
+  const isNowDay      = isDaytime(undefined, weather.sunrise, weather.sunset);
+  const condition     = getWeatherDescription(weather.weather_code, isNowDay);
 
   /* Hours for selected day */
   const activeDateStr    = activeDay?.date;
   const selectedDayHours = (weather.hourly_today || []).filter(h =>
     !activeDateStr || h.time.startsWith(activeDateStr)
   );
-
-  const now         = new Date();
-  const currentHour = now.getHours();
 
   /* Global min/max for 7-day temperature bar */
   const allTemps  = dailyList.flatMap(d => [d.temp_min, d.temp_max]);
@@ -226,11 +231,18 @@ export default function FarmerWeatherClient({
 
         {/* Main temperature display */}
         <div className="px-5 pb-3">
-          <div className="flex items-end gap-3 mb-1">
-            <span className="text-[72px] font-black text-slate-900 font-mono leading-none">
-              {temp !== null ? temp : '--'}°
-            </span>
-            <span className="text-5xl mb-2">{condition.emoji}</span>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[68px] font-black text-slate-900 font-mono leading-none tracking-tight">
+                {temp !== null ? temp : '--'}°
+              </span>
+            </div>
+            <WeatherIcon
+              code={weather.weather_code}
+              isDay={isNowDay}
+              size={64}
+              className="drop-shadow-sm"
+            />
           </div>
           <p className="text-base font-black text-emerald-800 mb-0.5">{condition.label}</p>
           <p className="text-slate-600 text-xs font-medium">
@@ -311,32 +323,34 @@ export default function FarmerWeatherClient({
           </Link>
         )}
 
-        {/* Spray status */}
-        <div className={`rounded-2xl p-4 flex items-start gap-3 border shadow-xs ${
-          spray.badge === 'green'
-            ? 'bg-emerald-50 border-emerald-300'
-            : spray.badge === 'yellow'
-            ? 'bg-amber-50 border-amber-300'
-            : 'bg-red-50 border-red-300'
-        }`}>
-          <span className="text-2xl flex-shrink-0 mt-0.5">
-            {spray.badge === 'green' ? '✅' : spray.badge === 'yellow' ? '⚠️' : '🚫'}
-          </span>
-          <div>
-            <p className={`font-black text-sm mb-0.5 ${
-              spray.badge === 'green'
-                ? 'text-emerald-900'
-                : spray.badge === 'yellow'
-                ? 'text-amber-900'
-                : 'text-red-900'
-            }`}>
-              {spray.message}
-            </p>
-            {spray.reason && (
-              <p className="text-slate-600 text-xs mt-0.5">{spray.reason}</p>
-            )}
+        {/* Spray status — مخفي بالليل (21:00–05:59) */}
+        {spray && (
+          <div className={`rounded-2xl p-4 flex items-start gap-3 border shadow-xs ${
+            spray.badge === 'green'
+              ? 'bg-emerald-50 border-emerald-300'
+              : spray.badge === 'yellow'
+              ? 'bg-amber-50 border-amber-300'
+              : 'bg-red-50 border-red-300'
+          }`}>
+            <span className="text-2xl flex-shrink-0 mt-0.5">
+              {spray.badge === 'green' ? '✅' : spray.badge === 'yellow' ? '⚠️' : '🚫'}
+            </span>
+            <div>
+              <p className={`font-black text-sm mb-0.5 ${
+                spray.badge === 'green'
+                  ? 'text-emerald-900'
+                  : spray.badge === 'yellow'
+                  ? 'text-amber-900'
+                  : 'text-red-900'
+              }`}>
+                {spray.message}
+              </p>
+              {spray.reason && (
+                <p className="text-slate-600 text-xs mt-0.5">{spray.reason}</p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Irrigation advice */}
         {irriAdvice && (
@@ -402,9 +416,13 @@ export default function FarmerWeatherClient({
                   }`}>
                     {isCurrentHour ? 'الآن' : `${hour}:00`}
                   </span>
-                  <span className="text-base leading-none">
-                    {getHourIcon(hour, h.wmo)}
-                  </span>
+                  <div className="w-7 h-7 flex items-center justify-center my-0.5">
+                    <WeatherIcon
+                      code={h.wmo}
+                      isDay={isDaytime(h.time, weather.sunrise, weather.sunset)}
+                      size={26}
+                    />
+                  </div>
                   <span className={`text-sm font-black font-mono leading-tight ${
                     isCurrentHour ? 'text-white' : 'text-slate-900'
                   }`}>
@@ -468,8 +486,10 @@ export default function FarmerWeatherClient({
                       {dayName}
                     </span>
 
-                    {/* Condition emoji */}
-                    <span className="text-xl flex-shrink-0 w-7 text-center">{desc.emoji}</span>
+                    {/* Condition WeatherIcon */}
+                    <div className="w-7 h-7 flex items-center justify-center flex-shrink-0">
+                      <WeatherIcon code={day.wmo} isDay={true} size={24} />
+                    </div>
 
                     {/* Rain probability */}
                     <div className="w-10 flex-shrink-0 text-right">
@@ -563,9 +583,13 @@ export default function FarmerWeatherClient({
                                 }`}>
                                   {isCurrentHour ? 'الآن' : `${hour}:00`}
                                 </span>
-                                <span className="text-base leading-none">
-                                  {getHourIcon(hour, h.wmo)}
-                                </span>
+                                <div className="w-7 h-7 flex items-center justify-center my-0.5">
+                                  <WeatherIcon
+                                    code={h.wmo}
+                                    isDay={isDaytime(h.time, weather.sunrise, weather.sunset)}
+                                    size={26}
+                                  />
+                                </div>
                                 <span className={`text-sm font-black font-mono leading-tight ${
                                   isCurrentHour ? 'text-white' : 'text-slate-900'
                                 }`}>
