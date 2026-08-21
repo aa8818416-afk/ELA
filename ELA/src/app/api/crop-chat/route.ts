@@ -442,17 +442,49 @@ const orchestratorToolDeclaration = {
             }
         },
         {
-            name: "profile_memory_subagent",
-            description: "استدعِ هذا المتخصص عندما تحتوي الرسالة على معلومة ثابتة عن المزرعة أو حقيقة سلوكية عن الفلاح تستحق التسجيل في الخلفية.",
+            name: "remember_farmer_fact",
+            description: "سجّل فوراً ولحظياً حقيقة حرجة أو طلباً صريحاً من الفلاح لحفظ معلومة عنه أو عن مزرعته (مثل: حساسية من مركب معين، قيد زراعي، امتلاك جرار/ماشية، أسلوب تواصل، أو طلب صريح 'افتكر إني...').",
             parameters: {
                 type: "OBJECT",
                 properties: {
-                    raw_farmer_text: {
+                    category: {
                         type: "STRING",
-                        description: "نص الفلاح الخام كاملاً."
+                        enum: [
+                            "farm_constraints",
+                            "equipment_inventory",
+                            "soil_water_notes",
+                            "budget_level",
+                            "risk_tolerance",
+                            "communication_style",
+                            "crop_preference",
+                            "trusted_source"
+                        ],
+                        description: "تصنيف المعلومة أو القيد"
+                    },
+                    fact: {
+                        type: "STRING",
+                        description: "نص الحقيقة أو القيد بوضوح وإيجاز"
                     }
                 },
-                required: ["raw_farmer_text"]
+                required: ["category", "fact"]
+            }
+        },
+        {
+            name: "search_recent_chat_history",
+            description: "ابحث في سجل محادثات الأسبوع الماضي (آخر 7 أيام) عندما يسأل الفلاح صراحة عن تفصيلة أو سؤال سابق لم يُذكر في الملخص الحالي.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    query: {
+                        type: "STRING",
+                        description: "الكلمة المفتاحية أو الموضوع للبحث في رسائل الأسبوع"
+                    },
+                    limit: {
+                        type: "INTEGER",
+                        description: "أقصى عدد من الرسائل المطلوبة (الافتراضي 5)"
+                    }
+                },
+                required: ["query"]
             }
         },
         {
@@ -486,17 +518,21 @@ const orchestratorToolDeclaration = {
         },
         {
             name: "read_crop_guide",
-            description: "اقرأ الدليل الزراعي الكامل لمحصول معين (أطوار النمو، الري، التسميد، الآفات، القطف، سلسلة التبريد). استخدمها عندما يسأل الفلاح سؤالاً تقنياً أو تشخيصياً أو يحتاج جرعة أو خطة لأي محصول.",
+            description: "اقرأ الدليل الزراعي الكامل لمحصول معين (أطوار النمو، الري، التسميد، الآفات، القطف، سلسلة التبريد). بالنسبة للمحاصيل ذات العروات المتعددة (البطاطس، الطماطم، الذرة، البصل) حدد المسار مع العروة (مثال: potato/summer أو tomato/winter).",
             parameters: {
                 type: "OBJECT",
                 properties: {
                     crop_name: {
                         type: "STRING",
                         enum: [
-                            "wheat", "barley", "rice", "maize", "sorghum",
+                            "crops/potato/summer", "crops/potato/winter", "crops/potato/nili",
+                            "crops/tomato/summer", "crops/tomato/winter", "crops/tomato/nili",
+                            "crops/maize/summer", "crops/maize/nili",
+                            "crops/onion/winter", "crops/onion/mukawar", "crops/onion/seeds",
+                            "wheat", "barley", "rice", "sorghum",
                             "faba_bean", "soybean", "peanut", "common_bean", "peas", "clover",
                             "sugar_beet", "sugar_cane", "sesame", "sunflower", "cotton",
-                            "crucifers", "potato", "tomato", "onion", "garlic",
+                            "crucifers", "garlic",
                             "sweet_potato", "strawberry", "watermelon", "cantaloupe",
                             "cucumber_squash", "pepper_eggplant",
                             "citrus_orange", "citrus_mandarin_lemon",
@@ -504,7 +540,7 @@ const orchestratorToolDeclaration = {
                             "banana", "pomegranate", "fig", "guava",
                             "peach_apricot", "cumin_anise", "hibiscus_fennel", "chamomile_marjoram"
                         ],
-                        description: "اسم المحصول المطلوب دليله الزراعي. استخدم الاسم الإنجليزي المختصر."
+                        description: "اسم المحصول المطلوب دليله الزراعي. للمحاصيل ذات العروات حدد المسار بالعروة مثل crops/potato/summer."
                     }
                 },
                 required: ["crop_name"]
@@ -1402,7 +1438,7 @@ ${fieldActivitiesSkill}
             },
             generationConfig: {
                 temperature: 0,
-                maxOutputTokens: 8192,
+                maxOutputTokens: 2000,
                 responseMimeType: "application/json",
                 thinkingConfig: selectedKey.thinking_level ? {
                     thinkingLevel: selectedKey.thinking_level.toUpperCase()
@@ -1593,194 +1629,6 @@ ${fieldActivitiesSkill}
     };
 }
 
-// ── Profile & Memory Sub-Agent (Async Background Fire-and-Forget) ──────────────
-async function executeProfileMemorySubagent(
-    rawFarmerText: string,
-    currentFarmProfile: Record<string, any>,
-    existingMemoryCategories: string[],
-    activeFieldsContext: string,
-    userId: string,
-    supabaseAdmin: any,
-    primaryApiKey: string,
-    keyModels?: any[]
-): Promise<void> {
-    const memStartTime = Date.now();
-    try {
-        console.log(`[crop-chat] 🧠 [Profile/Memory Sub-Agent (Background)] Started for message: "${rawFarmerText}"`);
-
-        const profileMemorySubagentPrompt = `<role>
-أنت مستمع صامت متخصص، لست محادثاً ولا تنتظر أي رد. مهمتك الوحيدة: تحليل نص الفلاح الخام، واستخراج أي معلومة ثابتة عن ملفه الزراعي أو أي حقيقة سلوكية عنه، وتسجيلها فوراً عبر الأداة المناسبة. ناتجك دائماً وفق <output_contract> فقط، ولا يصل أبداً للفلاح بأي شكل.
-</role>
-
-<output_contract>
-{
-  "status": "complete | skipped",
-  "operations": [ { "type": "update_farm_profile | log_farmer_memory", "tool_result": {...} } ]
-}
-استخدم status="skipped" مع operations فارغة إذا لم تجد في النص أي معلومة تستحق التسجيل.
-</output_contract>
-
-<domain_context>
-ملف المزرعة الحالي: ${JSON.stringify(currentFarmProfile, null, 2)}
-فئات الذاكرة المسجلة سابقاً: ${existingMemoryCategories.length > 0 ? existingMemoryCategories.join("، ") : "لا توجد"}
-</domain_context>
-
-<stealth_profile_update_rules>
-إذا ذكر النص معلومة جديدة أو دائمة عن أرض الفلاح أو معداته أو ريه أو محصوله (مثل سعة رشاشة، نوع تربة، طريقة ري، مساحة عامة، تقاوي)، استدعِ update_farm_profile فوراً بالحقل المطابق. إذا ذكر محصولاً غير موجود في قائمة الاختيارات المغلقة، اختر 'other_crop'.
-</stealth_profile_update_rules>
-
-<memory_categories>
-سجّل فقط الحقائق التي تندرج بوضوح تحت واحد من هذه الخمسة، ولا تخترع تصنيفاً سادساً:
-  - budget_level: قدرته المالية وميله للحلول الاقتصادية أو المرتفعة الثمن (قيمة واحدة تمثل حالته الحالية).
-  - risk_tolerance: مدى استعداده لتجربة منتجات أو طرق جديدة (قيمة واحدة).
-  - communication_style: طريقته المفضلة في تلقي المعلومة (قيمة واحدة).
-  - crop_preference: المحاصيل التي يفضل زراعتها (قيم متعددة).
-  - trusted_source: الجهات التي يثق برأيها الزراعي (قيم متعددة).
-
-إذا لم تنطبق الحقيقة بوضوح على أي تصنيف، لا تسجلها إطلاقاً.
-</memory_categories>
-
-<how_to_log>
-استخدم log_farmer_memory فوراً بمجرد استنتاج حقيقة بثقة عالية.
-
-تصنيفات القيمة الواحدة (budget_level, risk_tolerance, communication_style): لو الفلاح قال ما يناقض حقيقة مسجلة سابقاً لنفس التصنيف، سجّل الحقيقة الجديدة (ستحل تلقائياً محل القديمة).
-
-تصنيفات القيم المتعددة (crop_preference, trusted_source): كل ذكر جديد يُضاف كحقيقة مستقلة، ولا يُفترض أنه يلغي ما قبله إلا بتصريح صريح بالتراجع (مثل "بطلت أزرع كذا").
-
-لا تسجل ملاحظة عابرة أو مبنية على تخمين؛ سجّل فقط ما صرّح به الفلاح فعلياً أو استنتجته بثقة عالية من سياق واضح ومتكرر.
-</how_to_log>
-`;
-
-        const candidateGeminiKeys = await getCandidateGeminiKeys(primaryApiKey, keyModels, supabaseAdmin);
-
-        for (const selectedKey of candidateGeminiKeys) {
-            const geminiApiKey = selectedKey.api_keys?.api_key || primaryApiKey;
-            const geminiModel = selectedKey.model_name || "gemini-3.5-flash-lite";
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
-
-            console.log(`[crop-chat] 🧠 [Profile/Memory Sub-Agent (Background)] Invoking Flash Lite model "${geminiModel}" (ID: ${selectedKey.id}) | daily_usage: ${selectedKey.daily_usage}/${selectedKey.daily_limit}`);
-
-            const requestBody = {
-                contents: [
-                    {
-                        role: "user",
-                        parts: [{ text: JSON.stringify({ current_message: rawFarmerText, current_farm_profile: currentFarmProfile }) }],
-                    },
-                ],
-                systemInstruction: {
-                    parts: [{ text: profileMemorySubagentPrompt }],
-                },
-                tools: [profileMemoryToolDeclaration],
-                tool_config: {
-                    function_calling_config: { mode: "AUTO" },
-                },
-                generationConfig: {
-                    temperature: 0,
-                    maxOutputTokens: 2000,
-                    responseMimeType: "application/json",
-                    thinkingConfig: selectedKey.thinking_level ? {
-                        thinkingLevel: selectedKey.thinking_level.toUpperCase()
-                    } : undefined,
-                },
-            };
-
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 60_000);
-
-            try {
-                const res = await fetch(endpoint, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(requestBody),
-                    signal: controller.signal,
-                }).finally(() => clearTimeout(timeout));
-
-                if (!res.ok) {
-                    const errText = await res.text();
-                    console.error(`[crop-chat] ❌ Profile/Memory Sub-Agent failed HTTP ${res.status} on ${geminiModel}:`, errText);
-                    if (res.status === 429 && selectedKey.id && supabaseAdmin) {
-                        await (supabaseAdmin as any).from("api_key_models").update({ status: "rate_limited" }).eq("id", selectedKey.id);
-                    }
-                    continue;
-                }
-
-                const data = await res.json();
-                const memElapsed = Date.now() - memStartTime;
-                const candidate = data.candidates?.[0];
-                if (!candidate) continue;
-
-                // ── Token Usage for Memory Sub-Agent ───────────────────────────
-                const memUsage = data.usageMetadata;
-                if (memUsage) {
-                    console.log(`[crop-chat] 🔢 [Profile/Memory Sub-Agent Tokens] model: ${geminiModel} | prompt: ${memUsage.promptTokenCount ?? '?'} | output: ${memUsage.candidatesTokenCount ?? '?'} | total: ${memUsage.totalTokenCount ?? '?'} | latency: ${memElapsed}ms`);
-                } else {
-                    console.log(`[crop-chat] ⏱️ [Profile/Memory Sub-Agent] Latency: ${memElapsed}ms`);
-                }
-
-                if (selectedKey.id && supabaseAdmin) {
-                    const updatedUsage = (selectedKey.daily_usage || 0) + 1;
-                    await (supabaseAdmin as any).from("api_key_models").update({ daily_usage: updatedUsage }).eq("id", selectedKey.id);
-                }
-
-                const parts: any[] = candidate.content?.parts ?? [];
-                const functionCalls = parts.filter((p: any) => p.functionCall).map((p: any) => p.functionCall);
-
-                for (const call of functionCalls) {
-                    if (call.name === "update_farm_profile") {
-                        const { target_scope, properties_to_update } = call.args || {};
-                        const cleanedData = Object.fromEntries(
-                            Object.entries(properties_to_update || {}).filter(
-                                ([_, v]) => v !== undefined && v !== null && v !== ""
-                            )
-                        );
-                        if (Object.keys(cleanedData).length > 0) {
-                            const { error: rpcError } = await (supabaseAdmin as any).rpc("merge_farm_profile", {
-                                farmer_id: userId,
-                                target_scope: target_scope || "general",
-                                new_data: cleanedData,
-                            });
-                            if (rpcError) console.error("[crop-chat] ⚠️ Background merge_farm_profile error:", rpcError);
-                            else console.log(`[crop-chat] 🧠 Successfully updated farm profile for farmer ${userId}`);
-                        }
-                    } else if (call.name === "log_farmer_memory") {
-                        const { category, fact, confidence } = call.args || {};
-                        if (category && fact) {
-                            await (supabaseAdmin as any)
-                                .from("farmer_memory")
-                                .update({ is_active: false })
-                                .eq("farmer_id", userId)
-                                .eq("category", category)
-                                .eq("is_active", true);
-
-                            const { error: memErr } = await (supabaseAdmin as any)
-                                .from("farmer_memory")
-                                .insert({
-                                    farmer_id: userId,
-                                    category,
-                                    fact,
-                                    source: "conversation",
-                                    confidence: confidence || null,
-                                    is_active: true,
-                                });
-
-                            if (memErr) console.error(`[crop-chat] ⚠️ Background log_farmer_memory error:`, memErr);
-                            else console.log(`[crop-chat] 🧠 Successfully logged farmer memory (${category}) for farmer ${userId}`);
-                        }
-                    }
-                }
-
-                console.log(`[crop-chat] 🧠 [Profile/Memory Sub-Agent (Background)] Completed successfully.`);
-                return;
-            } catch (err) {
-                console.error(`[crop-chat] Background profile memory subagent fetch error for model ${geminiModel}:`, err);
-                continue;
-            }
-        }
-    } catch (outerErr) {
-        console.error("[crop-chat] Background executeProfileMemorySubagent caught error:", outerErr);
-    }
-}
-
 // ── Session Pending Operation Extraction Helper ────────────────────────────────
 function extractPendingOperationFromHistory(history?: RequestHistoryItem[]): any {
     if (!history || history.length === 0) return null;
@@ -1855,11 +1703,51 @@ export async function POST(request: Request) {
         serviceRoleKey
     );
 
-    // 2. Fetch fresh farmer profile, location, active fields, memory, and active agenda alerts
-    const [farmerRowRes, farmerFieldsRes, farmerMemoryRes, weatherCacheRes] = await Promise.all([
+    // 1.5 Handle / Init Chat Session & User Message persistence (7-day rolling window)
+    let sessionId: string | null = (body as any).session_id || null;
+    try {
+        if (!sessionId) {
+            const cleanTitle = (message || "استشارة زراعية").trim().slice(0, 35);
+            const { data: newSession, error: createSessErr } = await (supabaseAdmin as any)
+                .from("chat_sessions")
+                .insert({
+                    farmer_id: userId,
+                    title: cleanTitle || "استشارة زراعية",
+                    is_active: true,
+                })
+                .select("id")
+                .single();
+
+            if (createSessErr) {
+                console.error("[crop-chat] ⚠️ Error creating new session:", createSessErr);
+            }
+            sessionId = newSession?.id || null;
+        }
+
+        if (sessionId) {
+            const { error: insertUserMsgErr } = await (supabaseAdmin as any).from("chat_messages").insert({
+                session_id: sessionId,
+                farmer_id: userId,
+                role: "user",
+                content: message,
+                image_url: imageBase64 ? "attached_image" : null,
+            });
+            if (insertUserMsgErr) {
+                console.error("[crop-chat] ⚠️ Error logging user message to chat_messages:", insertUserMsgErr);
+            }
+
+            await (supabaseAdmin as any).from("chat_sessions").update({ updated_at: new Date().toISOString() }).eq("id", sessionId);
+        }
+    } catch (sessionInitErr) {
+        console.error("[crop-chat] Session init error:", sessionInitErr);
+    }
+
+    // 2. Fetch fresh farmer profile, location, active fields, memory, continuous synthesis, and weather
+    const [farmerRowRes, farmerFieldsRes, farmerMemoryRes, farmerSynthesisRes, weatherCacheRes] = await Promise.all([
         (supabaseAdmin as any).from("farmers").select("governorate, center, village, farm_profile").eq("profile_id", userId).maybeSingle(),
         (supabaseAdmin as any).from("farmer_fields").select("id, field_name, crop_type, planting_date, area_feddan, area_unit, latitude, longitude, is_active").eq("farmer_id", userId).eq("is_active", true).order("created_at", { ascending: false }),
-        (supabaseAdmin as any).from("farmer_memory").select("category, fact").eq("farmer_id", userId).eq("is_active", true),
+        (supabaseAdmin as any).from("farmer_memory").select("id, category, fact, confidence").eq("farmer_id", userId).eq("is_active", true).in("confidence", ["high", "medium"]),
+        (supabaseAdmin as any).from("farmer_synthesis").select("*").eq("farmer_id", userId),
         (supabaseAdmin as any).from("weather_cache").select("location_name, temperature_2m, relative_humidity_2m, wind_speed_10m, weather_code, daily_forecast").order("fetched_at", { ascending: false }).limit(10),
     ]);
 
@@ -1880,6 +1768,29 @@ export async function POST(request: Request) {
             `- المعرف: ${f.id} | اسم الأرض: ${f.field_name || "بدون اسم"} | المحصول: ${f.crop_type || "غير محدد"} | المساحة: ${displayArea(f.area_feddan || 1, f.area_unit || "فدان")} | تاريخ الزراعة: ${f.planting_date || "غير محدد"}`
         ).join("\n")
         : "لا توجد أراضٍ مسجلة حالياً للفلاح.";
+
+    // Format Continuous Synthesis Context (Master Profile + Topic Syntheses)
+    const syntheses = (farmerSynthesisRes.data as any[]) || [];
+    const masterSynth = syntheses.find((s: any) => s.area_scope === "general");
+    const topicSynths = syntheses.filter((s: any) => s.area_scope !== "general");
+
+    let farmerSynthesisContext = "لا يوجد ملخص تراكمي مسجل حتى الآن.";
+    if (masterSynth || topicSynths.length > 0) {
+        const sections: string[] = [];
+        if (masterSynth) {
+            sections.push(`### [الملف العام للفلاح (Master Profile)]
+- نشاط المزرعة والمعدات: ${masterSynth.work_context || "غير محدد"}
+- أسلوب وشخصية الفلاح: ${masterSynth.personal_context || "غير محدد"}
+- ما يشغل باله حالياً (Top of Mind): ${masterSynth.top_of_mind || "غير محدد"}
+- المحطات والقرارات التاريخية: ${masterSynth.brief_history || "لا توجد محطات سابقة"}
+- ملخص شامل: ${masterSynth.summary_content || ""}`);
+        }
+        if (topicSynths.length > 0) {
+            sections.push(`### [ملخصات الموضوعات والحقول المتخصصة]
+${topicSynths.map((t: any) => `- [نطاق: ${t.area_scope}] ${t.title || 'موضوع'}: ${t.summary_content}`).join("\n")}`);
+        }
+        farmerSynthesisContext = sections.join("\n\n");
+    }
 
     // Fetch active open agenda alerts for these fields
     const fieldIds = activeFields.map((f: any) => f.id);
@@ -1922,9 +1833,9 @@ export async function POST(request: Request) {
         ? Object.entries(farmerMemoryCategoriesMap)
             .map(([cat, facts]) => `### [${cat}]\n${facts.map(f => `- ${f}`).join("\n")}`)
             .join("\n\n")
-        : "لا توجد ملاحظات سلوكية مسجلة حتى الآن.";
+        : "لا توجد ملاحظات سلوكية أو قيود مسجلة حتى الآن.";
 
-    console.log(`[crop-chat] 📊 [Context Snapshot] Farmer: ${userId.slice(0,8)}... | Active Fields: ${activeFields.length} | Memory Facts: ${farmerMemories.length}`);
+    console.log(`[crop-chat] 📊 [Context Snapshot] Farmer: ${userId.slice(0,8)}... | Active Fields: ${activeFields.length} | Memory Facts: ${farmerMemories.length} | Synthesis Sections: ${syntheses.length}`);
     if (activeFields.length > 0) {
         console.log(`[crop-chat] 🌾 [Active Fields List]:\n${activeFields.map((f: any, i: number) => `  ${i+1}. "${f.field_name || 'بدون اسم'}" — ${f.crop_type || 'غير محدد'} — ${displayArea(f.area_feddan || 1, f.area_unit || 'فدان')}`).join('\n')}`);
     }
@@ -1990,7 +1901,7 @@ export async function POST(request: Request) {
             .replace(/<call:[^>]*\{[\s\S]*?\}>/gi, "")
             .replace(/<call:[\s\S]*?>/gi, "")
             .replace(/<call:[^\n>]+>/gi, "")
-            .replace(/\[(?:default_api:)?(?:activity_subagent|profile_memory_subagent|web_search|read_skill|read_crop_guide|update_farm_profile|manage_farmer_field|log_farmer_memory|log_field_activity|update_field_activity)[\s\S]*?\]/gi, "")
+            .replace(/\[(?:default_api:)?(?:activity_subagent|remember_farmer_fact|search_recent_chat_history|web_search|read_skill|read_crop_guide|manage_farmer_field|log_field_activity|update_field_activity)[\s\S]*?\]/gi, "")
             .replace(/\[default_api:[\s\S]*?\]/gi, "")
             .replace(/```[\s\S]*?```/g, "")
             .replace(/\((?:activity_id|field_id|id):\s*[a-f0-9\-]+\)/gi, "")
@@ -2061,7 +1972,7 @@ export async function POST(request: Request) {
 <role>
 أنت "المرشد الزراعي"، مهندس زراعي مصري خبير يعمل لصالح منصة ELA. أسلوبك ودود ومباشر، تتحدث مع الفلاح كأخ خبير يثق فيه، لا كموظف رسمي. 
 مهمتك الأساسية: الإجابة عن تساؤلات الفلاح بدقة، تقديم النصائح الاستباقية بالربط بين الطقس وتنبيهات الأجندة، وترشيح المنتجات المعتمدة من قائمتنا فقط عند الحاجة الفعلية وحساب جرعاتها بدقة رياضية.
-أنت **لا تنفّذ عمليات تسجيل البيانات بنفسك**. عندما يحتاج الأمر تسجيل نشاط أو أرض أو ملاحظة سلوكية، تستعين بالمتخصصين (activity_subagent, profile_memory_subagent) في الخلفية، وتصيغ النتيجة للفلاح بأسلوبك الطبيعي.
+أنت **لا تنفّذ عمليات تسجيل البيانات الحقلية بنفسك**. عندما يحتاج الأمر تسجيل نشاط أو أرض، تستعين بـ activity_subagent. وعندما يطلب الفلاح حفظ قيد أو معلومة هامة عنه أو عن مزرعته، تستخدم remember_farmer_fact فوراً.
 </role>
 
 <voice_and_language_rules>
@@ -2099,18 +2010,22 @@ ${activeFieldsContext}
 <regional_weather_context>
 حالة الطقس الحالية المسجلة لمنطقة الفلاح:
 ${weatherSummaryContext}
-</regional_weather_context>
-
-<active_agenda_alerts>
+</regional_weather_context><active_agenda_alerts>
 تنبيهات ومخاطر الأجندة اليومية الصادرة لحقول الفلاح:
 ${openAlertsContext}
 </active_agenda_alerts>
 
+<farmer_continuous_synthesis>
+الملخص التراكمي المستمر للفلاح والموضوعات (Master & Topic Synthesis):
+${farmerSynthesisContext}
+</farmer_continuous_synthesis>
+
 <farmer_behavioral_memory>
-الملاحظات والحقائق السلوكية والمالية المسجلة:
+الملاحظات والحقائق السلوكية والمالية والمحددات المسجلة:
 ${farmerMemoryContext}
 
 كيف توظف هذه الذاكرة:
+- farm_constraints / equipment_inventory: احترم أي قيود صحية أو حساسية من مركبات معينة أو محددات ملوحة، ووظف المعدات المتوفرة لديه.
 - budget_level (اقتصادي): ابدأ بالحلول المجدية اقتصادياً والأسمدة والمبيدات الأحادية الموفرة، وقدم البدائل باهظة الثمن كخيار إضافي دون التصريح له بوضعه المالي.
 - risk_tolerance: إن كانت منخفضة ركز على الطرق التقليدية المجربة، وإن كانت عالية اقترح حلولاً حديثة.
 - communication_style: طابق أسلوبه (موجز ومباشر مقابل شرح وتفصيل).
@@ -2178,8 +2093,8 @@ ${productsContext}
 - \`crops/chamomile_marjoram\`: الدليل الزراعي الشامل للبابونج الألماني والبردقوش (الشاموميل المصري والزيت الأزرق الكامازولين، دورات القطف كل 7-10 أيام بالمشط بدون أعناق، حشات البردقوش المتتابعة، المعايير العضوية التصديرية، والتجفيف المظلل).
 
 قواعد تشغيلية للأدوات:
-1. عندما يسأل الفلاح سؤالاً تقنياً أو تشخيصياً يخص محصولاً معيناً (الأمراض، التسميد، الري، الجرعات، القطف...)، استدعِ أداة **\`read_crop_guide\`** باسم المحصول الإنجليزي المختصر (مثال: wheat, guava, tomato) لقراءة الدليل الزراعي الكامل قبل الرد.
-2. عندما تحتاج تطبيق بروتوكول سلوكي محدد (الإنذار المسبق، تشخيص الأمراض، إدارة الأراضي، تسجيل الأنشطة)، استدعِ أداة **\`read_skill\`** باسم المهارة المناسبة.
+1. عندما يسأل الفلاح سؤالاً تقنياً أو تشخيصياً يخص محصولاً معيناً (الأمراض، التسميد، الري، الجرعات، القطف...)، استدعِ أداة \`read_crop_guide\` باسم المحصول الإنجليزي المختصر (مثال: wheat, guava, tomato) لقراءة الدليل الزراعي الكامل قبل الرد.
+2. عندما تحتاج تطبيق بروتوكول سلوكي محدد (الإنذار المسبق، تشخيص الأمراض، إدارة الأراضي، تسجيل الأنشطة)، استدعِ أداة \`read_skill\` باسم المهارة المناسبة.
 3. يمكنك استدعاء كلتا الأداتين معاً في نفس الوقت عند الحاجة (مثلاً: read_crop_guide للمعرفة + read_skill لبروتوكول التشخيص).
 4. صِغ ردك النهائي دائماً داخل <answer> بعد قراءة الأدلة.
 </available_skills_index>
@@ -2189,8 +2104,9 @@ ${productsContext}
 1. **read_crop_guide**: استدعِها لتحميل الدليل الزراعي الكامل لأي محصول عند أي سؤال تقني أو تشخيصي.
 2. **read_skill**: استدعِها لتحميل بروتوكول سلوك وتفكير محدد (proactive_advisor, crop_doctor, land_management, field_activities).
 3. **activity_subagent**: استدعِه فوراً بنص الفلاح الخام عند ذكر نشاط وقع فعلياً (رش/تسميد/ري/حصاد/عمالة) أو عند طلب تسجيل/تعديل أرض.
-4. **profile_memory_subagent**: استدعِه في الخلفية عند ذكر معلومة ثابتة عن المزرعة أو حقيقة سلوكية.
-5. **web_search**: استدعِه للبحث عن أسعار السوق اليومية أو الأخبار الحية.
+4. **remember_farmer_fact**: استدعِها فوراً ولحظياً لتسجيل أي طلب صريح ("افتكر كذا") أو حقيقة حرجة (حساسية من مركب، امتلاك جرار/معدات، قيد زراعي).
+5. **search_recent_chat_history**: استدعِها للبحث في رسائل الأسبوع الماضي إذا سأل الفلاح عن تفصيلة سابقة غير مذكورة في الملخص.
+6. **web_search**: استدعِه للبحث عن أسعار السوق اليومية أو الأخبار الحية.
 
 قواعد التعامل مع نتيجة activity_subagent:
 - \`awaiting_confirmation\`: اعرض ملخص البيانات بقالب ودود واطلب تأكيد الفلاح دون الادعاء بأن التسجيل تم.
@@ -2408,26 +2324,123 @@ ${pendingActivitiesContext}
             for (const callPart of functionCallParts) {
                 const { name, args } = callPart.functionCall!;
 
-                if (name === "profile_memory_subagent") {
-                    // Fire-and-forget background execution
-                    const rawFarmerText = args?.raw_farmer_text || message;
-                    executeProfileMemorySubagent(
-                        rawFarmerText,
-                        farmerProfile,
-                        existingMemoryCategories,
-                        activeFieldsContext,
-                        userId,
-                        supabaseAdmin,
-                        keyData.api_keys.api_key,
-                        keyModels
-                    ).catch((err) => console.error("[crop-chat] Unhandled error in executeProfileMemorySubagent:", err));
+                if (name === "remember_farmer_fact") {
+                    const category = args?.category || "general_notes";
+                    const fact = args?.fact;
+                    const confidence = args?.confidence_level || "high";
+                    const supersedesFact = args?.supersedes_fact;
 
-                    functionResponseParts.push({
-                        functionResponse: {
-                            name: "profile_memory_subagent",
-                            response: { status: "queued", message: "تم إطلاق استخراج البروفايل والذاكرة في الخلفية بنجاح." }
-                        }
-                    });
+                    if (fact) {
+                        parallelTasks.push(
+                            (async () => {
+                                try {
+                                    if (supersedesFact) {
+                                        await (supabaseAdmin as any)
+                                            .from("farmer_memory")
+                                            .update({ is_active: false })
+                                            .eq("farmer_id", userId)
+                                            .eq("is_active", true)
+                                            .ilike("fact", `%${supersedesFact.slice(0, 20)}%`);
+                                    }
+
+                                    const { data: inserted, error: insErr } = await (supabaseAdmin as any)
+                                        .from("farmer_memory")
+                                        .insert({
+                                            farmer_id: userId,
+                                            category,
+                                            fact,
+                                            confidence,
+                                            source: "chat_explicit",
+                                            is_active: true
+                                        })
+                                        .select("id")
+                                        .maybeSingle();
+
+                                    const savedId = inserted?.id || (insErr ? 'err' : 'ok');
+
+                                    if (insErr) {
+                                        console.error("[crop-chat] ❌ Error saving memory fact:", insErr);
+                                    }
+
+                                    console.log(`[crop-chat] 💾 [Explicit Fact Saved] Category: ${category} | Fact: "${fact}" | ID: ${savedId}`);
+
+                                    functionResponseParts.push({
+                                        functionResponse: {
+                                            name: "remember_farmer_fact",
+                                            response: {
+                                                status: insErr ? "error" : "success",
+                                                message: insErr ? "فشل حفظ الملاحظة" : "تم حفظ الملاحظة في الذاكرة بنجاح.",
+                                                category,
+                                                fact
+                                            }
+                                        }
+                                    });
+                                } catch (factErr) {
+                                    console.error("[crop-chat] Error saving remember_farmer_fact:", factErr);
+                                    functionResponseParts.push({
+                                        functionResponse: {
+                                            name: "remember_farmer_fact",
+                                            response: { status: "error", message: "حدث خطأ أثناء حفظ الذاكرة" }
+                                        }
+                                    });
+                                }
+                            })()
+                        );
+                    }
+                } else if (name === "search_recent_chat_history") {
+                    const queryText = args?.query_or_topic || "";
+                    const maxTurns = args?.max_results || 5;
+
+                    parallelTasks.push(
+                        (async () => {
+                            try {
+                                const sevenDaysAgo = new Date();
+                                sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+                                let queryBuilder = (supabaseAdmin as any)
+                                    .from("chat_messages")
+                                    .select("role, content, created_at")
+                                    .eq("farmer_id", userId)
+                                    .gte("created_at", sevenDaysAgo.toISOString())
+                                    .order("created_at", { ascending: false })
+                                    .limit(maxTurns * 2);
+
+                                if (queryText && queryText.trim().length > 2) {
+                                    queryBuilder = queryBuilder.ilike("content", `%${queryText.trim()}%`);
+                                }
+
+                                const { data: messages, error: searchErr } = await queryBuilder;
+
+                                console.log(`[crop-chat] 🔍 [Chat History Search] Query: "${queryText}" | Results Found: ${messages?.length || 0}`);
+
+                                const formattedMatches = messages?.map((m: any) => ({
+                                    sender: m.role === "user" ? "الفلاح" : "المرشد الزراعي",
+                                    message: m.content,
+                                    time: new Date(m.created_at).toLocaleString("ar-EG", { timeZone: "Africa/Cairo" })
+                                })) || [];
+
+                                functionResponseParts.push({
+                                    functionResponse: {
+                                        name: "search_recent_chat_history",
+                                        response: {
+                                            status: searchErr ? "error" : "success",
+                                            query: queryText,
+                                            matches_count: formattedMatches.length,
+                                            results: formattedMatches
+                                        }
+                                    }
+                                });
+                            } catch (historyErr) {
+                                console.error("[crop-chat] Error in search_recent_chat_history:", historyErr);
+                                functionResponseParts.push({
+                                    functionResponse: {
+                                        name: "search_recent_chat_history",
+                                        response: { status: "error", results: [] }
+                                    }
+                                });
+                            }
+                        })()
+                    );
                 } else if (name === "activity_subagent") {
                     const rawFarmerText = args?.raw_farmer_text || message;
                     parallelTasks.push(
@@ -2503,7 +2516,14 @@ ${pendingActivitiesContext}
                         }
                     });
                 } else if (name === "read_crop_guide") {
-                    const cropName = args?.crop_name || "wheat";
+                    let cropName = args?.crop_name || "wheat";
+                    // Normalize and smart fallback for multi-season crops
+                    cropName = cropName.replace(/^crops\//i, "").trim();
+                    if (cropName === "potato") cropName = "potato/summer";
+                    else if (cropName === "tomato") cropName = "tomato/summer";
+                    else if (cropName === "maize") cropName = "maize/summer";
+                    else if (cropName === "onion") cropName = "onion/winter";
+
                     const skillPath = `crops/${cropName}`;
                     console.log(`[crop-chat] 📖 [Crop Guide] Loading crop knowledge file: "${skillPath}"...`);
                     const cropContent = getSkillContent(skillPath);
@@ -2593,12 +2613,30 @@ ${pendingActivitiesContext}
                 }
             }
 
-            if (!followUpOk) {
+            const sendModelResponse = async (finalCleanText: string, recProduct: any = null) => {
+                if (finalCleanText && sessionId) {
+                    try {
+                        await (supabaseAdmin as any).from("chat_messages").insert({
+                            session_id: sessionId,
+                            farmer_id: userId,
+                            role: "model",
+                            content: finalCleanText
+                        });
+                    } catch (mErr) {
+                        console.error("[crop-chat] Error saving model response:", mErr);
+                    }
+                }
                 return NextResponse.json({
                     success: true,
-                    text: "تمام يا حاج، فهمت كلامك وحفظته عندي.",
+                    text: finalCleanText,
+                    recommendedProduct: recProduct,
+                    session_id: sessionId,
                     sources: accumulatedSources.length > 0 ? accumulatedSources : undefined,
                 });
+            };
+
+            if (!followUpOk) {
+                return sendModelResponse("تمام يا حاج، فهمت كلامك وحفظته عندي.");
             }
 
             const roundText = currentParts
@@ -2610,14 +2648,31 @@ ${pendingActivitiesContext}
                 const { cleanText, recommendedProduct } = processResponseText(roundText);
                 const totalElapsed = Date.now() - requestStartTime;
                 console.log(`[crop-chat] 🏁 [Pipeline Summary] Duration: ${totalElapsed}ms | Tool Rounds: ${loopCount} | Output: ${cleanText.length} chars | Product: ${recommendedProduct?.name_ar || 'None'} | Sources: ${accumulatedSources.length}`);
-                return NextResponse.json({
-                    success: true,
-                    text: cleanText,
-                    recommendedProduct,
-                    sources: accumulatedSources.length > 0 ? accumulatedSources : undefined,
-                });
+                return sendModelResponse(cleanText, recommendedProduct);
             }
         }
+
+        const sendModelResponse = async (finalCleanText: string, recProduct: any = null) => {
+            if (finalCleanText && sessionId) {
+                try {
+                    await (supabaseAdmin as any).from("chat_messages").insert({
+                        session_id: sessionId,
+                        farmer_id: userId,
+                        role: "model",
+                        content: finalCleanText
+                    });
+                } catch (mErr) {
+                    console.error("[crop-chat] Error saving model response:", mErr);
+                }
+            }
+            return NextResponse.json({
+                success: true,
+                text: finalCleanText,
+                recommendedProduct: recProduct,
+                session_id: sessionId,
+                sources: accumulatedSources.length > 0 ? accumulatedSources : undefined,
+            });
+        };
 
         const loopExitText = currentParts
             .filter((p: any) => !p.thought && p.text)
@@ -2628,21 +2683,12 @@ ${pendingActivitiesContext}
             const { cleanText, recommendedProduct } = processResponseText(loopExitText);
             const totalElapsed = Date.now() - requestStartTime;
             console.log(`[crop-chat] 🏁 [Pipeline Summary] Duration: ${totalElapsed}ms | Tool Rounds: ${loopCount} | Output: ${cleanText.length} chars | Product: ${recommendedProduct?.name_ar || 'None'} | Sources: ${accumulatedSources.length}`);
-            return NextResponse.json({
-                success: true,
-                text: cleanText,
-                recommendedProduct,
-                sources: accumulatedSources.length > 0 ? accumulatedSources : undefined,
-            });
+            return sendModelResponse(cleanText, recommendedProduct);
         }
 
         const totalElapsed = Date.now() - requestStartTime;
         console.log(`[crop-chat] 🏁 [Pipeline Summary: Fallback] Duration: ${totalElapsed}ms | Tool Rounds: ${loopCount}`);
-        return NextResponse.json({
-            success: true,
-            text: "تمام يا حاج، حفظتها في دماغي كويس. لو احتجت أي تفاصيل تانية أنا معاك.",
-            sources: accumulatedSources.length > 0 ? accumulatedSources : undefined,
-        });
+        return sendModelResponse("تمام يا حاج، حفظتها في دماغي كويس. لو احتجت أي تفاصيل تانية أنا معاك.");
     }
 
     try {
@@ -2654,4 +2700,123 @@ ${pendingActivitiesContext}
             { status: 500 }
         );
     }
+}
+
+// ── GET /api/crop-chat: Fetch 7-Day Sessions & Messages ─────────────────────────
+export async function GET(request: Request) {
+    const supabase = await createServerClient();
+    const {
+        data: { user: currentUser },
+    } = await supabase.auth.getUser();
+
+    if (!currentUser) {
+        return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
+    }
+
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey) {
+        return NextResponse.json({ error: "مفتاح الخدمة مفقود" }, { status: 500 });
+    }
+
+    const supabaseAdmin = createAdminClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        serviceRoleKey
+    );
+
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get("action");
+    const requestedSessionId = searchParams.get("session_id");
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    // 1. Fetch list of sessions
+    if (action === "sessions") {
+        const { data: sessions, error: sessErr } = await (supabaseAdmin as any)
+            .from("chat_sessions")
+            .select("id, title, is_active, created_at, updated_at")
+            .eq("farmer_id", currentUser.id)
+            .eq("is_active", true)
+            .gte("updated_at", sevenDaysAgo.toISOString())
+            .order("updated_at", { ascending: false });
+
+        if (sessErr) {
+            console.error("[crop-chat] GET sessions error:", sessErr);
+            return NextResponse.json({ sessions: [] });
+        }
+
+        return NextResponse.json({ sessions: sessions || [] });
+    }
+
+    // 2. Fetch messages for a specific session or recent 7-day messages
+    let queryBuilder = (supabaseAdmin as any)
+        .from("chat_messages")
+        .select("id, session_id, role, content, image_url, created_at")
+        .eq("farmer_id", currentUser.id)
+        .gte("created_at", sevenDaysAgo.toISOString())
+        .order("created_at", { ascending: true });
+
+    if (requestedSessionId) {
+        queryBuilder = queryBuilder.eq("session_id", requestedSessionId);
+    }
+
+    const { data: messages, error } = await queryBuilder;
+
+    if (error) {
+        console.error("[crop-chat] GET history error:", error);
+        return NextResponse.json({ messages: [], session_id: requestedSessionId });
+    }
+
+    return NextResponse.json({
+        session_id: requestedSessionId,
+        messages: (messages || []).map((m: any) => ({
+            id: m.id,
+            session_id: m.session_id,
+            role: m.role,
+            content: m.content,
+            imageBase64: m.image_url === "attached_image" ? undefined : m.image_url,
+            created_at: m.created_at
+        }))
+    });
+}
+
+// ── DELETE /api/crop-chat: Delete / Archive a Session ──────────────────────────
+export async function DELETE(request: Request) {
+    const supabase = await createServerClient();
+    const {
+        data: { user: currentUser },
+    } = await supabase.auth.getUser();
+
+    if (!currentUser) {
+        return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
+    }
+
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey) {
+        return NextResponse.json({ error: "مفتاح الخدمة مفقود" }, { status: 500 });
+    }
+
+    const supabaseAdmin = createAdminClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        serviceRoleKey
+    );
+
+    const { searchParams } = new URL(request.url);
+    const sessionId = searchParams.get("session_id");
+
+    if (!sessionId) {
+        return NextResponse.json({ error: "معرف الجلسة مطلوب" }, { status: 400 });
+    }
+
+    const { error } = await (supabaseAdmin as any)
+        .from("chat_sessions")
+        .update({ is_active: false })
+        .eq("id", sessionId)
+        .eq("farmer_id", currentUser.id);
+
+    if (error) {
+        return NextResponse.json({ error: "فشل حذف المحادثة" }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
 }

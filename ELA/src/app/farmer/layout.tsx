@@ -26,11 +26,13 @@ export default function FarmerLayout({
     }
   };
 
+  const isWidePage = pathname?.startsWith("/farmer/scanner") || pathname?.startsWith("/farmer/chat");
+
   return (
     <div className="min-h-screen bg-[#f8faf9] text-slate-900 flex flex-col font-sans">
       {/* Top Header */}
       <header className="bg-white/95 backdrop-blur-xl border-b border-slate-200/80 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-lg mx-auto px-4 flex items-center justify-between" style={{ height: '56px' }}>
+        <div className={`mx-auto px-4 flex items-center justify-between ${isWidePage ? "max-w-7xl" : "max-w-lg md:max-w-2xl"}`} style={{ height: '56px' }}>
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-base shadow-sm shadow-emerald-900/20 text-white flex-shrink-0">
               🌾
@@ -58,7 +60,7 @@ export default function FarmerLayout({
       </header>
 
       {/* Page Content — pb accounts for nav + iOS home indicator */}
-      <main className="flex-1 max-w-lg mx-auto w-full px-4 pt-4 pb-[88px]">
+      <main className={`flex-1 mx-auto w-full px-2 sm:px-4 pt-2 sm:pt-4 pb-[88px] ${isWidePage ? "max-w-7xl" : "max-w-lg md:max-w-2xl lg:max-w-4xl"}`}>
         {children}
       </main>
 
@@ -67,7 +69,7 @@ export default function FarmerLayout({
         className="fixed bottom-0 left-0 right-0 z-50 bg-white/97 backdrop-blur-xl border-t border-slate-200/90 shadow-lg"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        <div className="max-w-lg mx-auto flex">
+        <div className="max-w-lg md:max-w-2xl mx-auto flex">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (

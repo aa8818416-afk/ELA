@@ -19,6 +19,13 @@ import {
     WifiOff,
     Globe,
     ExternalLink,
+    MessageSquare,
+    Plus,
+    Trash2,
+    Clock,
+    Sparkles,
+    PanelLeftClose,
+    PanelLeftOpen,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -32,6 +39,7 @@ import type { RecommendedProduct } from "@/components/chat/QuickOrderModal";
 
 interface Message {
     id: string;
+    session_id?: string;
     role: "user" | "model";
     content: string;
     timestamp: Date;
@@ -41,22 +49,36 @@ interface Message {
     sources?: Array<{ title: string; url: string }>;
 }
 
+interface ChatSession {
+    id: string;
+    title: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
 type FailedPayload = {
     message: string;
+    session_id?: string | null;
     history: { role: "user" | "model"; content: string; imageBase64?: string }[];
     imageBase64?: string;
 };
 
+const WELCOME_MESSAGE: Message = {
+    id: "welcome",
+    role: "model",
+    content:
+        "أهلاً بك يا حاج! أنا مرشدك الزراعي الذكي 🌾. إسألني عن أي حاجة تخص زرعك، الري، التسميد، أو الأمراض اللي بتواجهك وأنا هجاوبك حالاً. يمكنك كمان ترفق صورة من المحصول وأنا هحللها.",
+    timestamp: new Date(),
+};
+
 export default function FarmerChat() {
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: "welcome",
-            role: "model",
-            content:
-                "أهلاً بك يا حاج! أنا مرشدك الزراعي الذكي 🌾. إسألني عن أي حاجة تخص زرعك، الري، التسميد، أو الأمراض اللي بتواجهك وأنا هجاوبك حالاً. يمكنك كمان ترفق صورة من المحصول وأنا هحللها.",
-            timestamp: new Date(),
-        },
-    ]);
+    const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
+    const [sessions, setSessions] = useState<ChatSession[]>([]);
+    const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
     const [inputText, setInputText] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -91,6 +113,58 @@ export default function FarmerChat() {
         };
     }, []);
 
+    // ── Load Sessions List ──────────────────────────────────────────────────
+    const loadSessions = useCallback(async () => {
+        try {
+            const res = await fetch("/api/crop-chat?action=sessions");
+            if (res.ok) {
+                const data = await res.json();
+                if (data.sessions) {
+                    setSessions(data.sessions);
+                }
+            }
+        } catch (err) {
+            console.warn("Failed to load sessions:", err);
+        }
+    }, []);
+
+    // ── Load Messages for a specific Session ────────────────────────────────
+    const loadSessionMessages = useCallback(async (sessionId?: string | null) => {
+        setIsLoadingHistory(true);
+        try {
+            const url = sessionId ? `/api/crop-chat?session_id=${sessionId}` : "/api/crop-chat";
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.messages && data.messages.length > 0) {
+                    setMessages(data.messages.map((m: any) => ({
+                        id: m.id || String(Math.random()),
+                        session_id: m.session_id,
+                        role: m.role,
+                        content: m.content,
+                        timestamp: new Date(m.created_at || Date.now()),
+                        imagePreview: m.imageBase64,
+                    })));
+                    if (data.session_id) {
+                        setCurrentSessionId(data.session_id);
+                    }
+                } else if (sessionId) {
+                    setMessages([WELCOME_MESSAGE]);
+                }
+            }
+        } catch (err) {
+            console.warn("Failed to load messages:", err);
+        } finally {
+            setIsLoadingHistory(false);
+        }
+    }, []);
+
+    // Initial Load: Sessions & Latest History
+    useEffect(() => {
+        loadSessions();
+        loadSessionMessages();
+    }, [loadSessions, loadSessionMessages]);
+
     // Scroll to bottom on new messages
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -101,13 +175,52 @@ export default function FarmerChat() {
         const el = textareaRef.current;
         if (!el) return;
         el.style.height = "auto";
-        // Max ~6 lines (~144px), min 1 line
         el.style.height = Math.min(el.scrollHeight, 144) + "px";
     }, []);
 
     useEffect(() => {
         autoResize();
     }, [inputText, autoResize]);
+
+    // ── Start New Chat Session ──────────────────────────────────────────────
+    const startNewChat = () => {
+        setCurrentSessionId(null);
+        setMessages([WELCOME_MESSAGE]);
+        setIsSidebarOpen(false);
+        setError(null);
+        setAttachedImage(null);
+    };
+
+    // ── Select Past Session ─────────────────────────────────────────────────
+    const selectSession = (sessionId: string) => {
+        if (sessionId === currentSessionId) {
+            setIsSidebarOpen(false);
+            return;
+        }
+        setCurrentSessionId(sessionId);
+        loadSessionMessages(sessionId);
+        setIsSidebarOpen(false);
+    };
+
+    // ── Delete a Session ────────────────────────────────────────────────────
+    const deleteSession = async (e: React.MouseEvent, sessionId: string) => {
+        e.stopPropagation();
+        if (!confirm("هل تريد بالتأكيد حذف هذه المحادثة؟")) return;
+
+        try {
+            const res = await fetch(`/api/crop-chat?session_id=${sessionId}`, {
+                method: "DELETE",
+            });
+            if (res.ok) {
+                setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+                if (currentSessionId === sessionId) {
+                    startNewChat();
+                }
+            }
+        } catch (err) {
+            console.error("Failed to delete session:", err);
+        }
+    };
 
     // Image compression helper
     function compressImage(dataUrl: string, maxWidth = 768, quality = 0.65): Promise<string> {
@@ -130,7 +243,7 @@ export default function FarmerChat() {
         });
     }
 
-    // Handle image file selection (from camera or gallery)
+    // Handle image file selection
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -139,12 +252,11 @@ export default function FarmerChat() {
             setAttachedImage(ev.target?.result as string);
         };
         reader.readAsDataURL(file);
-        // Reset so same file can be re-selected
         if (cameraInputRef.current) cameraInputRef.current.value = "";
         if (galleryInputRef.current) galleryInputRef.current.value = "";
     };
 
-    // Core API call shared for retry
+    // Core API call
     const callChatApi = async (payload: FailedPayload) => {
         setIsLoading(true);
         setError(null);
@@ -154,7 +266,10 @@ export default function FarmerChat() {
             const res = await fetch("/api/crop-chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({
+                    ...payload,
+                    session_id: currentSessionId,
+                }),
             });
 
             const data = await res.json();
@@ -166,8 +281,14 @@ export default function FarmerChat() {
                 setError(data.error || "عذراً، حدث خطأ في معالجة طلبك.");
                 setFailedPayload(payload);
             } else if (data.success && data.text) {
+                if (data.session_id && data.session_id !== currentSessionId) {
+                    setCurrentSessionId(data.session_id);
+                    loadSessions();
+                }
+
                 const modelMsg: Message = {
                     id: `msg-${Date.now()}-model`,
+                    session_id: data.session_id || currentSessionId || undefined,
                     role: "model",
                     content: data.text,
                     timestamp: new Date(),
@@ -176,14 +297,11 @@ export default function FarmerChat() {
                 };
                 setMessages((prev) => [...prev, modelMsg]);
 
-                // Auto-play the AI response if TTS is supported
                 if (isTtsSupported()) {
                     handleSpeak(modelMsg.content, modelMsg.id);
                 }
             }
         } catch (err) {
-            // Only treat genuine network failures (fetch couldn't reach server)
-            // as a network error — not JSON parse failures or AbortError
             const isNetworkError =
                 err instanceof TypeError &&
                 (err.message.toLowerCase().includes("fetch") ||
@@ -204,10 +322,8 @@ export default function FarmerChat() {
 
     const handleSend = async (textToSend?: string) => {
         const text = (textToSend || inputText).trim();
-        // Allow sending if there's text OR an image attached
         if ((!text && !attachedImage) || isLoading) return;
 
-        // Compress image if present
         let compressedImage: string | undefined = undefined;
         if (attachedImage) {
             try {
@@ -218,25 +334,23 @@ export default function FarmerChat() {
         }
 
         const imagePreview = attachedImage || undefined;
-
         setInputText("");
         setAttachedImage(null);
 
-        const displayText = text || (imagePreview ? "📷 تم إرفاق صورة" : "");
-
         const userMsg: Message = {
             id: `msg-${Date.now()}-user`,
+            session_id: currentSessionId || undefined,
             role: "user",
-            content: displayText,
+            content: text || "📷",
             timestamp: new Date(),
             imagePreview,
         };
 
-        setMessages((prev) => [...prev, userMsg]);
+        const nextMessages = [...messages, userMsg];
+        setMessages(nextMessages);
 
-        // Build history with per-message image data
-        const chatHistory = messages
-            .filter((m) => m.id !== "welcome")
+        const historyPayload = nextMessages
+            .filter((m) => m.id !== "welcome" && m.id !== userMsg.id)
             .map((m) => ({
                 role: m.role,
                 content: m.content,
@@ -244,8 +358,9 @@ export default function FarmerChat() {
             }));
 
         const payload: FailedPayload = {
-            history: chatHistory,
-            message: text || "انظر إلى الصورة المرفقة وأخبرني بما تراه من إصابات أو أمراض",
+            message: text || "صف هذه الصورة الزراعية وحللها بدقة وقدم التوصيات المناسبة.",
+            session_id: currentSessionId,
+            history: historyPayload,
             imageBase64: compressedImage,
         };
 
@@ -268,7 +383,6 @@ export default function FarmerChat() {
     };
 
     const handleSpeak = (text: string, msgId: string) => {
-        // If already loading or playing this message → stop it
         if (activeSpeechId === msgId || loadingSpeechId === msgId) {
             stopSpeaking();
             setActiveSpeechId(null);
@@ -276,24 +390,18 @@ export default function FarmerChat() {
             return;
         }
 
-        // Stop any other audio that may be playing/loading first
         stopSpeaking();
         setActiveSpeechId(null);
         setLoadingSpeechId(null);
-
-        // Start loading
         setLoadingSpeechId(msgId);
 
         speakArabic(
             text,
-            // onLoading: already set above, nothing extra needed
             () => {},
-            // onStart: audio is now actually playing
             () => {
                 setLoadingSpeechId(null);
                 setActiveSpeechId(msgId);
             },
-            // onEnd: audio finished or errored
             () => {
                 setActiveSpeechId(null);
                 setLoadingSpeechId(null);
@@ -302,321 +410,477 @@ export default function FarmerChat() {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-120px)] max-w-2xl mx-auto bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-            {/* Header */}
-            <div className="flex items-center gap-3 p-4 bg-slate-900 border-b border-slate-800">
-                <Link
-                    href="/farmer"
-                    className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full transition-colors"
-                >
-                    <ArrowRight className="w-5 h-5" />
-                </Link>
-                <div>
-                    <h2 className="text-white font-bold text-lg">المرشد الزراعي الذكي</h2>
-                    <p className="text-emerald-400 text-xs flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        متاح للاستشارة الصوتية والكتابية وبالصور
-                    </p>
+        <div className="relative w-full max-w-3xl mx-auto">
+            {/* ── Sliding Left Sidebar Drawer (على الشمال وتتفتح وتنقفل) ────── */}
+            {isSidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 transition-opacity"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
+            <div
+                className={`fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-white border-r border-slate-200 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
+                    isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+                }`}
+            >
+                {/* Sidebar Header */}
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                    <div className="flex items-center gap-2 text-slate-800">
+                        <MessageSquare className="w-5 h-5 text-emerald-600" />
+                        <h3 className="font-bold text-sm">محادثاتك السابقة</h3>
+                        {sessions.length > 0 && (
+                            <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                                {sessions.length}
+                            </span>
+                        )}
+                    </div>
+                    <button
+                        onClick={() => setIsSidebarOpen(false)}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-200/60 transition-colors"
+                        title="إغلاق القائمة"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* New Chat Button */}
+                <div className="p-3 bg-white">
+                    <button
+                        onClick={startNewChat}
+                        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-all shadow-sm active:scale-[0.98]"
+                    >
+                        <Plus className="w-4 h-4" />
+                        <span>محادثة جديدة</span>
+                    </button>
+                </div>
+
+                {/* Sessions List */}
+                <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
+                    <p className="text-[11px] font-bold text-slate-400 px-2 pb-1">سجل آخر 7 أيام</p>
+                    {sessions.length === 0 ? (
+                        <div className="text-center py-12 text-slate-400 text-xs flex flex-col items-center gap-2">
+                            <MessageSquare className="w-8 h-8 opacity-30 text-slate-400" />
+                            <span>لا توجد محادثات سابقة مسجلة</span>
+                            <span className="text-[10px] text-slate-400">ابدأ استشارتك الأولى الآن</span>
+                        </div>
+                    ) : (
+                        sessions.map((sess) => {
+                            const isCurrent = sess.id === currentSessionId;
+                            return (
+                                <div
+                                    key={sess.id}
+                                    onClick={() => selectSession(sess.id)}
+                                    className={`group flex items-center justify-between p-3 rounded-2xl cursor-pointer transition-all border ${
+                                        isCurrent
+                                            ? "bg-emerald-50 border-emerald-300 text-emerald-900 shadow-xs font-bold"
+                                            : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80 hover:border-slate-300"
+                                    }`}
+                                >
+                                    <div className="flex items-start gap-2.5 flex-1 min-w-0 pr-1 text-right">
+                                        <MessageSquare
+                                            className={`w-4 h-4 shrink-0 mt-0.5 ${
+                                                isCurrent ? "text-emerald-600" : "text-slate-400 group-hover:text-emerald-600"
+                                            }`}
+                                        />
+                                        <div className="truncate flex-1">
+                                            <p className="text-xs truncate leading-snug">
+                                                {sess.title || "استشارة زراعية"}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-1 font-normal">
+                                                <Clock className="w-3 h-3" />
+                                                {new Date(sess.updated_at).toLocaleDateString("ar-EG", {
+                                                    weekday: "short",
+                                                    month: "numeric",
+                                                    day: "numeric",
+                                                    hour: "2-digit",
+                                                    minute: "2-digit",
+                                                })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={(e) => deleteSession(e, sess.id)}
+                                        className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-all"
+                                        title="حذف المحادثة"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
             </div>
 
-            {/* Messages Area */}
-            <div className="flex-1 p-4 overflow-y-auto space-y-4 scrollbar-thin scrollbar-thumb-slate-800">
-                {messages.map((msg) => (
-                    <div
-                        key={msg.id}
-                        className={`flex gap-3 max-w-[85%] ${msg.role === "user" ? "mr-auto flex-row-reverse" : "ml-auto"
-                            }`}
-                    >
-                        {/* Avatar */}
-                        <div
-                            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border ${msg.role === "user"
-                                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                                    : "bg-slate-800 border-slate-700 text-slate-300"
-                                }`}
+            {/* ── Main Chat Box (Centered in Page - Clean White Theme) ─── */}
+            <div className="bg-white border border-slate-200/90 rounded-3xl shadow-sm flex flex-col h-[calc(100vh-140px)] min-h-[550px] overflow-hidden">
+                {/* Header */}
+                <div className="p-4 bg-white border-b border-slate-200/80 flex items-center justify-between z-10 shadow-xs">
+                    {/* Right: Title & Back Button */}
+                    <div className="flex items-center gap-2.5">
+                        <Link
+                            href="/farmer"
+                            className="p-2 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-full transition-colors"
+                            title="العودة للرئيسية"
                         >
-                            {msg.role === "user" ? (
-                                <User className="w-5 h-5" />
-                            ) : (
-                                <Bot className="w-5 h-5" />
+                            <ArrowRight className="w-5 h-5" />
+                        </Link>
+                        <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-xl shadow-xs shrink-0">
+                            🌿
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-1.5">
+                                <h2 className="text-slate-900 font-black text-base leading-tight">المرشد الزراعي الذكي</h2>
+                                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-md border border-emerald-200">AI</span>
+                            </div>
+                            <p className="text-emerald-700 text-xs flex items-center gap-1 mt-0.5 font-medium">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                متصل وجاهز للتشخيص الصوتي والكتابي والصور
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Left: Sidebar Toggle & New Chat Button */}
+                    <div className="flex items-center gap-1.5">
+                        {/* New Chat Quick Button */}
+                        <button
+                            onClick={startNewChat}
+                            className="flex items-center gap-1 text-xs font-bold py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-all active:scale-95 shadow-xs"
+                            title="محادثة جديدة"
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">جديد</span>
+                        </button>
+
+                        {/* Left Sidebar Toggle Button */}
+                        <button
+                            onClick={() => setIsSidebarOpen(true)}
+                            className="flex items-center gap-1.5 text-xs font-bold py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200 transition-all active:scale-95 shadow-xs"
+                            title="عرض المحادثات السابقة على الشمال"
+                        >
+                            <MessageSquare className="w-4 h-4 text-emerald-600" />
+                            <span className="hidden sm:inline">المحادثات</span>
+                            {sessions.length > 0 && (
+                                <span className="text-[10px] bg-emerald-600 text-white font-bold px-1.5 py-0.2 rounded-full">
+                                    {sessions.length}
+                                </span>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Messages Area */}
+                <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 bg-[#f8faf9]/60 scrollbar-thin scrollbar-thumb-slate-300">
+                    {isLoadingHistory ? (
+                        <div className="flex items-center justify-center h-48 text-slate-500 text-sm gap-2">
+                            <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+                            <span>جاري استرجاع المحادثة...</span>
+                        </div>
+                    ) : (
+                        messages.map((msg) => (
+                            <div
+                                key={msg.id}
+                                className={`flex gap-3 max-w-[90%] sm:max-w-[85%] ${
+                                    msg.role === "user" ? "mr-auto flex-row-reverse" : "ml-auto text-right"
+                                }`}
+                            >
+                                {/* Avatar */}
+                                <div
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border shadow-xs ${
+                                        msg.role === "user"
+                                            ? "bg-emerald-100 border-emerald-200 text-emerald-800"
+                                            : "bg-white border-slate-200 text-slate-700"
+                                    }`}
+                                >
+                                    {msg.role === "user" ? (
+                                        <User className="w-4 h-4" />
+                                    ) : (
+                                        <Bot className="w-4 h-4 text-emerald-600" />
+                                    )}
+                                </div>
+
+                                {/* Bubble */}
+                                <div className={`space-y-1.5 flex-1 min-w-0 ${msg.role === "user" ? "items-end flex flex-col" : ""}`}>
+                                    {msg.imagePreview && (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                            src={msg.imagePreview}
+                                            alt="صورة مرفقة"
+                                            className="w-52 h-40 object-cover rounded-2xl border border-slate-200 shadow-xs mb-1"
+                                        />
+                                    )}
+                                    <div
+                                        className={`rounded-2xl p-4 text-sm leading-relaxed relative shadow-xs ${
+                                            msg.role === "user"
+                                                ? "bg-emerald-600 text-white rounded-tr-none"
+                                                : "bg-white border border-slate-200/90 text-slate-800 rounded-tl-none whitespace-pre-line"
+                                        }${!msg.content || msg.content === "📷" ? " italic opacity-80" : ""}`}
+                                    >
+                                        {msg.content && msg.content !== "📷" && (
+                                            <p>{msg.content}</p>
+                                        )}
+
+                                        {/* Product Recommendation Card */}
+                                        {msg.role === "model" && msg.recommendedProduct && (
+                                            <ProductRecommendationCard product={msg.recommendedProduct} userRole="farmer" />
+                                        )}
+
+                                        {/* Web Search Grounding Sources */}
+                                        {msg.role === "model" && msg.sources && msg.sources.length > 0 && (
+                                            <div className="mt-3 pt-2.5 border-t border-slate-100 text-xs">
+                                                <div className="flex items-center gap-1 text-emerald-700 font-bold mb-1.5">
+                                                    <Globe className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                                    <span>المصادر ومراجع البحث من الويب:</span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {msg.sources.map((source, idx) => (
+                                                        <a
+                                                            key={idx}
+                                                            href={source.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-600 hover:text-emerald-800 text-[11px] px-2.5 py-1 rounded-lg transition-colors max-w-full truncate"
+                                                            title={source.url}
+                                                        >
+                                                            <span className="truncate max-w-[180px]">{source.title}</span>
+                                                            <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* TTS Speaker icon for model replies */}
+                                        {msg.role === "model" && ttsSupported && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSpeak(msg.content, msg.id)}
+                                                className={`absolute -bottom-2.5 -left-2.5 p-1.5 rounded-full border shadow-xs transition-colors ${
+                                                    loadingSpeechId === msg.id || activeSpeechId === msg.id
+                                                        ? "bg-emerald-600 text-white border-emerald-500"
+                                                        : "bg-white text-slate-500 hover:text-emerald-700 border-slate-200 hover:bg-slate-50"
+                                                }`}
+                                                title={
+                                                    loadingSpeechId === msg.id
+                                                        ? "جاري تحميل الصوت... (إيقاف)"
+                                                        : activeSpeechId === msg.id
+                                                        ? "إيقاف الصوت"
+                                                        : "قراءة الرسالة بصوت عالي"
+                                                }
+                                            >
+                                                {loadingSpeechId === msg.id ? (
+                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                ) : activeSpeechId === msg.id ? (
+                                                    <VolumeX className="w-3.5 h-3.5" />
+                                                ) : (
+                                                    <Volume2 className="w-3.5 h-3.5" />
+                                                )}
+                                            </button>
+                                        )}
+                                    </div>
+                                    <span className="text-[10px] text-slate-400 block px-1">
+                                        {msg.timestamp.toLocaleTimeString("ar-EG", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                        })}
+                                    </span>
+                                </div>
+                            </div>
+                        ))
+                    )}
+
+                    {/* Loading / Writing Indicator */}
+                    {isLoading && (
+                        <div className="flex gap-3 max-w-[85%] ml-auto text-right">
+                            <div className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+                                <Bot className="w-4 h-4 text-emerald-600" />
+                            </div>
+                            <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-3.5 text-sm text-slate-600 flex items-center gap-2 shadow-xs">
+                                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                                <span>جاري فحص السؤال وتحضير الإجابة...</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Audio transcribing indicator */}
+                    {transcribing && (
+                        <div className="flex gap-3 max-w-[85%] mr-auto flex-row-reverse text-right">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                                <User className="w-4 h-4" />
+                            </div>
+                            <div className="bg-white border border-slate-200 rounded-2xl rounded-tr-none p-3.5 text-sm text-slate-600 flex items-center gap-2 shadow-xs">
+                                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                                <span>جاري تحويل صوتك لنص...</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div ref={messagesEndRef} />
+                </div>
+
+                {/* Errors or Mic Alerts */}
+                {(error || recorderError) && (
+                    <div className="px-4 mb-2">
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex flex-col items-center gap-2 text-red-600 text-xs">
+                            <div className="flex items-start gap-2.5 w-full">
+                                {error === "__network__" ? (
+                                    <WifiOff className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                                ) : (
+                                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                                )}
+                                <p className="leading-relaxed flex-1">
+                                    {error === "__network__"
+                                        ? "⚠️ هناك مشكلة في الاتصال بالإنترنت، يرجى المحاولة لاحقاً"
+                                        : (error || recorderError)}
+                                </p>
+                            </div>
+                            {failedPayload && error !== "انتهت جلستك، يرجى تسجيل الدخول مجدداً." && (
+                                <button
+                                    onClick={handleRetry}
+                                    className="flex items-center gap-1.5 text-xs font-bold text-red-700 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-xl transition-colors"
+                                >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                    إعادة الإرسال
+                                </button>
                             )}
                         </div>
+                    </div>
+                )}
 
-                        {/* Bubble */}
-                        <div className={`space-y-1.5 ${msg.role === "user" ? "items-end flex flex-col" : ""}`}>
-                            {/* Attached image thumbnail in bubble */}
-                            {msg.imagePreview && (
-                                // eslint-disable-next-line @next/next/no-img-element
+                {/* Attached Image Preview Bar */}
+                {attachedImage && (
+                    <div className="px-4 mb-2">
+                        <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl p-2">
+                            <div className="relative flex-shrink-0">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
-                                    src={msg.imagePreview}
-                                    alt="صورة مرفقة"
-                                    className="w-52 h-40 object-cover rounded-2xl border border-slate-700 shadow-md"
+                                    src={attachedImage}
+                                    alt="معاينة الصورة"
+                                    className="w-14 h-12 object-cover rounded-xl border border-emerald-500 shadow-xs"
                                 />
-                            )}
-                            <div
-                                className={`rounded-2xl p-4 text-sm leading-relaxed relative ${msg.role === "user"
-                                        ? "bg-emerald-600 text-white rounded-tr-none"
-                                        : "bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none"
-                                    }${!msg.content || msg.content === "📷" ? " italic opacity-70" : ""}`}
-                            >
-                                {msg.content && msg.content !== "📷" && <p className="whitespace-pre-line">{msg.content}</p>}
-
-                                {/* Product Recommendation Card */}
-                                {msg.role === "model" && msg.recommendedProduct && (
-                                    <ProductRecommendationCard product={msg.recommendedProduct} userRole="farmer" />
-                                )}
-
-                                {/* Web Search Grounding Sources */}
-                                {msg.role === "model" && msg.sources && msg.sources.length > 0 && (
-                                    <div className="mt-3 pt-2.5 border-t border-slate-800/80 text-xs">
-                                        <div className="flex items-center gap-1.5 text-emerald-400 font-medium mb-1.5">
-                                            <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                            <span>المصادر ومراجع البحث في الويب:</span>
-                                        </div>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {msg.sources.map((source, idx) => (
-                                                <a
-                                                    key={idx}
-                                                    href={source.url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-1 bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-emerald-500/50 text-slate-300 hover:text-emerald-400 text-[11px] px-2.5 py-1 rounded-lg transition-colors max-w-full truncate"
-                                                    title={source.url}
-                                                >
-                                                    <span className="truncate max-w-[180px]">{source.title}</span>
-                                                    <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
-                                                </a>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* TTS Speaker icon for model replies */}
-                                {msg.role === "model" && ttsSupported && (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleSpeak(msg.content, msg.id)}
-                                        className={`absolute -bottom-3 -left-3 p-1.5 rounded-full border shadow-md transition-colors ${
-                                            loadingSpeechId === msg.id || activeSpeechId === msg.id
-                                                ? "bg-emerald-500 text-white border-emerald-400 hover:bg-emerald-600"
-                                                : "bg-slate-800 text-slate-400 hover:text-white border-slate-700 hover:bg-slate-700"
-                                        }`}
-                                        title={
-                                            loadingSpeechId === msg.id
-                                                ? "جاري تحميل الصوت... (إيقاف)"
-                                                : activeSpeechId === msg.id
-                                                ? "إيقاف الصوت"
-                                                : "قراءة الرسالة بصوت عالي"
-                                        }
-                                    >
-                                        {loadingSpeechId === msg.id ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : activeSpeechId === msg.id ? (
-                                            <VolumeX className="w-4 h-4" />
-                                        ) : (
-                                            <Volume2 className="w-4 h-4" />
-                                        )}
-                                    </button>
-                                )}
+                                <button
+                                    onClick={() => setAttachedImage(null)}
+                                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-xs"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
                             </div>
-                            <span className="text-[10px] text-slate-500 block px-1">
-                                {msg.timestamp.toLocaleTimeString("ar-EG", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                })}
+                            <span className="text-slate-600 text-xs flex-1 font-medium">
+                                صورة المحصول جاهزة للفحص والتحليل الزراعي
                             </span>
                         </div>
                     </div>
-                ))}
-
-                {/* Loading / Writing Indicator */}
-                {isLoading && (
-                    <div className="flex gap-3 max-w-[85%] ml-auto">
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-slate-800 border border-slate-700 text-slate-300">
-                            <Bot className="w-5 h-5" />
-                        </div>
-                        <div className="bg-slate-900 border border-slate-800 text-slate-400 rounded-2xl rounded-tl-none p-4 text-sm flex items-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                            <span>جاري كتابة الرد الزراعي...</span>
-                        </div>
-                    </div>
                 )}
 
-                {/* Audio transcribing indicator */}
-                {transcribing && (
-                    <div className="flex gap-3 max-w-[85%] mr-auto flex-row-reverse">
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                            <User className="w-5 h-5" />
-                        </div>
-                        <div className="bg-slate-900 border border-slate-800 text-slate-400 rounded-2xl rounded-tr-none p-4 text-sm flex items-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                            <span>جاري كتابة صوتك بالذكاء الاصطناعي...</span>
-                        </div>
-                    </div>
-                )}
-
-                <div ref={messagesEndRef} />
-            </div>
-
-            {/* Errors or Mic Alerts with Retry Button */}
-            {(error || recorderError) && (
-                <div className="mx-4 p-3 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col items-center gap-2.5 text-red-400 text-xs">
-                    <div className="flex items-start gap-2.5 w-full">
-                        {error === "__network__" ? (
-                            <WifiOff className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
-                        ) : (
-                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                        )}
-                        <p className="leading-relaxed flex-1">
-                            {error === "__network__"
-                                ? "⚠️ هناك مشكلة في الشبكة، تحقق من الاتصال وحاول مرة أخرى"
-                                : (error || recorderError)}
-                        </p>
-                    </div>
-                    {failedPayload && error !== "انتهت جلستك، يرجى تسجيل الدخول مجدداً." && (
-                        <button
-                            onClick={handleRetry}
-                            className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 px-4 py-2 rounded-xl transition-colors self-center"
-                        >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            إعادة الإرسال
-                        </button>
-                    )}
-                </div>
-            )}
-
-            {/* Attached image preview bar */}
-            {attachedImage && (
-                <div className="mx-4 mb-1 flex items-center gap-3 bg-slate-900/80 border border-slate-800 rounded-2xl px-3 py-2">
-                    <div className="relative flex-shrink-0">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                            src={attachedImage}
-                            alt="معاينة الصورة"
-                            className="w-14 h-10 object-cover rounded-xl border border-emerald-500/40"
-                        />
-                        <button
-                            onClick={() => setAttachedImage(null)}
-                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white shadow-sm"
-                        >
-                            <X className="w-3 h-3" />
-                        </button>
-                    </div>
-                    <span className="text-slate-400 text-xs flex-1">صورة جاهزة للإرسال — يمكنك كتابة سؤالك أو الضغط إرسال مباشرة</span>
-                </div>
-            )}
-
-            {/* Footer / Input form */}
-            <div className="px-3 pt-2 pb-3 bg-slate-900 border-t border-slate-800">
-
-                {/* Row 1: Textarea + Send (always visible, full width) */}
-                <div className="flex items-end gap-2 mb-2">
-                    <textarea
-                        ref={textareaRef}
-                        rows={1}
-                        value={inputText}
-                        onChange={(e) => setInputText(e.target.value)}
-                        disabled={isLoading || transcribing}
-                        placeholder={
-                            isRecording
-                                ? "🎙️ جاري تسجيل صوتك..."
-                                : transcribing
-                                ? "⏳ جاري ترجمة صوتك..."
-                                : attachedImage
-                                ? "اكتب سؤالك عن الصورة (اختياري)..."
-                                : "اكتب سؤالك هنا..."
-                        }
-                        className="flex-1 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 text-white placeholder-slate-500 rounded-2xl py-3 px-4 text-sm outline-none transition-colors disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
-                        style={{ minHeight: "44px", maxHeight: "144px" }}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSend();
+                {/* Footer Input Area */}
+                <div className="p-3 sm:p-4 bg-white border-t border-slate-200/80 space-y-2">
+                    {/* Row 1: Textarea + Send */}
+                    <div className="flex items-end gap-2">
+                        <textarea
+                            ref={textareaRef}
+                            rows={1}
+                            value={inputText}
+                            onChange={(e) => setInputText(e.target.value)}
+                            disabled={isLoading || transcribing}
+                            placeholder={
+                                isRecording
+                                    ? "🎙️ جاري تسجيل صوتك..."
+                                    : transcribing
+                                    ? "⏳ جاري ترجمة صوتك..."
+                                    : attachedImage
+                                    ? "اكتب سؤالك عن الصورة (اختياري)..."
+                                    : "اكتب استشارتك الزراعية هنا..."
                             }
-                        }}
-                    />
+                            className="flex-1 bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-emerald-500 focus:bg-white text-slate-900 placeholder-slate-400 rounded-2xl py-3 px-4 text-sm outline-none transition-all disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
+                            style={{ minHeight: "46px", maxHeight: "144px" }}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSend();
+                                }
+                            }}
+                        />
 
-                    {/* Send Button — always visible and prominent */}
-                    <button
-                        type="button"
-                        onClick={() => handleSend()}
-                        disabled={isLoading || transcribing || (!inputText.trim() && !attachedImage)}
-                        className="p-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-2xl transition-colors active:scale-95 shadow-lg flex items-center justify-center shrink-0 self-end"
-                        title="إرسال"
-                        aria-label="إرسال الرسالة"
-                    >
-                        <Send className="w-5 h-5 rotate-180" />
-                    </button>
-                </div>
-
-                {/* Row 2: Camera / Gallery / Mic icons */}
-                <div className="flex items-center gap-2">
-                    {/* Camera: instant capture */}
-                    <button
-                        type="button"
-                        onClick={() => cameraInputRef.current?.click()}
-                        disabled={isLoading || transcribing}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors text-xs"
-                        title="تصوير فوري بالكاميرا"
-                    >
-                        <Camera className="w-4 h-4" />
-                        <span className="hidden sm:inline">كاميرا</span>
-                    </button>
-                    <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        ref={cameraInputRef}
-                        onChange={handleImageSelect}
-                        className="hidden"
-                    />
-
-                    {/* Gallery: pick from device files */}
-                    <button
-                        type="button"
-                        onClick={() => galleryInputRef.current?.click()}
-                        disabled={isLoading || transcribing}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40 transition-colors text-xs"
-                        title="اختر صورة من الهاتف"
-                    >
-                        <FolderOpen className="w-4 h-4" />
-                        <span className="hidden sm:inline">معرض</span>
-                    </button>
-                    <input
-                        type="file"
-                        accept="image/*"
-                        ref={galleryInputRef}
-                        onChange={handleImageSelect}
-                        className="hidden"
-                    />
-
-                    {/* Microphone button (Speech-to-Text via Groq Whisper) */}
-                    {hasMic && (
+                        {/* Send Button */}
                         <button
                             type="button"
-                            onClick={handleMicClick}
-                            disabled={isLoading || transcribing}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border transition-all duration-300 text-xs ${
-                                isRecording
-                                    ? "bg-red-500 text-white border-red-400 animate-pulse"
-                                    : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
-                            }`}
-                            title={isRecording ? "إيقاف التسجيل" : "تحدث بالصوت"}
+                            onClick={() => handleSend()}
+                            disabled={isLoading || transcribing || (!inputText.trim() && !attachedImage)}
+                            className="p-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-2xl transition-all active:scale-95 shadow-xs flex items-center justify-center shrink-0 self-end"
+                            title="إرسال"
+                            aria-label="إرسال الرسالة"
                         >
-                            {isRecording ? (
-                                <><Square className="w-4 h-4 fill-current" /><span>إيقاف</span></>
-                            ) : (
-                                <><Mic className="w-4 h-4" /><span className="hidden sm:inline">صوت</span></>
-                            )}
+                            <Send className="w-5 h-5 rotate-180" />
                         </button>
+                    </div>
+
+                    {/* Row 2: Camera / Gallery / Mic icons */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => cameraInputRef.current?.click()}
+                            disabled={isLoading || transcribing}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 disabled:opacity-50 transition-colors text-xs font-bold"
+                            title="تصوير فوري بالكاميرا"
+                        >
+                            <Camera className="w-4 h-4 text-emerald-600" />
+                            <span>كاميرا</span>
+                        </button>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            ref={cameraInputRef}
+                            onChange={handleImageSelect}
+                            className="hidden"
+                        />
+
+                        <button
+                            type="button"
+                            onClick={() => galleryInputRef.current?.click()}
+                            disabled={isLoading || transcribing}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 disabled:opacity-50 transition-colors text-xs font-bold"
+                            title="اختر صورة من الهاتف"
+                        >
+                            <FolderOpen className="w-4 h-4 text-emerald-600" />
+                            <span>المعرض</span>
+                        </button>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            ref={galleryInputRef}
+                            onChange={handleImageSelect}
+                            className="hidden"
+                        />
+
+                        {hasMic && (
+                            <button
+                                type="button"
+                                onClick={handleMicClick}
+                                disabled={isLoading || transcribing}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border transition-all text-xs font-bold ${
+                                    isRecording
+                                        ? "bg-red-500 text-white border-red-400 animate-pulse shadow-sm"
+                                        : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+                                }`}
+                                title={isRecording ? "إيقاف التسجيل" : "تحدث بالصوت"}
+                            >
+                                {isRecording ? (
+                                    <><Square className="w-4 h-4 fill-current" /><span>إيقاف</span></>
+                                ) : (
+                                    <><Mic className="w-4 h-4 text-emerald-600" /><span>تسجيل صوتي</span></>
+                                )}
+                            </button>
+                        )}
+                    </div>
+
+                    {isRecording && (
+                        <p className="text-center text-[11px] text-red-500 animate-pulse font-medium">
+                            الميكروفون نشط الآن — انقر «إيقاف» عند الانتهاء
+                        </p>
                     )}
                 </div>
-
-                {isRecording && (
-                    <p className="text-center text-[10px] text-red-400 animate-pulse mt-1.5">
-                        الميكروفون نشط — انقر «إيقاف» عند الانتهاء
-                    </p>
-                )}
             </div>
         </div>
     );
