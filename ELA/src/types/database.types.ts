@@ -295,29 +295,47 @@ export type Database = {
       }
       orders: {
         Row: {
+          collected_from_farmer: boolean
           created_at: string
+          created_by_type: string
+          delivered_at: string | null
           distributor_id: string
           farmer_id: string
           id: string
+          is_seen: boolean
           payment_status: Database["public"]["Enums"]["payment_status"]
+          settled_at: string | null
+          settled_to_admin: boolean
           status: Database["public"]["Enums"]["order_status"]
           total_price: number
         }
         Insert: {
+          collected_from_farmer?: boolean
           created_at?: string
+          created_by_type?: string
+          delivered_at?: string | null
           distributor_id: string
           farmer_id: string
           id?: string
+          is_seen?: boolean
           payment_status?: Database["public"]["Enums"]["payment_status"]
+          settled_at?: string | null
+          settled_to_admin?: boolean
           status?: Database["public"]["Enums"]["order_status"]
           total_price?: number
         }
         Update: {
+          collected_from_farmer?: boolean
           created_at?: string
+          created_by_type?: string
+          delivered_at?: string | null
           distributor_id?: string
           farmer_id?: string
           id?: string
+          is_seen?: boolean
           payment_status?: Database["public"]["Enums"]["payment_status"]
+          settled_at?: string | null
+          settled_to_admin?: boolean
           status?: Database["public"]["Enums"]["order_status"]
           total_price?: number
         }

@@ -68,6 +68,10 @@ type Order = {
   payment_status: string;
   total_price: number;
   created_at: string;
+  settled_to_admin?: boolean;
+  collected_from_farmer?: boolean;
+  delivered_at?: string | null;
+  settled_at?: string | null;
   farmers?: {
     profiles?: {
       full_name?: string | null;
@@ -360,7 +364,10 @@ function SettleSalesModal({
   onSuccess: () => void;
 }) {
   const distUnpaidOrders = orders.filter(
-    (o) => o.distributor_id === dist.profile_id && o.status === "delivered" && o.payment_status === "unpaid"
+    (o) =>
+      o.distributor_id === dist.profile_id &&
+      o.status === "delivered" &&
+      (o.settled_to_admin === false || (!("settled_to_admin" in o) && o.payment_status === "unpaid"))
   );
 
   const [selectedIds, setSelectedIds] = useState<string[]>(distUnpaidOrders.map((o) => o.id));
@@ -531,11 +538,19 @@ function DistributorLedgerModal({
   const deliveredOrders = distOrders.filter((o) => o.status === "delivered");
 
   const uncollectedSum = deliveredOrders
-    .filter((o) => o.payment_status === "unpaid")
+    .filter(
+      (o) =>
+        o.settled_to_admin === false ||
+        (!("settled_to_admin" in o) && o.payment_status === "unpaid")
+    )
     .reduce((sum, o) => sum + (Number(o.total_price) || 0), 0);
 
   const collectedSumPeriod = deliveredOrders
-    .filter((o) => o.payment_status === "paid" && isWithinTimeframe(o.created_at, timeframe))
+    .filter(
+      (o) =>
+        (o.settled_to_admin === true || o.payment_status === "paid") &&
+        isWithinTimeframe(o.created_at, timeframe)
+    )
     .reduce((sum, o) => sum + (Number(o.total_price) || 0), 0);
 
   const completedCountPeriod = deliveredOrders.filter((o) =>
@@ -630,13 +645,13 @@ function DistributorLedgerModal({
                             {Number(order.total_price).toLocaleString("ar-EG")} ج.م
                           </td>
                           <td className="px-4 py-3">
-                            {order.payment_status === "paid" ? (
+                            {order.settled_to_admin ? (
                               <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-semibold">
-                                <CheckCircle2 className="w-3 h-3" /> تم التحصيل
+                                <CheckCircle2 className="w-3 h-3" /> تم التوريد للإدارة
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-semibold">
-                                <Clock className="w-3 h-3" /> غير مستلم
+                                <Clock className="w-3 h-3" /> مستحق على الموزع
                               </span>
                             )}
                           </td>
@@ -711,6 +726,7 @@ export default function DistributorsPage() {
       .from("orders")
       .select(`
         id, distributor_id, status, payment_status, total_price, created_at,
+        settled_to_admin, collected_from_farmer, delivered_at, settled_at,
         farmers(profiles(full_name)),
         order_items(id, quantity, products(name_ar, image_url))
       `)
@@ -736,11 +752,19 @@ export default function DistributorsPage() {
       const distOrders = orders.filter((o) => o.distributor_id === dist.profile_id);
 
       const uncollectedSales = distOrders
-        .filter((o) => o.payment_status === "unpaid")
+        .filter(
+          (o) =>
+            o.settled_to_admin === false ||
+            (!("settled_to_admin" in o) && o.payment_status === "unpaid")
+        )
         .reduce((sum, o) => sum + (Number(o.total_price) || 0), 0);
 
       const collectedSalesPeriod = distOrders
-        .filter((o) => o.payment_status === "paid" && isWithinTimeframe(o.created_at, timeframe))
+        .filter(
+          (o) =>
+            (o.settled_to_admin === true || o.payment_status === "paid") &&
+            isWithinTimeframe(o.created_at, timeframe)
+        )
         .reduce((sum, o) => sum + (Number(o.total_price) || 0), 0);
 
       const completedCountPeriod = distOrders.filter((o) =>

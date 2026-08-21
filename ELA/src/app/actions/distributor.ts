@@ -473,31 +473,52 @@ export async function markOrderDelivered(orderId: string) {
       .from("orders")
       .update({
         status: "delivered",
+        payment_status: "paid",
+        collected_from_farmer: true,
+        delivered_at: new Date().toISOString(),
       })
       .eq("id", orderId)
-      .eq("distributor_id", currentUser.id);
+      .eq("distributor_id", currentUser.id)
+      .neq("status", "delivered")
+      .select("id");
 
     if (updateError) {
       console.error("[markOrderDelivered] Update Error:", updateError);
       return { error: "فشل تحديث حالة الطلب" };
     }
 
-    // 5. Update distributor wallet
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: distData } = await (supabase as any)
-      .from("distributors")
-      .select("wallet_balance")
-      .eq("profile_id", currentUser.id)
-      .single();
+    if (!updatedOrders || updatedOrders.length === 0) {
+      return { error: "الطلب تم تسليمه مسبقاً أو غير موجود" };
+    }
 
-    if (distData) {
+    // 5. Update distributor wallet atomically
+    if (totalCommission > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from("distributors")
-        .update({
-          wallet_balance: distData.wallet_balance + totalCommission
-        })
-        .eq("profile_id", currentUser.id);
+      const { error: rpcError } = await (supabase as any).rpc("increment_distributor_wallet", {
+        p_profile_id: currentUser.id,
+        p_amount: totalCommission,
+      });
+
+      if (rpcError) {
+        console.warn("[markOrderDelivered] RPC increment failed, using fallback update:", rpcError);
+        // Fallback in case RPC is not yet created in DB
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: distData } = await (supabase as any)
+          .from("distributors")
+          .select("wallet_balance")
+          .eq("profile_id", currentUser.id)
+          .single();
+
+        if (distData) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any)
+            .from("distributors")
+            .update({
+              wallet_balance: (Number(distData.wallet_balance) || 0) + totalCommission,
+            })
+            .eq("profile_id", currentUser.id);
+        }
+      }
     }
 
     revalidatePath("/distributor/deliveries");

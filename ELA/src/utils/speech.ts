@@ -137,6 +137,44 @@ let globalTtsAudio: HTMLAudioElement | null = null;
 let globalTtsAbortController: AbortController | null = null;
 
 /**
+ * Strips markdown, emojis, horizontal dividers, and special formatting markers so that Edge-TTS speaks natural, fluent Arabic.
+ */
+export function stripMarkdownForTts(text: string): string {
+  if (!text) return "";
+
+  return text
+    // 1. Remove recommendation system tags like [RECOMMEND_PRODUCT:xyz]
+    .replace(/\[RECOMMEND_PRODUCT:[^\]]+\]/gi, "")
+    // 2. Remove markdown links [Title](url) -> Title
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    // 3. Remove horizontal dividers (---, ___, ***) and repeated hyphens/dashes
+    .replace(/^[ \t]*[-*_]{3,}[ \t]*$/gm, "")
+    .replace(/[-–—]{2,}/g, " ")
+    // 4. Remove emojis and pictographs so TTS doesn't say "علامة تحذير" or "سنبلة"
+    .replace(/[\u{1F300}-\u{1F9FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/gu, "")
+    // 5. Remove header markers (# Title, ## Title, ### Title) -> Title
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/#{1,6}\s+/g, " ")
+    // 6. Remove bold & italic (**text**, *text*, __text__, _text_) -> text
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    // 7. Remove inline code (`code`) -> code
+    .replace(/`([^`]+)`/g, "$1")
+    // 8. Convert bullet lists (- item, * item, • item) -> item
+    .replace(/^[-*•]\s+/gm, "")
+    // 9. Remove blockquotes (> text) -> text
+    .replace(/^>\s+/gm, "")
+    // 10. Clean up stray markdown symbols (#, *, _, ~, `, |, ^)
+    .replace(/[#*_~`|^]/g, "")
+    // 11. Normalize multiple line breaks to full stop + pause
+    .replace(/\n{2,}/g, ".\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+/**
  * Text-to-Speech: Converts text to Egyptian Neural voice (ar-EG-SalmaNeural)
  * using ELA's Edge-TTS Next.js API endpoint (/api/text-to-speech).
  */
@@ -148,6 +186,12 @@ export async function speakArabic(
   voice?: string
 ): Promise<void> {
   if (typeof window === "undefined") return;
+
+  const sanitizedText = stripMarkdownForTts(text);
+  if (!sanitizedText) {
+    onEnd?.();
+    return;
+  }
 
   try {
     // Cancel any previous in-flight fetch + stop any playing audio
@@ -164,7 +208,7 @@ export async function speakArabic(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        text,
+        text: sanitizedText,
         ...(voice ? { voice } : {}),
       }),
       signal: abortController.signal,

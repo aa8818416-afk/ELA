@@ -43,14 +43,18 @@ export async function settleDistributorSales(profileId: string, orderIds?: strin
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("orders")
-    .update({ payment_status: "paid" })
+    .update({
+      payment_status: "paid",
+      settled_to_admin: true,
+      settled_at: new Date().toISOString(),
+    })
     .eq("distributor_id", profileId)
     .eq("status", "delivered");
 
   if (orderIds && orderIds.length > 0) {
     query = query.in("id", orderIds);
   } else {
-    query = query.eq("payment_status", "unpaid");
+    query = query.or("settled_to_admin.eq.false,payment_status.eq.unpaid");
   }
 
   const { error } = await query;

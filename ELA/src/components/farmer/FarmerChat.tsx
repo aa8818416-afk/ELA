@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
     Send,
     Loader2,
@@ -10,8 +10,6 @@ import {
     VolumeX,
     AlertCircle,
     ArrowRight,
-    User,
-    Bot,
     Camera,
     FolderOpen,
     X,
@@ -23,9 +21,9 @@ import {
     Plus,
     Trash2,
     Clock,
-    Sparkles,
-    PanelLeftClose,
     PanelLeftOpen,
+    ChevronDown,
+    ArrowDown,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -43,7 +41,6 @@ interface Message {
     role: "user" | "model";
     content: string;
     timestamp: Date;
-    /** Image specifically attached to this message (base64 preview) */
     imagePreview?: string;
     recommendedProduct?: RecommendedProduct;
     sources?: Array<{ title: string; url: string }>;
@@ -68,9 +65,146 @@ const WELCOME_MESSAGE: Message = {
     id: "welcome",
     role: "model",
     content:
-        "أهلاً بك يا حاج! أنا مرشدك الزراعي الذكي 🌾. إسألني عن أي حاجة تخص زرعك، الري، التسميد، أو الأمراض اللي بتواجهك وأنا هجاوبك حالاً. يمكنك كمان ترفق صورة من المحصول وأنا هحللها.",
+        "أهلاً بك يا حاج! أنا مرشدك الزراعي الذكي 🌾.\nاسألني عن أي حاجة تخص زرعك، الري، التسميد، أو الأمراض اللي بتواجهك وأنا هجاوبك حالاً. يمكنك كمان ترفق صورة من المحصول وأنا هحللها بدقة.",
     timestamp: new Date(),
 };
+
+/**
+ * Lightweight & Rich Markdown Formatter for Arabic Chat
+ */
+/**
+ * Lightweight & Robust Markdown Formatter for Arabic Chat
+ */
+function MarkdownMessage({ content }: { content: string }) {
+    const rendered = useMemo(() => {
+        if (!content) return null;
+
+        // Pre-normalize content to fix common LLM formatting inconsistencies:
+        // 1. Separate inline headers onto their own lines (e.g. "...حقلك: ## العنوان" -> "...حقلك:\n\n## العنوان")
+        // 2. Fix detached numbers (e.g. "1.\nالاسم" -> "1. الاسم")
+        // 3. Normalize horizontal rules (e.g. "---" onto separate lines)
+        let normalized = content
+            .replace(/([^\n])\s*(#{1,6}\s+)/g, "$1\n\n$2")
+            .replace(/(^|\n)(\d+\.)\s*\n\s*/g, "$1$2 ")
+            .replace(/([^\n])\s*(---|___|\*\*\*)\s*/g, "$1\n\n---\n\n");
+
+        const lines = normalized.split("\n");
+        const elements: React.ReactNode[] = [];
+
+        lines.forEach((line, lineIdx) => {
+            const trimmed = line.trim();
+
+            if (!trimmed) {
+                elements.push(<div key={`empty-${lineIdx}`} className="h-2" />);
+                return;
+            }
+
+            // Horizontal Divider (---)
+            if (trimmed === "---" || trimmed === "***" || trimmed === "___") {
+                elements.push(
+                    <hr key={`hr-${lineIdx}`} className="my-3.5 border-t border-slate-200" />
+                );
+                return;
+            }
+
+            // Heading 1 (# ...)
+            if (trimmed.startsWith("# ")) {
+                elements.push(
+                    <h1 key={`h1-${lineIdx}`} className="text-xl sm:text-2xl font-black text-slate-900 mt-4 mb-2">
+                        {formatInline(trimmed.replace(/^#\s+/, ""))}
+                    </h1>
+                );
+                return;
+            }
+
+            // Heading 2 (## ...)
+            if (trimmed.startsWith("## ")) {
+                elements.push(
+                    <h2 key={`h2-${lineIdx}`} className="text-lg sm:text-xl font-bold text-slate-900 mt-4 mb-2 pb-1 border-b border-emerald-100 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0 inline-block" />
+                        <span>{formatInline(trimmed.replace(/^##\s+/, ""))}</span>
+                    </h2>
+                );
+                return;
+            }
+
+            // Heading 3 (### ...)
+            if (trimmed.startsWith("### ")) {
+                elements.push(
+                    <h3 key={`h3-${lineIdx}`} className="text-base sm:text-lg font-bold text-emerald-900 mt-3 mb-1">
+                        {formatInline(trimmed.replace(/^###\s+/, ""))}
+                    </h3>
+                );
+                return;
+            }
+
+            // Bullet lists (- or * or •)
+            if (/^[-*•]\s+/.test(trimmed)) {
+                elements.push(
+                    <div key={`li-${lineIdx}`} className="flex items-start gap-2 mr-2 my-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mt-2 shrink-0" />
+                        <span className="text-slate-800 text-sm sm:text-base leading-relaxed">
+                            {formatInline(trimmed.replace(/^[-*•]\s+/, ""))}
+                        </span>
+                    </div>
+                );
+                return;
+            }
+
+            // Numbered list (1. ...)
+            const numMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
+            if (numMatch) {
+                elements.push(
+                    <div key={`num-${lineIdx}`} className="flex items-start gap-2 mr-1 my-1">
+                        <span className="font-bold text-emerald-700 text-sm sm:text-base shrink-0 min-w-5">
+                            {numMatch[1]}.
+                        </span>
+                        <span className="text-slate-800 text-sm sm:text-base leading-relaxed">
+                            {formatInline(numMatch[2])}
+                        </span>
+                    </div>
+                );
+                return;
+            }
+
+            // Regular paragraph
+            elements.push(
+                <p key={`p-${lineIdx}`} className="text-slate-800 text-sm sm:text-base leading-relaxed my-1">
+                    {formatInline(trimmed)}
+                </p>
+            );
+        });
+
+        return elements;
+    }, [content]);
+
+    return <div className="space-y-1 text-right">{rendered}</div>;
+}
+
+/**
+ * Inline formatting for **bold**, `code`, and #hashtags
+ */
+function formatInline(text: string): React.ReactNode[] {
+    const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+
+    return parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+                <strong key={i} className="font-bold text-slate-950">
+                    {part.slice(2, -2)}
+                </strong>
+            );
+        }
+        if (part.startsWith("`") && part.endsWith("`")) {
+            return (
+                <code key={i} className="bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded text-xs sm:text-sm font-mono border border-emerald-200">
+                    {part.slice(1, -1)}
+                </code>
+            );
+        }
+        return part;
+    });
+}
 
 export default function FarmerChat() {
     const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
@@ -86,6 +220,9 @@ export default function FarmerChat() {
     const [loadingSpeechId, setLoadingSpeechId] = useState<string | null>(null);
     const [ttsSupported, setTtsSupported] = useState(false);
 
+    // Scroll-to-bottom visibility
+    const [showScrollButton, setShowScrollButton] = useState(false);
+
     // Image attachment state
     const [attachedImage, setAttachedImage] = useState<string | null>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -94,6 +231,7 @@ export default function FarmerChat() {
     // Stores the last failed request so we can retry it
     const [failedPayload, setFailedPayload] = useState<FailedPayload | null>(null);
 
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -165,9 +303,21 @@ export default function FarmerChat() {
         loadSessionMessages();
     }, [loadSessions, loadSessionMessages]);
 
+    // Handle scroll to check if user is away from bottom
+    const handleScroll = () => {
+        const el = messagesContainerRef.current;
+        if (!el) return;
+        const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+        setShowScrollButton(distanceFromBottom > 200);
+    };
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
     // Scroll to bottom on new messages
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        scrollToBottom();
     }, [messages, isLoading]);
 
     // Auto-resize textarea whenever inputText changes
@@ -175,7 +325,7 @@ export default function FarmerChat() {
         const el = textareaRef.current;
         if (!el) return;
         el.style.height = "auto";
-        el.style.height = Math.min(el.scrollHeight, 144) + "px";
+        el.style.height = Math.min(el.scrollHeight, 160) + "px";
     }, []);
 
     useEffect(() => {
@@ -409,9 +559,16 @@ export default function FarmerChat() {
         );
     };
 
+    // Find current active session title for the header
+    const currentSessionTitle = useMemo(() => {
+        if (!currentSessionId) return "استشارة جديدة";
+        const found = sessions.find((s) => s.id === currentSessionId);
+        return found?.title || "استشارة زراعية";
+    }, [currentSessionId, sessions]);
+
     return (
-        <div className="relative w-full max-w-3xl mx-auto">
-            {/* ── Sliding Left Sidebar Drawer (على الشمال وتتفتح وتنقفل) ────── */}
+        <div className="relative flex flex-col h-[calc(100vh-68px)] sm:h-[calc(100vh-80px)] w-full bg-slate-50/40">
+            {/* ── Sliding Left Sidebar Drawer ────── */}
             {isSidebarOpen && (
                 <div
                     className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 transition-opacity"
@@ -428,7 +585,7 @@ export default function FarmerChat() {
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                     <div className="flex items-center gap-2 text-slate-800">
                         <MessageSquare className="w-5 h-5 text-emerald-600" />
-                        <h3 className="font-bold text-sm">محادثاتك السابقة</h3>
+                        <h3 className="font-bold text-sm">سجل المحادثات</h3>
                         {sessions.length > 0 && (
                             <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
                                 {sessions.length}
@@ -445,10 +602,10 @@ export default function FarmerChat() {
                 </div>
 
                 {/* New Chat Button */}
-                <div className="p-3 bg-white">
+                <div className="p-3 bg-white border-b border-slate-100">
                     <button
                         onClick={startNewChat}
-                        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-all shadow-sm active:scale-[0.98]"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-all shadow-xs active:scale-[0.98]"
                     >
                         <Plus className="w-4 h-4" />
                         <span>محادثة جديدة</span>
@@ -513,65 +670,55 @@ export default function FarmerChat() {
                 </div>
             </div>
 
-            {/* ── Main Chat Box (Centered in Page - Clean White Theme) ─── */}
-            <div className="bg-white border border-slate-200/90 rounded-3xl shadow-sm flex flex-col h-[calc(100vh-140px)] min-h-[550px] overflow-hidden">
-                {/* Header */}
-                <div className="p-4 bg-white border-b border-slate-200/80 flex items-center justify-between z-10 shadow-xs">
-                    {/* Right: Title & Back Button */}
-                    <div className="flex items-center gap-2.5">
-                        <Link
-                            href="/farmer"
-                            className="p-2 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-full transition-colors"
-                            title="العودة للرئيسية"
-                        >
-                            <ArrowRight className="w-5 h-5" />
-                        </Link>
-                        <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-xl shadow-xs shrink-0">
-                            🌿
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-1.5">
-                                <h2 className="text-slate-900 font-black text-base leading-tight">المرشد الزراعي الذكي</h2>
-                                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-md border border-emerald-200">AI</span>
-                            </div>
-                            <p className="text-emerald-700 text-xs flex items-center gap-1 mt-0.5 font-medium">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                متصل وجاهز للتشخيص الصوتي والكتابي والصور
-                            </p>
-                        </div>
-                    </div>
+            {/* ── Top Page Bar (Independent, Clean, matching the screenshot) ─── */}
+            <div className="w-full bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 py-2.5 flex items-center justify-between z-10 shrink-0">
+                {/* Left Side: Sidebar Toggle Icon + Chat Title with dropdown chevron */}
+                <div className="flex items-center gap-2.5">
+                    <button
+                        onClick={() => setIsSidebarOpen(true)}
+                        className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors active:scale-95"
+                        title="فتح سجل المحادثات"
+                    >
+                        <PanelLeftOpen className="w-5 h-5 text-emerald-700" />
+                    </button>
 
-                    {/* Left: Sidebar Toggle & New Chat Button */}
-                    <div className="flex items-center gap-1.5">
-                        {/* New Chat Quick Button */}
-                        <button
-                            onClick={startNewChat}
-                            className="flex items-center gap-1 text-xs font-bold py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-all active:scale-95 shadow-xs"
-                            title="محادثة جديدة"
-                        >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">جديد</span>
-                        </button>
-
-                        {/* Left Sidebar Toggle Button */}
-                        <button
-                            onClick={() => setIsSidebarOpen(true)}
-                            className="flex items-center gap-1.5 text-xs font-bold py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200 transition-all active:scale-95 shadow-xs"
-                            title="عرض المحادثات السابقة على الشمال"
-                        >
-                            <MessageSquare className="w-4 h-4 text-emerald-600" />
-                            <span className="hidden sm:inline">المحادثات</span>
-                            {sessions.length > 0 && (
-                                <span className="text-[10px] bg-emerald-600 text-white font-bold px-1.5 py-0.2 rounded-full">
-                                    {sessions.length}
-                                </span>
-                            )}
-                        </button>
-                    </div>
+                    <button
+                        onClick={() => setIsSidebarOpen(true)}
+                        className="flex items-center gap-1.5 text-slate-900 hover:text-emerald-700 font-bold text-sm sm:text-base px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors max-w-[200px] sm:max-w-md truncate"
+                        title="تبديل أو عرض المحادثات"
+                    >
+                        <span className="truncate">{currentSessionTitle}</span>
+                        <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    </button>
                 </div>
 
-                {/* Messages Area */}
-                <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 bg-[#f8faf9]/60 scrollbar-thin scrollbar-thumb-slate-300">
+                {/* Right Side: Back to Farmer Home & Quick New Chat */}
+                <div className="flex items-center gap-1.5">
+                    <button
+                        onClick={startNewChat}
+                        className="p-2 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors"
+                        title="محادثة جديدة"
+                    >
+                        <Plus className="w-5 h-5" />
+                    </button>
+
+                    <Link
+                        href="/farmer"
+                        className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
+                        title="العودة للرئيسية"
+                    >
+                        <ArrowRight className="w-5 h-5" />
+                    </Link>
+                </div>
+            </div>
+
+            {/* ── Main Conversation Stream (Edge-to-Edge Free Flow Layout) ─── */}
+            <div
+                ref={messagesContainerRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 scrollbar-thin scrollbar-thumb-slate-300"
+            >
+                <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6">
                     {isLoadingHistory ? (
                         <div className="flex items-center justify-center h-48 text-slate-500 text-sm gap-2">
                             <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
@@ -579,59 +726,50 @@ export default function FarmerChat() {
                         </div>
                     ) : (
                         messages.map((msg) => (
-                            <div
-                                key={msg.id}
-                                className={`flex gap-3 max-w-[90%] sm:max-w-[85%] ${
-                                    msg.role === "user" ? "mr-auto flex-row-reverse" : "ml-auto text-right"
-                                }`}
-                            >
-                                {/* Avatar */}
-                                <div
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border shadow-xs ${
-                                        msg.role === "user"
-                                            ? "bg-emerald-100 border-emerald-200 text-emerald-800"
-                                            : "bg-white border-slate-200 text-slate-700"
-                                    }`}
-                                >
-                                    {msg.role === "user" ? (
-                                        <User className="w-4 h-4" />
-                                    ) : (
-                                        <Bot className="w-4 h-4 text-emerald-600" />
-                                    )}
-                                </div>
-
-                                {/* Bubble */}
-                                <div className={`space-y-1.5 flex-1 min-w-0 ${msg.role === "user" ? "items-end flex flex-col" : ""}`}>
-                                    {msg.imagePreview && (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={msg.imagePreview}
-                                            alt="صورة مرفقة"
-                                            className="w-52 h-40 object-cover rounded-2xl border border-slate-200 shadow-xs mb-1"
-                                        />
-                                    )}
-                                    <div
-                                        className={`rounded-2xl p-4 text-sm leading-relaxed relative shadow-xs ${
-                                            msg.role === "user"
-                                                ? "bg-emerald-600 text-white rounded-tr-none"
-                                                : "bg-white border border-slate-200/90 text-slate-800 rounded-tl-none whitespace-pre-line"
-                                        }${!msg.content || msg.content === "📷" ? " italic opacity-80" : ""}`}
-                                    >
-                                        {msg.content && msg.content !== "📷" && (
-                                            <p>{msg.content}</p>
+                            <div key={msg.id} className="w-full flex flex-col">
+                                {msg.role === "user" ? (
+                                    /* User Bubble (Right Aligned in RTL, sleek dark pill like screenshot) */
+                                    <div className="self-end max-w-[90%] sm:max-w-[80%] space-y-1.5 mb-2">
+                                        {msg.imagePreview && (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img
+                                                src={msg.imagePreview}
+                                                alt="صورة مرفقة"
+                                                className="w-56 h-44 object-cover rounded-2xl border border-slate-300 shadow-sm ml-auto mb-1"
+                                            />
                                         )}
+                                        <div className="bg-slate-800 text-white rounded-3xl rounded-tr-sm px-5 py-3.5 text-sm sm:text-base leading-relaxed shadow-sm text-right">
+                                            <p className="whitespace-pre-line">{msg.content}</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    /* Assistant AI Message (Open Stream, No enclosing box, Rich Markdown) */
+                                    <div className="w-full text-right py-2 space-y-3">
+                                        <div className="flex items-center gap-2 mb-1 text-xs font-bold text-emerald-800">
+                                            <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-xs text-emerald-800">
+                                                🌿
+                                            </div>
+                                            <span>طبيب المحاصيل الذكي</span>
+                                        </div>
+
+                                        {/* Rich Formatted Markdown Content */}
+                                        <div className="pr-1 text-slate-800">
+                                            <MarkdownMessage content={msg.content} />
+                                        </div>
 
                                         {/* Product Recommendation Card */}
-                                        {msg.role === "model" && msg.recommendedProduct && (
-                                            <ProductRecommendationCard product={msg.recommendedProduct} userRole="farmer" />
+                                        {msg.recommendedProduct && (
+                                            <div className="mt-4 pt-2">
+                                                <ProductRecommendationCard product={msg.recommendedProduct} userRole="farmer" />
+                                            </div>
                                         )}
 
-                                        {/* Web Search Grounding Sources */}
-                                        {msg.role === "model" && msg.sources && msg.sources.length > 0 && (
-                                            <div className="mt-3 pt-2.5 border-t border-slate-100 text-xs">
-                                                <div className="flex items-center gap-1 text-emerald-700 font-bold mb-1.5">
+                                        {/* Web Search Sources */}
+                                        {msg.sources && msg.sources.length > 0 && (
+                                            <div className="mt-3 pt-2.5 border-t border-slate-200/80 text-xs">
+                                                <div className="flex items-center gap-1 text-emerald-800 font-bold mb-1.5">
                                                     <Globe className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                                    <span>المصادر ومراجع البحث من الويب:</span>
+                                                    <span>مصادر ومراجع الويب:</span>
                                                 </div>
                                                 <div className="flex flex-wrap gap-1.5">
                                                     {msg.sources.map((source, idx) => (
@@ -640,10 +778,10 @@ export default function FarmerChat() {
                                                             href={source.url}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-600 hover:text-emerald-800 text-[11px] px-2.5 py-1 rounded-lg transition-colors max-w-full truncate"
+                                                            className="inline-flex items-center gap-1 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-800 text-[11px] px-2.5 py-1 rounded-lg transition-colors max-w-full truncate shadow-2xs"
                                                             title={source.url}
                                                         >
-                                                            <span className="truncate max-w-[180px]">{source.title}</span>
+                                                            <span className="truncate max-w-[200px]">{source.title}</span>
                                                             <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
                                                         </a>
                                                     ))}
@@ -651,132 +789,136 @@ export default function FarmerChat() {
                                             </div>
                                         )}
 
-                                        {/* TTS Speaker icon for model replies */}
-                                        {msg.role === "model" && ttsSupported && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleSpeak(msg.content, msg.id)}
-                                                className={`absolute -bottom-2.5 -left-2.5 p-1.5 rounded-full border shadow-xs transition-colors ${
-                                                    loadingSpeechId === msg.id || activeSpeechId === msg.id
-                                                        ? "bg-emerald-600 text-white border-emerald-500"
-                                                        : "bg-white text-slate-500 hover:text-emerald-700 border-slate-200 hover:bg-slate-50"
-                                                }`}
-                                                title={
-                                                    loadingSpeechId === msg.id
-                                                        ? "جاري تحميل الصوت... (إيقاف)"
-                                                        : activeSpeechId === msg.id
-                                                        ? "إيقاف الصوت"
-                                                        : "قراءة الرسالة بصوت عالي"
-                                                }
-                                            >
-                                                {loadingSpeechId === msg.id ? (
-                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                ) : activeSpeechId === msg.id ? (
-                                                    <VolumeX className="w-3.5 h-3.5" />
-                                                ) : (
-                                                    <Volume2 className="w-3.5 h-3.5" />
-                                                )}
-                                            </button>
+                                        {/* Audio Speaker Button */}
+                                        {ttsSupported && msg.content && (
+                                            <div className="pt-1 flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSpeak(msg.content, msg.id)}
+                                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                                                        loadingSpeechId === msg.id || activeSpeechId === msg.id
+                                                            ? "bg-emerald-600 text-white border-emerald-500"
+                                                            : "bg-white text-slate-600 hover:text-emerald-700 border-slate-200 hover:bg-slate-50"
+                                                    }`}
+                                                    title="استماع صوتي للإجابة"
+                                                >
+                                                    {loadingSpeechId === msg.id ? (
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                    ) : activeSpeechId === msg.id ? (
+                                                        <VolumeX className="w-3.5 h-3.5" />
+                                                    ) : (
+                                                        <Volume2 className="w-3.5 h-3.5" />
+                                                    )}
+                                                    <span>
+                                                        {loadingSpeechId === msg.id
+                                                            ? "جاري التحميل..."
+                                                            : activeSpeechId === msg.id
+                                                            ? "إيقاف الصوت"
+                                                            : "استمع للإجابة"}
+                                                    </span>
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
-                                    <span className="text-[10px] text-slate-400 block px-1">
-                                        {msg.timestamp.toLocaleTimeString("ar-EG", {
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                        })}
-                                    </span>
-                                </div>
+                                )}
                             </div>
                         ))
                     )}
 
-                    {/* Loading / Writing Indicator */}
+                    {/* Loading Indicator */}
                     {isLoading && (
-                        <div className="flex gap-3 max-w-[85%] ml-auto text-right">
-                            <div className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-700 flex items-center justify-center shrink-0">
-                                <Bot className="w-4 h-4 text-emerald-600" />
+                        <div className="w-full text-right py-2 space-y-2">
+                            <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
+                                <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-xs text-emerald-800">
+                                    🌿
+                                </div>
+                                <span>طبيب المحاصيل الذكي</span>
                             </div>
-                            <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-3.5 text-sm text-slate-600 flex items-center gap-2 shadow-xs">
+                            <div className="flex items-center gap-2.5 text-slate-500 text-sm py-2">
                                 <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                                <span>جاري فحص السؤال وتحضير الإجابة...</span>
+                                <span>جاري فحص السؤال وتحضير الإجابة بدقة...</span>
                             </div>
                         </div>
                     )}
 
                     {/* Audio transcribing indicator */}
                     {transcribing && (
-                        <div className="flex gap-3 max-w-[85%] mr-auto flex-row-reverse text-right">
-                            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
-                                <User className="w-4 h-4" />
-                            </div>
-                            <div className="bg-white border border-slate-200 rounded-2xl rounded-tr-none p-3.5 text-sm text-slate-600 flex items-center gap-2 shadow-xs">
-                                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                                <span>جاري تحويل صوتك لنص...</span>
-                            </div>
+                        <div className="self-end max-w-[80%] bg-slate-100 border border-slate-200 rounded-2xl p-3 text-sm text-slate-700 flex items-center gap-2 shadow-2xs">
+                            <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                            <span>جاري تحويل صوتك لنص...</span>
                         </div>
                     )}
 
                     <div ref={messagesEndRef} />
                 </div>
+            </div>
 
-                {/* Errors or Mic Alerts */}
-                {(error || recorderError) && (
-                    <div className="px-4 mb-2">
-                        <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex flex-col items-center gap-2 text-red-600 text-xs">
-                            <div className="flex items-start gap-2.5 w-full">
+            {/* ── Scroll to Bottom Floating Button (↓) ─── */}
+            {showScrollButton && (
+                <button
+                    onClick={scrollToBottom}
+                    className="absolute bottom-28 left-1/2 -translate-x-1/2 p-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-full shadow-lg transition-all active:scale-95 z-20"
+                    title="النزول لأسفل المحادثة"
+                >
+                    <ArrowDown className="w-4 h-4" />
+                </button>
+            )}
+
+            {/* ── Floating / Fixed Bottom Input Area ─── */}
+            <div className="w-full px-3 sm:px-6 pb-3 pt-1 shrink-0">
+                <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-2">
+                    {/* Error Box */}
+                    {(error || recorderError) && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-between text-red-600 text-xs">
+                            <div className="flex items-center gap-2">
                                 {error === "__network__" ? (
-                                    <WifiOff className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                                    <WifiOff className="w-4 h-4 text-amber-500 shrink-0" />
                                 ) : (
-                                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
                                 )}
-                                <p className="leading-relaxed flex-1">
+                                <span>
                                     {error === "__network__"
-                                        ? "⚠️ هناك مشكلة في الاتصال بالإنترنت، يرجى المحاولة لاحقاً"
+                                        ? "مشكلة في الاتصال بالإنترنت، يرجى المحاولة ثانية"
                                         : (error || recorderError)}
-                                </p>
+                                </span>
                             </div>
-                            {failedPayload && error !== "انتهت جلستك، يرجى تسجيل الدخول مجدداً." && (
+                            {failedPayload && (
                                 <button
                                     onClick={handleRetry}
-                                    className="flex items-center gap-1.5 text-xs font-bold text-red-700 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-xl transition-colors"
+                                    className="flex items-center gap-1 font-bold text-red-700 bg-red-100 hover:bg-red-200 px-2.5 py-1 rounded-lg transition-colors"
                                 >
-                                    <RotateCcw className="w-3.5 h-3.5" />
-                                    إعادة الإرسال
+                                    <RotateCcw className="w-3 h-3" />
+                                    إعادة المحاولة
                                 </button>
                             )}
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* Attached Image Preview Bar */}
-                {attachedImage && (
-                    <div className="px-4 mb-2">
-                        <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl p-2">
-                            <div className="relative flex-shrink-0">
+                    {/* Attached Image Preview */}
+                    {attachedImage && (
+                        <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl p-2 shadow-2xs">
+                            <div className="relative">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                     src={attachedImage}
                                     alt="معاينة الصورة"
-                                    className="w-14 h-12 object-cover rounded-xl border border-emerald-500 shadow-xs"
+                                    className="w-14 h-12 object-cover rounded-xl border border-emerald-500"
                                 />
                                 <button
                                     onClick={() => setAttachedImage(null)}
-                                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-xs"
+                                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-xs text-xs"
                                 >
                                     <X className="w-3 h-3" />
                                 </button>
                             </div>
-                            <span className="text-slate-600 text-xs flex-1 font-medium">
-                                صورة المحصول جاهزة للفحص والتحليل الزراعي
+                            <span className="text-slate-700 text-xs font-medium">
+                                صورة المحصول جاهزة للفحص والتحليل
                             </span>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* Footer Input Area */}
-                <div className="p-3 sm:p-4 bg-white border-t border-slate-200/80 space-y-2">
-                    {/* Row 1: Textarea + Send */}
-                    <div className="flex items-end gap-2">
+                    {/* Main Input Box (Rounded & Modern like ChatGPT/Claude) */}
+                    <div className="bg-white border border-slate-200/90 rounded-3xl p-2 sm:p-2.5 shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/10 transition-all">
                         <textarea
                             ref={textareaRef}
                             rows={1}
@@ -785,15 +927,15 @@ export default function FarmerChat() {
                             disabled={isLoading || transcribing}
                             placeholder={
                                 isRecording
-                                    ? "🎙️ جاري تسجيل صوتك..."
+                                    ? "🎙️ جاري تسجيل صوتك الآن..."
                                     : transcribing
-                                    ? "⏳ جاري ترجمة صوتك..."
+                                    ? "⏳ جاري تحويل الصوت إلى نص..."
                                     : attachedImage
-                                    ? "اكتب سؤالك عن الصورة (اختياري)..."
-                                    : "اكتب استشارتك الزراعية هنا..."
+                                    ? "اكتب تفاصيل أو استفسار عن الصورة..."
+                                    : "اكتب استشارتك الزراعية أو اسأل بصوتك..."
                             }
-                            className="flex-1 bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-emerald-500 focus:bg-white text-slate-900 placeholder-slate-400 rounded-2xl py-3 px-4 text-sm outline-none transition-all disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
-                            style={{ minHeight: "46px", maxHeight: "144px" }}
+                            className="w-full bg-transparent text-slate-900 placeholder-slate-400 py-1.5 px-3 text-sm sm:text-base outline-none resize-none overflow-y-auto leading-relaxed"
+                            style={{ minHeight: "44px", maxHeight: "160px" }}
                             onKeyDown={(e) => {
                                 if (e.key === "Enter" && !e.shiftKey) {
                                     e.preventDefault();
@@ -802,84 +944,78 @@ export default function FarmerChat() {
                             }}
                         />
 
-                        {/* Send Button */}
-                        <button
-                            type="button"
-                            onClick={() => handleSend()}
-                            disabled={isLoading || transcribing || (!inputText.trim() && !attachedImage)}
-                            className="p-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-2xl transition-all active:scale-95 shadow-xs flex items-center justify-center shrink-0 self-end"
-                            title="إرسال"
-                            aria-label="إرسال الرسالة"
-                        >
-                            <Send className="w-5 h-5 rotate-180" />
-                        </button>
-                    </div>
+                        {/* Input Footer: Camera, Gallery, Mic + Send Button */}
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                            {/* Media Controls */}
+                            <div className="flex items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => cameraInputRef.current?.click()}
+                                    disabled={isLoading || transcribing}
+                                    className="p-2 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors"
+                                    title="تصوير بالكاميرا"
+                                >
+                                    <Camera className="w-4 h-4" />
+                                </button>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    ref={cameraInputRef}
+                                    onChange={handleImageSelect}
+                                    className="hidden"
+                                />
 
-                    {/* Row 2: Camera / Gallery / Mic icons */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => cameraInputRef.current?.click()}
-                            disabled={isLoading || transcribing}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 disabled:opacity-50 transition-colors text-xs font-bold"
-                            title="تصوير فوري بالكاميرا"
-                        >
-                            <Camera className="w-4 h-4 text-emerald-600" />
-                            <span>كاميرا</span>
-                        </button>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            ref={cameraInputRef}
-                            onChange={handleImageSelect}
-                            className="hidden"
-                        />
+                                <button
+                                    type="button"
+                                    onClick={() => galleryInputRef.current?.click()}
+                                    disabled={isLoading || transcribing}
+                                    className="p-2 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors"
+                                    title="اختيار صورة"
+                                >
+                                    <FolderOpen className="w-4 h-4" />
+                                </button>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    ref={galleryInputRef}
+                                    onChange={handleImageSelect}
+                                    className="hidden"
+                                />
 
-                        <button
-                            type="button"
-                            onClick={() => galleryInputRef.current?.click()}
-                            disabled={isLoading || transcribing}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 disabled:opacity-50 transition-colors text-xs font-bold"
-                            title="اختر صورة من الهاتف"
-                        >
-                            <FolderOpen className="w-4 h-4 text-emerald-600" />
-                            <span>المعرض</span>
-                        </button>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            ref={galleryInputRef}
-                            onChange={handleImageSelect}
-                            className="hidden"
-                        />
+                                {hasMic && (
+                                    <button
+                                        type="button"
+                                        onClick={handleMicClick}
+                                        disabled={isLoading || transcribing}
+                                        className={`p-2 rounded-xl transition-colors ${
+                                            isRecording
+                                                ? "bg-red-500 text-white animate-pulse"
+                                                : "text-slate-500 hover:text-emerald-700 hover:bg-emerald-50"
+                                        }`}
+                                        title={isRecording ? "إيقاف التسجيل" : "تسجيل صوتي"}
+                                    >
+                                        {isRecording ? (
+                                            <Square className="w-4 h-4 fill-current" />
+                                        ) : (
+                                            <Mic className="w-4 h-4" />
+                                        )}
+                                    </button>
+                                )}
+                            </div>
 
-                        {hasMic && (
+                            {/* Send Button */}
                             <button
                                 type="button"
-                                onClick={handleMicClick}
-                                disabled={isLoading || transcribing}
-                                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border transition-all text-xs font-bold ${
-                                    isRecording
-                                        ? "bg-red-500 text-white border-red-400 animate-pulse shadow-sm"
-                                        : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
-                                }`}
-                                title={isRecording ? "إيقاف التسجيل" : "تحدث بالصوت"}
+                                onClick={() => handleSend()}
+                                disabled={isLoading || transcribing || (!inputText.trim() && !attachedImage)}
+                                className="p-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-2xl transition-all active:scale-95 shadow-xs"
+                                title="إرسال"
                             >
-                                {isRecording ? (
-                                    <><Square className="w-4 h-4 fill-current" /><span>إيقاف</span></>
-                                ) : (
-                                    <><Mic className="w-4 h-4 text-emerald-600" /><span>تسجيل صوتي</span></>
-                                )}
+                                <Send className="w-4 h-4 rotate-180" />
                             </button>
-                        )}
+                        </div>
                     </div>
-
-                    {isRecording && (
-                        <p className="text-center text-[11px] text-red-500 animate-pulse font-medium">
-                            الميكروفون نشط الآن — انقر «إيقاف» عند الانتهاء
-                        </p>
-                    )}
                 </div>
             </div>
         </div>

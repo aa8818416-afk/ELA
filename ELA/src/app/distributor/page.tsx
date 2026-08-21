@@ -47,19 +47,21 @@ export default async function DistributorDashboardPage() {
     .gte("created_at", startOfMonth)
     .lte("created_at", endOfMonth);
 
-  // Fetch total unpaid sales (delivered + unpaid) — amount distributor owes to admin
+  // Fetch total un-remitted sales (delivered, but not yet settled to admin)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: unpaidSalesData } = await (supabase as any)
     .from("orders")
-    .select("total_price")
+    .select("total_price, settled_to_admin, payment_status")
     .eq("distributor_id", user.id)
-    .eq("status", "delivered")
-    .eq("payment_status", "unpaid");
+    .eq("status", "delivered");
 
-  const totalUnpaidSales = unpaidSalesData?.reduce(
-    (sum: number, order: { total_price: number }) => sum + (Number(order.total_price) || 0),
-    0
-  ) ?? 0;
+  const totalUnpaidSales = unpaidSalesData
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ?.filter((o: any) => o.settled_to_admin === false || (!('settled_to_admin' in o) && o.payment_status === "unpaid"))
+    .reduce(
+      (sum: number, order: { total_price: number }) => sum + (Number(order.total_price) || 0),
+      0
+    ) ?? 0;
 
   const walletBalance = Number(distributor?.wallet_balance) || 0;
   const villages: string[] = distributor?.supervised_villages || [];
