@@ -21,151 +21,206 @@ interface DayForecast {
   precip_prob: number;
 }
 
-// ---------- single location fetch ----------
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchLocationWeather(item: CenterCoordinates, supabase: any) {
+// ---------- format single center data ----------
+function formatCenterWeatherData(item: CenterCoordinates, data: any) {
   const locationName = `${item.governorate} - ${item.center}`;
-  try {
-    const url = new URL('https://api.open-meteo.com/v1/forecast');
-    url.searchParams.set('latitude', item.lat.toString());
-    url.searchParams.set('longitude', item.lng.toString());
+  const current = data.current;
+  const hourly  = data.hourly;
+  const daily   = data.daily;
 
-    // --- current ---
-    url.searchParams.set('current', [
-      'temperature_2m',
-      'apparent_temperature',
-      'relative_humidity_2m',
-      'weather_code',
-      'wind_speed_10m',
-      'precipitation',
-      'dew_point_2m',
-    ].join(','));
-
-    // --- hourly (for the day detail panels) ---
-    url.searchParams.set('hourly', [
-      'temperature_2m',
-      'wind_speed_10m',
-      'precipitation_probability',
-      'weather_code',
-    ].join(','));
-
-    // --- daily (5-day forecast + ET0 + sunrise/sunset) ---
-    url.searchParams.set('daily', [
-      'temperature_2m_max',
-      'temperature_2m_min',
-      'precipitation_probability_max',
-      'weather_code',
-      'sunrise',
-      'sunset',
-      'et0_fao_evapotranspiration',
-    ].join(','));
-
-    url.searchParams.set('forecast_days', '7');
-    url.searchParams.set('timezone', 'Africa/Cairo');
-
-    const response = await fetch(url.toString(), {
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Open-Meteo responded with ${response.status}`);
-    }
-
-    const data = await response.json();
-    const current = data.current;
-    const hourly  = data.hourly;
-    const daily   = data.daily;
-
-    // All 24 hours per day for all 7 days — no filter
-    const hourlyPoints: HourlyPoint[] = (hourly.time as string[])
-      .map((t: string, i: number) => ({
-        time: t,
-        temp: hourly.temperature_2m[i] as number,
-        wind: hourly.wind_speed_10m[i] as number,
-        precip_prob: (hourly.precipitation_probability[i] as number) ?? 0,
-        wmo:  (hourly.weather_code?.[i] as number | undefined),
-      }));
-
-    // Build 7-day forecast array
-    const dailyForecast: DayForecast[] = (daily.time as string[]).slice(0, 7).map((date: string, i: number) => ({
-      date,
-      wmo:        daily.weather_code[i] as number,
-      temp_max:   daily.temperature_2m_max[i] as number,
-      temp_min:   daily.temperature_2m_min[i] as number,
-      precip_prob: (daily.precipitation_probability_max[i] as number) ?? 0,
-    }));
-
-    const { error: upsertErr } = await (supabase as any)
-      .from('weather_cache')
-      .upsert(
-        {
-          location_name:                locationName,
-          latitude:                     item.lat,
-          longitude:                    item.lng,
-          // current
-          temperature_2m:               current.temperature_2m,
-          relative_humidity_2m:         current.relative_humidity_2m,
-          apparent_temperature:         current.apparent_temperature,
-          weather_code:                 current.weather_code,
-          wind_speed_10m:               current.wind_speed_10m,
-          precipitation:                current.precipitation,
-          dew_point_2m:                 current.dew_point_2m,
-          // daily
-          et0_fao_evapotranspiration:   daily.et0_fao_evapotranspiration[0],
-          sunrise:                      daily.sunrise[0],
-          sunset:                       daily.sunset[0],
-          daily_forecast:               dailyForecast,
-          // hourly
-          hourly_today:                 hourlyPoints,
-          // meta
-          fetched_at:                   new Date().toISOString(),
-          raw_data:                     data,
-        },
-        { onConflict: 'latitude,longitude' }
-      );
-
-    if (upsertErr) throw upsertErr;
-
-    return { location: locationName, success: true };
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-    return { location: locationName, success: false, error: errorMessage };
+  if (!current || !hourly || !daily) {
+    throw new Error(`Incomplete weather data structure for ${locationName}`);
   }
+
+  // All 24 hours per day for 7 days
+  const hourlyPoints: HourlyPoint[] = (hourly.time as string[]).map((t: string, i: number) => ({
+    time: t,
+    temp: hourly.temperature_2m[i] as number,
+    wind: hourly.wind_speed_10m[i] as number,
+    precip_prob: (hourly.precipitation_probability?.[i] as number) ?? 0,
+    wmo: (hourly.weather_code?.[i] as number | undefined),
+  }));
+
+  // Build 7-day forecast array
+  const dailyForecast: DayForecast[] = (daily.time as string[]).slice(0, 7).map((date: string, i: number) => ({
+    date,
+    wmo: daily.weather_code?.[i] as number,
+    temp_max: daily.temperature_2m_max?.[i] as number,
+    temp_min: daily.temperature_2m_min?.[i] as number,
+    precip_prob: (daily.precipitation_probability_max?.[i] as number) ?? 0,
+  }));
+
+  return {
+    location_name: locationName,
+    latitude: item.lat,
+    longitude: item.lng,
+    temperature_2m: current.temperature_2m,
+    relative_humidity_2m: current.relative_humidity_2m,
+    apparent_temperature: current.apparent_temperature,
+    weather_code: current.weather_code,
+    wind_speed_10m: current.wind_speed_10m,
+    precipitation: current.precipitation,
+    dew_point_2m: current.dew_point_2m,
+    et0_fao_evapotranspiration: daily.et0_fao_evapotranspiration?.[0] ?? null,
+    sunrise: daily.sunrise?.[0] ?? null,
+    sunset: daily.sunset?.[0] ?? null,
+    daily_forecast: dailyForecast,
+    hourly_today: hourlyPoints,
+    fetched_at: new Date().toISOString(),
+    raw_data: data,
+  };
 }
 
-// ---------- batch processor ----------
+// ---------- multi-location batch fetcher ----------
+async function fetchBatchWeather(batch: CenterCoordinates[]) {
+  const url = new URL('https://api.open-meteo.com/v1/forecast');
+  url.searchParams.set('latitude', batch.map(c => c.lat).join(','));
+  url.searchParams.set('longitude', batch.map(c => c.lng).join(','));
+
+  // --- current ---
+  url.searchParams.set('current', [
+    'temperature_2m',
+    'apparent_temperature',
+    'relative_humidity_2m',
+    'weather_code',
+    'wind_speed_10m',
+    'precipitation',
+    'dew_point_2m',
+  ].join(','));
+
+  // --- hourly ---
+  url.searchParams.set('hourly', [
+    'temperature_2m',
+    'wind_speed_10m',
+    'precipitation_probability',
+    'weather_code',
+  ].join(','));
+
+  // --- daily (7-day forecast + ET0 + sunrise/sunset) ---
+  url.searchParams.set('daily', [
+    'temperature_2m_max',
+    'temperature_2m_min',
+    'precipitation_probability_max',
+    'weather_code',
+    'sunrise',
+    'sunset',
+    'et0_fao_evapotranspiration',
+  ].join(','));
+
+  url.searchParams.set('forecast_days', '7');
+  url.searchParams.set('timezone', 'Africa/Cairo');
+
+  const response = await fetch(url.toString(), {
+    headers: { 'Accept': 'application/json' },
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Open-Meteo API error (${response.status}): ${errorText.slice(0, 100)}`);
+  }
+
+  const rawJson = await response.json();
+  const dataList = Array.isArray(rawJson) ? rawJson : [rawJson];
+
+  const rows: any[] = [];
+  const results: { location: string; success: boolean; error?: string }[] = [];
+
+  for (let i = 0; i < batch.length; i++) {
+    const center = batch[i];
+    const centerData = dataList[i];
+    const locationName = `${center.governorate} - ${center.center}`;
+
+    if (!centerData) {
+      results.push({ location: locationName, success: false, error: 'No data returned for coordinate' });
+      continue;
+    }
+
+    try {
+      const row = formatCenterWeatherData(center, centerData);
+      rows.push(row);
+      results.push({ location: locationName, success: true });
+    } catch (err: any) {
+      results.push({ location: locationName, success: false, error: err.message });
+    }
+  }
+
+  return { rows, results };
+}
+
+// ---------- main batch processor ----------
 async function processWeatherFetch() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const results: { location: string; success: boolean; error?: string }[] = [];
+  const startTime = Date.now();
+  const allRows: any[] = [];
+  const allResults: { location: string; success: boolean; error?: string }[] = [];
 
-  // Parallel batches of 10 (daily+hourly payload is larger than current-only)
-  const BATCH_SIZE = 10;
+  // Split 233 centers into 5 multi-location batch requests (~50 centers per request)
+  const BATCH_SIZE = 50;
   for (let i = 0; i < EGYPT_CENTERS_COORDINATES.length; i += BATCH_SIZE) {
     const batch = EGYPT_CENTERS_COORDINATES.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.all(batch.map((item) => fetchLocationWeather(item, supabase)));
-    results.push(...batchResults);
+    try {
+      const { rows, results } = await fetchBatchWeather(batch);
+      allRows.push(...rows);
+      allResults.push(...results);
+    } catch (batchErr: any) {
+      console.error(`[fetch-weather] Error fetching batch ${Math.floor(i / BATCH_SIZE) + 1}:`, batchErr);
+      for (const item of batch) {
+        allResults.push({
+          location: `${item.governorate} - ${item.center}`,
+          success: false,
+          error: batchErr.message,
+        });
+      }
+    }
   }
 
-  const successCount = results.filter((r) => r.success).length;
+  // Bulk upsert all gathered locations into Supabase in chunks of 50
+  if (allRows.length > 0) {
+    const UPSERT_CHUNK = 50;
+    for (let i = 0; i < allRows.length; i += UPSERT_CHUNK) {
+      const chunk = allRows.slice(i, i + UPSERT_CHUNK);
+      const { error: upsertErr } = await (supabase as any)
+        .from('weather_cache')
+        .upsert(chunk, { onConflict: 'latitude,longitude' });
+
+      if (upsertErr) {
+        console.error('[fetch-weather] Bulk upsert error:', upsertErr);
+      }
+    }
+  }
+
+  const successCount = allResults.filter((r) => r.success).length;
+  const executionMs = Date.now() - startTime;
 
   return {
-    message: `Weather fetch complete: ${successCount}/${EGYPT_CENTERS_COORDINATES.length} locations updated`,
-    results,
+    success: true,
+    message: `Weather fetch complete: ${successCount}/${EGYPT_CENTERS_COORDINATES.length} locations updated in ${executionMs}ms`,
+    updatedCount: successCount,
+    totalCenters: EGYPT_CENTERS_COORDINATES.length,
+    executionTimeMs: executionMs,
     fetchedAt: new Date().toISOString(),
+    results: allResults,
   };
 }
 
 // ---------- POST (cron trigger) ----------
 export async function POST(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const querySecret = searchParams.get('secret') || searchParams.get('key');
   const authHeader = req.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env.CRON_SECRET || process.env.CRON_SECRET_KEY;
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  const isAuthorized = !cronSecret ||
+    authHeader === `Bearer ${cronSecret}` ||
+    querySecret === cronSecret ||
+    process.env.NODE_ENV === 'development';
+
+  if (!isAuthorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -173,14 +228,19 @@ export async function POST(req: Request) {
   return NextResponse.json(data);
 }
 
-// ---------- GET (manual test) ----------
+// ---------- GET (manual test & fallback) ----------
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action');
-  const key    = searchParams.get('key');
-  const cronSecret = process.env.CRON_SECRET;
+  const querySecret = searchParams.get('secret') || searchParams.get('key');
+  const cronSecret = process.env.CRON_SECRET || process.env.CRON_SECRET_KEY;
 
-  if (action === 'fetch' || (cronSecret && key === cronSecret)) {
+  const isAuthorized = action === 'fetch' ||
+    !cronSecret ||
+    querySecret === cronSecret ||
+    process.env.NODE_ENV === 'development';
+
+  if (isAuthorized) {
     const data = await processWeatherFetch();
     return NextResponse.json(data);
   }
@@ -188,7 +248,8 @@ export async function GET(req: Request) {
   return NextResponse.json({
     message: 'Weather cron endpoint. GET ?action=fetch or POST to trigger.',
     totalCenters: EGYPT_CENTERS_COORDINATES.length,
-    fields: ['current', 'hourly (6am-8pm)', 'daily (6 days)', 'ET0', 'dew_point', 'sunrise', 'sunset'],
+    fields: ['current', 'hourly (24h)', 'daily (7 days)', 'ET0', 'dew_point', 'sunrise', 'sunset'],
   });
 }
+
 
