@@ -26,10 +26,39 @@ function getSkillContent(skillName: string): string {
             return content;
         }
         console.warn(`[crop-chat] ⚠️ [Skill Loader: NOT FOUND] "${cleanName}" at ${finalPath}`);
-        return `المهارة "${cleanName}" غير موجودة. تأكد من كتابة المسار الصحيح للمهارة.`;
     } catch (err: any) {
         console.error(`[crop-chat] ❌ [Skill Loader: ERROR] Reading ${cleanName}:`, err);
         return `تعذر قراءة المهارة: ${err?.message || "خطأ في القراءة"}`;
+    }
+}
+
+// ── In-memory Products Catalog Cache (5 min TTL) ──────────────────────────────
+let productsCatalogCache: any[] | null = null;
+let productsCatalogCacheExpiresAt = 0;
+const PRODUCTS_CATALOG_CACHE_TTL_MS = 5 * 60_000;
+
+async function getCachedProducts(supabaseAdmin: any): Promise<any[]> {
+    const now = Date.now();
+    if (productsCatalogCache && now < productsCatalogCacheExpiresAt) {
+        return productsCatalogCache;
+    }
+    try {
+        const { data: products, error } = await (supabaseAdmin as any)
+            .from("products")
+            .select("id, name_ar, active_ingredient, price_to_farmer, stock_status, image_url, dose_unit, dose_amount, package_size, package_unit, target_crops")
+            .eq("stock_status", true);
+
+        if (error || !products) {
+            console.warn("[crop-chat] ⚠️ Failed to fetch products catalog:", error);
+            return productsCatalogCache || [];
+        }
+
+        productsCatalogCache = products;
+        productsCatalogCacheExpiresAt = now + PRODUCTS_CATALOG_CACHE_TTL_MS;
+        return products;
+    } catch (err) {
+        console.error("[crop-chat] ❌ Error in getCachedProducts:", err);
+        return productsCatalogCache || [];
     }
 }
 
@@ -770,22 +799,22 @@ async function fetchPendingActivities(
         const [treatments, irrigations, harvests, labors] = await Promise.all([
             supabaseAdmin
                 .from("field_treatments")
-                .select("*")
+                .select("id, field_id, activity_date, created_at, category, product_id, product_name_text, dosage, dosage_unit, sprayer_count, spray_time_of_day, outcome_rating, notes, status")
                 .in("field_id", fieldIds)
                 .eq("status", "pending_outcome"),
             supabaseAdmin
                 .from("field_irrigation_logs")
-                .select("*")
+                .select("id, field_id, activity_date, created_at, description, notes, status")
                 .in("field_id", fieldIds)
                 .eq("status", "pending_outcome"),
             supabaseAdmin
                 .from("field_harvest_records")
-                .select("*")
+                .select("id, field_id, activity_date, created_at, quantity, quantity_unit, description, notes, status")
                 .in("field_id", fieldIds)
                 .eq("status", "pending_outcome"),
             supabaseAdmin
                 .from("field_labor_logs")
-                .select("*")
+                .select("id, field_id, activity_date, created_at, worker_count, contractor_name, notes, status")
                 .in("field_id", fieldIds)
                 .eq("status", "pending_outcome"),
         ]);
@@ -1747,7 +1776,7 @@ export async function POST(request: Request) {
         (supabaseAdmin as any).from("farmers").select("governorate, center, village, farm_profile").eq("profile_id", userId).maybeSingle(),
         (supabaseAdmin as any).from("farmer_fields").select("id, field_name, crop_type, planting_date, area_feddan, area_unit, latitude, longitude, is_active").eq("farmer_id", userId).eq("is_active", true).order("created_at", { ascending: false }),
         (supabaseAdmin as any).from("farmer_memory").select("id, category, fact, confidence").eq("farmer_id", userId).eq("is_active", true).in("confidence", ["high", "medium"]),
-        (supabaseAdmin as any).from("farmer_synthesis").select("*").eq("farmer_id", userId),
+        (supabaseAdmin as any).from("farmer_synthesis").select("id, area_scope, title, summary_content, work_context, personal_context, top_of_mind, brief_history").eq("farmer_id", userId),
         (supabaseAdmin as any).from("weather_cache").select("location_name, temperature_2m, relative_humidity_2m, wind_speed_10m, weather_code, daily_forecast").order("fetched_at", { ascending: false }).limit(10),
     ]);
 
@@ -1842,10 +1871,8 @@ ${topicSynths.map((t: any) => `- [نطاق: ${t.area_scope}] ${t.title || 'مو�
 
     const pendingActivitiesContext = await fetchPendingActivities(supabaseAdmin, userId);
 
-    // 3. Fetch products catalog
-    const { data: products } = await (supabaseAdmin as any)
-        .from("products")
-        .select("id, name_ar, active_ingredient, price_to_farmer, stock_status, image_url, dose_unit, dose_amount, package_size, package_unit, target_crops");
+    // 3. Fetch products catalog (cached with 5 min TTL)
+    const products = await getCachedProducts(supabaseAdmin);
 
     const productsContext =
         products

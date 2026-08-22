@@ -67,7 +67,7 @@ export async function runDailySynthesis(
 
                 // Fetch current master synthesis and topic syntheses
                 const [synthesisRes, memoryRes, fieldsRes, farmerProfileRes] = await Promise.all([
-                    supabaseAdmin.from("farmer_synthesis").select("*").eq("farmer_id", farmerId),
+                    supabaseAdmin.from("farmer_synthesis").select("id, area_scope, title, summary_content, work_context, personal_context, top_of_mind, brief_history").eq("farmer_id", farmerId),
                     supabaseAdmin.from("farmer_memory").select("id, category, fact, confidence").eq("farmer_id", farmerId).eq("is_active", true),
                     supabaseAdmin.from("farmer_fields").select("id, field_name, crop_type, area_feddan, area_unit, planting_date").eq("farmer_id", farmerId).eq("is_active", true),
                     supabaseAdmin.from("farmers").select("farm_profile, governorate, center, village").eq("profile_id", farmerId).maybeSingle(),

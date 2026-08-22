@@ -13,47 +13,56 @@ export default async function DistributorDashboardPage() {
     redirect("/login");
   }
 
-  // Fetch distributor data
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: distributor } = await (supabase as any)
-    .from("distributors")
-    .select("wallet_balance, supervised_villages")
-    .eq("profile_id", user.id)
-    .single();
-
-  // Fetch total registered farmers under this distributor
-  const { count: farmersCount } = await supabase
-    .from("farmers")
-    .select("*", { count: "exact", head: true })
-    .eq("distributor_id", user.id);
-
-  // Fetch pending orders count (pending + in_transit)
-  const { count: pendingOrdersCount } = await supabase
-    .from("orders")
-    .select("*", { count: "exact", head: true })
-    .eq("distributor_id", user.id)
-    .in("status", ["pending", "in_transit"]);
-
-  // Fetch completed orders count this month (delivered, current month)
+  // Fetch distributor data, counts, and sales in parallel with Promise.allSettled
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
-  const { count: completedThisMonthCount } = await supabase
-    .from("orders")
-    .select("*", { count: "exact", head: true })
-    .eq("distributor_id", user.id)
-    .eq("status", "delivered")
-    .gte("created_at", startOfMonth)
-    .lte("created_at", endOfMonth);
+  const [distRes, farmersCountRes, pendingOrdersRes, completedMonthRes, unpaidSalesRes] = await Promise.allSettled([
+    // 1. Fetch distributor data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("distributors")
+      .select("wallet_balance, supervised_villages")
+      .eq("profile_id", user.id)
+      .single(),
 
-  // Fetch total un-remitted sales (delivered, but not yet settled to admin)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: unpaidSalesData } = await (supabase as any)
-    .from("orders")
-    .select("total_price, settled_to_admin, payment_status")
-    .eq("distributor_id", user.id)
-    .eq("status", "delivered");
+    // 2. Fetch total registered farmers under this distributor
+    supabase
+      .from("farmers")
+      .select("profile_id", { count: "exact", head: true })
+      .eq("distributor_id", user.id),
+
+    // 3. Fetch pending orders count (pending + in_transit)
+    supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("distributor_id", user.id)
+      .in("status", ["pending", "in_transit"]),
+
+    // 4. Fetch completed orders count this month (delivered, current month)
+    supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("distributor_id", user.id)
+      .eq("status", "delivered")
+      .gte("created_at", startOfMonth)
+      .lte("created_at", endOfMonth),
+
+    // 5. Fetch total un-remitted sales (delivered, but not yet settled to admin)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("orders")
+      .select("total_price, settled_to_admin, payment_status")
+      .eq("distributor_id", user.id)
+      .eq("status", "delivered"),
+  ]);
+
+  const distributor = distRes.status === "fulfilled" ? distRes.value.data : null;
+  const farmersCount = farmersCountRes.status === "fulfilled" ? farmersCountRes.value.count || 0 : 0;
+  const pendingOrdersCount = pendingOrdersRes.status === "fulfilled" ? pendingOrdersRes.value.count || 0 : 0;
+  const completedThisMonthCount = completedMonthRes.status === "fulfilled" ? completedMonthRes.value.count || 0 : 0;
+  const unpaidSalesData = unpaidSalesRes.status === "fulfilled" ? unpaidSalesRes.value.data : [];
 
   const totalUnpaidSales = unpaidSalesData
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

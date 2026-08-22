@@ -17,7 +17,7 @@ async function getTtsSettings(): Promise<TtsSettings> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tts_settings")
-    .select("*")
+    .select("id, voice, rate, pitch, volume, break_on_comma_ms, break_on_period_ms, chunk_max_chars, auto_breaks_enabled, updated_at")
     .eq("id", "default")
     .single();
 

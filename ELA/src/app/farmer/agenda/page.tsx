@@ -38,43 +38,47 @@ export default async function FarmerAgendaPage() {
   let todayLogs: any[] = [];
 
   if (fieldIds.length > 0) {
-    const { data: alertsData } = await (supabase as any)
-      .from("alert_instances")
-      .select("*")
-      .in("farmer_field_id", fieldIds)
-      .not(
-        "status",
-        "in",
-        '("CLOSED_FALSE_ALARM","AUTO_CLOSED_NO_RESPONSE","RESOLVED","CROP_LOSS","CLOSED_SEASON_END","MISDIAGNOSED_ORIGINAL")'
-      )
-      .order("severity_snapshot", { ascending: true })
-      .order("created_at", { ascending: true });
-    openAlerts = alertsData || [];
-
     const todayCairo = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Africa/Cairo",
     }).format(new Date());
 
-    const { data: logsData } = await (supabase as any)
-      .from("daily_agenda_log")
-      .select(`
-        id,
-        farmer_field_id,
-        date,
-        quality_tip_id,
-        crop_quality_tips (
-          id,
-          tip_text,
-          tip_reason,
-          crop_type,
-          stage_from_day,
-          stage_to_day,
-          rotation_order
+    const [alertsRes, logsRes] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
+        .from("alert_instances")
+        .select("*")
+        .in("farmer_field_id", fieldIds)
+        .not(
+          "status",
+          "in",
+          '("CLOSED_FALSE_ALARM","AUTO_CLOSED_NO_RESPONSE","RESOLVED","CROP_LOSS","CLOSED_SEASON_END","MISDIAGNOSED_ORIGINAL")'
         )
-      `)
-      .in("farmer_field_id", fieldIds)
-      .eq("date", todayCairo);
-    todayLogs = logsData || [];
+        .order("severity_snapshot", { ascending: true })
+        .order("created_at", { ascending: true }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
+        .from("daily_agenda_log")
+        .select(`
+          id,
+          farmer_field_id,
+          date,
+          quality_tip_id,
+          crop_quality_tips (
+            id,
+            tip_text,
+            tip_reason,
+            crop_type,
+            stage_from_day,
+            stage_to_day,
+            rotation_order
+          )
+        `)
+        .in("farmer_field_id", fieldIds)
+        .eq("date", todayCairo),
+    ]);
+
+    openAlerts = alertsRes.data || [];
+    todayLogs = logsRes.data || [];
   }
 
   return (

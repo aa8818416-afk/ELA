@@ -25,68 +25,101 @@ export default async function FarmerHomePage() {
 
   if (!user) redirect("/login");
 
-  // 1. Fetch farmer + distributor info
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: farmerData } = await (supabase as any)
-    .from("farmers")
-    .select(
+  // 1. Parallel fetch of independent base queries (resilient to flaky rural network)
+  const [farmerDataRes, farmerFieldsRes, campaignsRes, profileRes] = await Promise.allSettled([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("farmers")
+      .select(
+        `
+        distributor_id,
+        distributors (
+          village,
+          profiles ( full_name, phone )
+        )
       `
-      distributor_id,
-      distributors (
-        village,
-        profiles ( full_name, phone )
       )
-    `
-    )
-    .eq("profile_id", user.id)
-    .single();
+      .eq("profile_id", user.id)
+      .single(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("farmer_fields")
+      .select("id, field_name, crop_type, latitude, longitude")
+      .eq("farmer_id", user.id)
+      .eq("is_active", true)
+      .limit(5),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("group_buy_offers")
+      .select(`
+        id,
+        product_id,
+        tier1_qty,
+        tier1_discount,
+        tier2_qty,
+        tier2_discount,
+        tier3_qty,
+        tier3_discount,
+        end_date,
+        products (
+          id,
+          name_ar,
+          price_to_farmer,
+          stock_status,
+          image_url
+        )
+      `)
+      .eq("active_status", true),
+    supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .single(),
+  ]);
+
+  const farmerData = farmerDataRes.status === "fulfilled" ? farmerDataRes.value.data : null;
+  const farmerFields = farmerFieldsRes.status === "fulfilled" ? farmerFieldsRes.value.data : [];
+  const campaignsData = campaignsRes.status === "fulfilled" ? campaignsRes.value.data : [];
+  const profile = profileRes.status === "fulfilled" ? profileRes.value.data : null;
 
   const distributorProfile = farmerData?.distributors?.profiles;
   const distributorName = distributorProfile?.full_name || "السفير";
   const distributorPhone = distributorProfile?.phone || null;
   const village = farmerData?.distributors?.village || null;
 
-  // 2. Fetch farmer's active fields for agenda
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: farmerFields } = await (supabase as any)
-    .from("farmer_fields")
-    .select("id, field_name, crop_type, latitude, longitude")
-    .eq("farmer_id", user.id)
-    .eq("is_active", true)
-    .limit(5);
-
   const hasFields = farmerFields && farmerFields.length > 0;
 
-  // 3. Fetch open alert count & latest alert for farmer's fields
+  // 2. Fetch open alert count & latest alert in parallel for farmer's fields
   let openAlertsCount = 0;
   let latestAlert: { id: string; advice_text_snapshot: string } | null = null;
 
   if (hasFields) {
     const fieldIds = farmerFields.map((f: { id: string }) => f.id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count } = await (supabase as any)
-      .from("alert_instances")
-      .select("*", { count: "exact", head: true })
-      .in("farmer_field_id", fieldIds)
-      .not("status", "in", '("CLOSED_FALSE_ALARM","AUTO_CLOSED_NO_RESPONSE","RESOLVED","CROP_LOSS","CLOSED_SEASON_END","MISDIAGNOSED_ORIGINAL")');
-    openAlertsCount = count || 0;
+    const [countResult, alertResult] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
+        .from("alert_instances")
+        .select("id", { count: "exact", head: true })
+        .in("farmer_field_id", fieldIds)
+        .not("status", "in", '("CLOSED_FALSE_ALARM","AUTO_CLOSED_NO_RESPONSE","RESOLVED","CROP_LOSS","CLOSED_SEASON_END","MISDIAGNOSED_ORIGINAL")'),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
+        .from("alert_instances")
+        .select("id, advice_text_snapshot")
+        .in("farmer_field_id", fieldIds)
+        .not("status", "in", '("CLOSED_FALSE_ALARM","AUTO_CLOSED_NO_RESPONSE","RESOLVED","CROP_LOSS","CLOSED_SEASON_END","MISDIAGNOSED_ORIGINAL")')
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: alertData } = await (supabase as any)
-      .from("alert_instances")
-      .select("id, advice_text_snapshot")
-      .in("farmer_field_id", fieldIds)
-      .not("status", "in", '("CLOSED_FALSE_ALARM","AUTO_CLOSED_NO_RESPONSE","RESOLVED","CROP_LOSS","CLOSED_SEASON_END","MISDIAGNOSED_ORIGINAL")')
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (alertData) {
-      latestAlert = alertData;
+    openAlertsCount = countResult.count || 0;
+    if (alertResult.data) {
+      latestAlert = alertResult.data;
     }
   }
 
-  // 4. Determine nearest center weather
+  // 3. Determine nearest center weather
   const fieldLat = farmerFields?.[0]?.latitude ?? 30.0444;
   const fieldLon = farmerFields?.[0]?.longitude ?? 31.2357;
 
@@ -99,33 +132,8 @@ export default async function FarmerHomePage() {
   ).center;
 
   const weatherData = await getOrFetchCenterWeather(nearestCenter, supabase);
-  const currentCrop = farmerFields?.[0]?.crop_type || undefined;
 
-
-  // 4. Fetch active group buy campaigns
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: campaignsData } = await (supabase as any)
-    .from("group_buy_offers")
-    .select(`
-      id,
-      product_id,
-      tier1_qty,
-      tier1_discount,
-      tier2_qty,
-      tier2_discount,
-      tier3_qty,
-      tier3_discount,
-      end_date,
-      products (
-        id,
-        name_ar,
-        price_to_farmer,
-        stock_status,
-        image_url
-      )
-    `)
-    .eq("active_status", true);
-
+  // 4. Process active campaigns & village volume count
   const campaigns = campaignsData || [];
 
   // Filter out expired campaigns
@@ -157,13 +165,6 @@ export default async function FarmerHomePage() {
       }
     }
   }
-
-  // 6. Fetch profile for greeting
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("id", user.id)
-    .single();
 
   const firstName = (profile as any)?.full_name?.split(" ")[0] || "يا فلاح";
 

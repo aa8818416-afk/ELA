@@ -20,23 +20,27 @@ export default async function DistributorLayout({
   let walletBalance = 0;
 
   if (user) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: profile } = await (supabase as any)
-      .from("profiles")
-      .select("full_name")
-      .eq("id", user.id)
-      .maybeSingle();
+    const [profileRes, distRes] = await Promise.allSettled([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .maybeSingle(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
+        .from("distributors")
+        .select("wallet_balance")
+        .eq("profile_id", user.id)
+        .maybeSingle(),
+    ]);
+
+    const profile = profileRes.status === "fulfilled" ? profileRes.value.data : null;
+    const dist = distRes.status === "fulfilled" ? distRes.value.data : null;
 
     if (profile?.full_name) {
       distributorName = profile.full_name;
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: dist } = await (supabase as any)
-      .from("distributors")
-      .select("wallet_balance")
-      .eq("profile_id", user.id)
-      .maybeSingle();
 
     if (dist?.wallet_balance) {
       walletBalance = Number(dist.wallet_balance) || 0;
