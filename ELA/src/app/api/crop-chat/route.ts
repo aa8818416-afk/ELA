@@ -2834,3 +2834,56 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true });
 }
+
+// ── PATCH /api/crop-chat: Rename / Update Session Title ──────────────────────
+export async function PATCH(request: Request) {
+    const supabase = await createServerClient();
+    const {
+        data: { user: currentUser },
+    } = await supabase.auth.getUser();
+
+    if (!currentUser) {
+        return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
+    }
+
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey) {
+        return NextResponse.json({ error: "مفتاح الخدمة مفقود" }, { status: 500 });
+    }
+
+    const supabaseAdmin = createAdminClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        serviceRoleKey
+    );
+
+    try {
+        const body = await request.json();
+        const { session_id, title } = body;
+
+        if (!session_id || !title || typeof title !== "string" || !title.trim()) {
+            return NextResponse.json({ error: "معرف الجلسة والعنوان الجديد مطلوبان" }, { status: 400 });
+        }
+
+        const cleanTitle = title.trim().slice(0, 100);
+
+        const { error } = await (supabaseAdmin as any)
+            .from("chat_sessions")
+            .update({
+                title: cleanTitle,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", session_id)
+            .eq("farmer_id", currentUser.id);
+
+        if (error) {
+            console.error("[crop-chat] PATCH error renaming session:", error);
+            return NextResponse.json({ error: "فشل تعديل عنوان المحادثة" }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true, title: cleanTitle });
+    } catch (err: any) {
+        console.error("[crop-chat] PATCH json error:", err);
+        return NextResponse.json({ error: "بيانات الطلب غير صالحة" }, { status: 400 });
+    }
+}
+

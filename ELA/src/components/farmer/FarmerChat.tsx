@@ -9,7 +9,6 @@ import {
     Volume2,
     VolumeX,
     AlertCircle,
-    ArrowRight,
     Camera,
     FolderOpen,
     X,
@@ -21,11 +20,11 @@ import {
     Plus,
     Trash2,
     Clock,
-    PanelLeftOpen,
-    ChevronDown,
+    PanelRightOpen,
+    Pencil,
+    Check,
     ArrowDown,
 } from "lucide-react";
-import Link from "next/link";
 import {
     useAudioRecorder,
     speakArabic,
@@ -220,6 +219,12 @@ export default function FarmerChat() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
+    // Chat Session Title Editing State
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [editTitleText, setEditTitleText] = useState("");
+    const [isSavingTitle, setIsSavingTitle] = useState(false);
+    const titleInputRef = useRef<HTMLInputElement>(null);
+
     const [inputText, setInputText] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -346,10 +351,14 @@ export default function FarmerChat() {
         setIsSidebarOpen(false);
         setError(null);
         setAttachedImage(null);
+        setIsEditingTitle(false);
+        setEditTitleText("");
     };
 
     // ── Select Past Session ─────────────────────────────────────────────────
     const selectSession = (sessionId: string) => {
+        setIsEditingTitle(false);
+        setEditTitleText("");
         if (sessionId === currentSessionId) {
             setIsSidebarOpen(false);
             return;
@@ -357,6 +366,52 @@ export default function FarmerChat() {
         setCurrentSessionId(sessionId);
         loadSessionMessages(sessionId);
         setIsSidebarOpen(false);
+    };
+
+    // ── Chat Session Title Editing Handlers ─────────────────────────────────
+    const startEditingTitle = () => {
+        setEditTitleText(currentSessionTitle);
+        setIsEditingTitle(true);
+        setTimeout(() => {
+            titleInputRef.current?.focus();
+            titleInputRef.current?.select();
+        }, 50);
+    };
+
+    const saveTitle = async () => {
+        if (!editTitleText.trim()) {
+            setIsEditingTitle(false);
+            return;
+        }
+        const newTitle = editTitleText.trim().slice(0, 100);
+        setIsEditingTitle(false);
+
+        if (currentSessionId) {
+            setIsSavingTitle(true);
+            // Optimistic update
+            setSessions((prev) =>
+                prev.map((s) => (s.id === currentSessionId ? { ...s, title: newTitle } : s))
+            );
+            try {
+                await fetch("/api/crop-chat", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        session_id: currentSessionId,
+                        title: newTitle,
+                    }),
+                });
+            } catch (err) {
+                console.error("Failed to save title:", err);
+            } finally {
+                setIsSavingTitle(false);
+            }
+        }
+    };
+
+    const cancelEditingTitle = () => {
+        setIsEditingTitle(false);
+        setEditTitleText("");
     };
 
     // ── Delete a Session ────────────────────────────────────────────────────
@@ -590,8 +645,8 @@ export default function FarmerChat() {
     }, [currentSessionId, sessions]);
 
     return (
-        <div className="relative flex flex-col h-[calc(100vh-68px)] sm:h-[calc(100vh-80px)] w-full bg-slate-50/40">
-            {/* ── Sliding Left Sidebar Drawer ────── */}
+        <div className="relative flex flex-col h-[calc(100dvh-130px)] sm:h-[calc(100dvh-140px)] w-full bg-slate-50/40 rounded-2xl overflow-hidden">
+            {/* ── Sliding Right Sidebar Drawer ────── */}
             {isSidebarOpen && (
                 <div
                     className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 transition-opacity"
@@ -600,8 +655,8 @@ export default function FarmerChat() {
             )}
 
             <div
-                className={`fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-white border-r border-slate-200 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
-                    isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+                className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] bg-white border-l border-slate-200 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
+                    isSidebarOpen ? "translate-x-0" : "translate-x-full"
                 }`}
             >
                 {/* Sidebar Header */}
@@ -624,7 +679,7 @@ export default function FarmerChat() {
                     </button>
                 </div>
 
-                {/* New Chat Button */}
+                {/* New Chat Button in Sidebar */}
                 <div className="p-3 bg-white border-b border-slate-100">
                     <button
                         onClick={startNewChat}
@@ -693,45 +748,74 @@ export default function FarmerChat() {
                 </div>
             </div>
 
-            {/* ── Top Page Bar (Independent, Clean, matching the screenshot) ─── */}
-            <div className="w-full bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 py-2.5 flex items-center justify-between z-10 shrink-0">
-                {/* Left Side: Sidebar Toggle Icon + Chat Title with dropdown chevron */}
-                <div className="flex items-center gap-2.5">
+            {/* ── Top Floating Controls (100% Transparent Row, Only Buttons are Floating Glass Pills) ─── */}
+            <div className="absolute top-2.5 right-3 left-3 z-20 flex items-center justify-between pointer-events-none transition-all">
+                {/* Right-aligned in RTL: Door / Sidebar + Plus (New Chat) + Title + Pencil */}
+                <div className="flex items-center gap-2 min-w-0 flex-1 pointer-events-auto">
+                    {/* 1. Sidebar Toggle (Door / Drawer icon) */}
                     <button
                         onClick={() => setIsSidebarOpen(true)}
-                        className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors active:scale-95"
-                        title="فتح سجل المحادثات"
+                        className="p-2 text-slate-700 hover:text-emerald-700 bg-white/80 hover:bg-white border border-slate-200/80 shadow-xs rounded-xl backdrop-blur-md transition-all active:scale-95 shrink-0"
+                        title="سجل المحادثات السابقة"
                     >
-                        <PanelLeftOpen className="w-5 h-5 text-emerald-700" />
+                        <PanelRightOpen className="w-5 h-5 text-emerald-700" />
                     </button>
 
-                    <button
-                        onClick={() => setIsSidebarOpen(true)}
-                        className="flex items-center gap-1.5 text-slate-900 hover:text-emerald-700 font-bold text-sm sm:text-base px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors max-w-[200px] sm:max-w-md truncate"
-                        title="تبديل أو عرض المحادثات"
-                    >
-                        <span className="truncate">{currentSessionTitle}</span>
-                        <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                    </button>
-                </div>
-
-                {/* Right Side: Back to Farmer Home & Quick New Chat */}
-                <div className="flex items-center gap-1.5">
+                    {/* 2. Quick New Chat (+) */}
                     <button
                         onClick={startNewChat}
-                        className="p-2 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors"
+                        className="p-2 text-slate-700 hover:text-emerald-700 bg-white/80 hover:bg-white border border-slate-200/80 shadow-xs rounded-xl backdrop-blur-md transition-all active:scale-95 shrink-0"
                         title="محادثة جديدة"
                     >
-                        <Plus className="w-5 h-5" />
+                        <Plus className="w-5 h-5 text-slate-700 hover:text-emerald-700" />
                     </button>
 
-                    <Link
-                        href="/farmer"
-                        className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
-                        title="العودة للرئيسية"
-                    >
-                        <ArrowRight className="w-5 h-5" />
-                    </Link>
+                    {/* 3 & 4. Session Title & Inline Edit */}
+                    {isEditingTitle ? (
+                        <div className="flex items-center gap-1.5 min-w-0 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-emerald-400 shadow-sm">
+                            <input
+                                ref={titleInputRef}
+                                type="text"
+                                value={editTitleText}
+                                onChange={(e) => setEditTitleText(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") saveTitle();
+                                    if (e.key === "Escape") cancelEditingTitle();
+                                }}
+                                className="bg-transparent px-2 py-0.5 text-xs sm:text-sm font-bold text-slate-900 focus:outline-none max-w-[180px] sm:max-w-xs"
+                                placeholder="عنوان المحادثة..."
+                                maxLength={80}
+                            />
+                            <button
+                                onClick={saveTitle}
+                                disabled={isSavingTitle}
+                                className="p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors"
+                                title="حفظ"
+                            >
+                                <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={cancelEditingTitle}
+                                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                title="إلغاء"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-1.5 min-w-0 max-w-[calc(100%-90px)] bg-white/80 hover:bg-white backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200/80 shadow-xs transition-all">
+                            <span className="text-xs sm:text-sm font-bold text-slate-800 truncate">
+                                {currentSessionTitle}
+                            </span>
+                            <button
+                                onClick={startEditingTitle}
+                                className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-all active:scale-95 shrink-0"
+                                title="تعديل عنوان المحادثة"
+                            >
+                                <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -739,7 +823,7 @@ export default function FarmerChat() {
             <div
                 ref={messagesContainerRef}
                 onScroll={handleScroll}
-                className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 scrollbar-thin scrollbar-thumb-slate-300"
+                className="flex-1 overflow-y-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-6 scrollbar-thin scrollbar-thumb-slate-300"
             >
                 <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6">
                     {isLoadingHistory ? (
