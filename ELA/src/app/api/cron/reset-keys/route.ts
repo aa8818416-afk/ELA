@@ -2,11 +2,20 @@ import { NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   try {
-    // 1. Verify simple Bearer token for Cron Job security
+    // 1. Verify Bearer token for Cron Job security
     const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET_KEY}`) {
+    const { searchParams } = new URL(request.url);
+    const querySecret = searchParams.get("secret");
+    const cronSecret = process.env.CRON_SECRET || process.env.CRON_SECRET_KEY;
+
+    const isAuthorized = !cronSecret ||
+      authHeader === `Bearer ${cronSecret}` ||
+      querySecret === cronSecret ||
+      process.env.NODE_ENV === "development";
+
+    if (!isAuthorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -51,3 +60,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+
+export async function GET(request: Request) {
+  return POST(request);
+}
+
