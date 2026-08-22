@@ -81,10 +81,12 @@ function MarkdownMessage({ content }: { content: string }) {
 
         // Pre-normalize content to fix common LLM formatting inconsistencies:
         // 1. Separate inline headers onto their own lines (e.g. "...حقلك: ## العنوان" -> "...حقلك:\n\n## العنوان")
-        // 2. Fix detached numbers (e.g. "1.\nالاسم" -> "1. الاسم")
-        // 3. Normalize horizontal rules (e.g. "---" onto separate lines)
+        // 2. Re-attach detached headers with their following text (e.g. "#\n\nتشخيص" -> "# تشخيص")
+        // 3. Fix detached numbers (e.g. "1.\nالاسم" -> "1. الاسم")
+        // 4. Normalize horizontal rules (e.g. "---" onto separate lines)
         let normalized = content
             .replace(/([^\n])\s*(#{1,6}\s+)/g, "$1\n\n$2")
+            .replace(/^(#{1,6})\s*\n+([^\n#])/gm, "$1 $2")
             .replace(/(^|\n)(\d+\.)\s*\n\s*/g, "$1$2 ")
             .replace(/([^\n])\s*(---|___|\*\*\*)\s*/g, "$1\n\n---\n\n");
 
@@ -107,32 +109,37 @@ function MarkdownMessage({ content }: { content: string }) {
                 return;
             }
 
-            // Heading 1 (# ...)
-            if (trimmed.startsWith("# ")) {
-                elements.push(
-                    <h1 key={`h1-${lineIdx}`} className="text-xl sm:text-2xl font-black text-slate-900 mt-4 mb-2">
-                        {formatInline(trimmed.replace(/^#\s+/, ""))}
-                    </h1>
-                );
+            // Ignore lone/orphaned hashtags with no title text
+            if (/^#{1,6}$/.test(trimmed)) {
                 return;
             }
 
-            // Heading 2 (## ...)
-            if (trimmed.startsWith("## ")) {
-                elements.push(
-                    <h2 key={`h2-${lineIdx}`} className="text-lg sm:text-xl font-bold text-slate-900 mt-4 mb-2 pb-1 border-b border-emerald-100 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0 inline-block" />
-                        <span>{formatInline(trimmed.replace(/^##\s+/, ""))}</span>
-                    </h2>
-                );
-                return;
-            }
+            // Headings (#, ##, ###)
+            const headingMatch = trimmed.match(/^(#{1,6})\s*(.+)$/);
+            if (headingMatch) {
+                const level = headingMatch[1].length;
+                const headingText = headingMatch[2].trim();
 
-            // Heading 3 (### ...)
-            if (trimmed.startsWith("### ")) {
+                if (level === 1) {
+                    elements.push(
+                        <h1 key={`h1-${lineIdx}`} className="text-xl sm:text-2xl font-black text-slate-900 mt-4 mb-2">
+                            {formatInline(headingText)}
+                        </h1>
+                    );
+                    return;
+                }
+                if (level === 2) {
+                    elements.push(
+                        <h2 key={`h2-${lineIdx}`} className="text-lg sm:text-xl font-bold text-slate-900 mt-4 mb-2 pb-1 border-b border-emerald-100 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0 inline-block" />
+                            <span>{formatInline(headingText)}</span>
+                        </h2>
+                    );
+                    return;
+                }
                 elements.push(
                     <h3 key={`h3-${lineIdx}`} className="text-base sm:text-lg font-bold text-emerald-900 mt-3 mb-1">
-                        {formatInline(trimmed.replace(/^###\s+/, ""))}
+                        {formatInline(headingText)}
                     </h3>
                 );
                 return;
@@ -422,13 +429,26 @@ export default function FarmerChat() {
                 }),
             });
 
-            const data = await res.json();
+            let data: any = null;
+            const contentType = res.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+                try {
+                    data = await res.json();
+                } catch {
+                    data = null;
+                }
+            }
 
             if (res.status === 401) {
                 setError("انتهت جلستك، يرجى تسجيل الدخول مجدداً.");
                 setFailedPayload(null);
-            } else if (!res.ok || data.error) {
-                setError(data.error || "عذراً، حدث خطأ في معالجة طلبك.");
+            } else if (!res.ok || !data || data.error) {
+                const errorMsg =
+                    data?.error ||
+                    (res.status >= 500
+                        ? "تعذر الاتصال بخدمة المرشد الزراعي حالياً، يرجى المحاولة مرة أخرى."
+                        : "عذراً، حدث خطأ في معالجة طلبك.");
+                setError(errorMsg);
                 setFailedPayload(payload);
             } else if (data.success && data.text) {
                 if (data.session_id && data.session_id !== currentSessionId) {
@@ -450,6 +470,9 @@ export default function FarmerChat() {
                 if (isTtsSupported()) {
                     handleSpeak(modelMsg.content, modelMsg.id);
                 }
+            } else {
+                setError("عذراً، حدث خطأ غير متوقع في استلام الرد.");
+                setFailedPayload(payload);
             }
         } catch (err) {
             const isNetworkError =

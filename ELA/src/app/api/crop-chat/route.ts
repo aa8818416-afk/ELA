@@ -1907,12 +1907,17 @@ ${topicSynths.map((t: any) => `- [نطاق: ${t.area_scope}] ${t.title || 'مو�
             .replace(/\((?:activity_id|field_id|id):\s*[a-f0-9\-]+\)/gi, "")
             .replace(/(?:activity_id|field_id):\s*[a-f0-9\-]+/gi, "")
             .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "")
+            .replace(/^(#{1,6})\s*\n+([^\n#])/gm, "$1 $2")
+            .replace(/^#{1,6}\s*$/gm, "")
             .replace(/\s{2,}/g, " ")
             .trim();
 
         const match = sanitizedText.match(/\[RECOMMEND_PRODUCT:\s*["']?([^\]"']+)["']?\s*\]/i);
         let recommendedProduct: any = null;
-        const cleanText = sanitizedText.replace(/\[RECOMMEND_PRODUCT:\s*["']?[^\]"']+["']?\s*\]/gi, "").trim();
+        const cleanText = sanitizedText
+            .replace(/\[RECOMMEND_PRODUCT:[^\]]*\]/gi, "")
+            .replace(/\[RECOMMEND_PRODUCT:\s*["']?[^\]"']*["']?\s*\]/gi, "")
+            .trim();
 
         if (match) {
             const tagValue = match[1].trim().toLowerCase();
@@ -2268,7 +2273,8 @@ ${pendingActivitiesContext}
             clearTimeout(timeout);
             const aborted = fetchError instanceof DOMException && fetchError.name === "AbortError";
             console.error(`[crop-chat] FETCH FAILED | Attempt ${attemptCount + 1} | Error:`, fetchError);
-            if (aborted && attemptCount < 5) {
+            if (attemptCount < 5 && keyModels.length > excludedIds.length + 1) {
+                console.warn(`[crop-chat] Retrying with next available Gemini key due to fetch failure (aborted=${aborted})...`);
                 return attemptChat(attemptCount + 1, [...excludedIds, keyData.id]);
             }
             return NextResponse.json(
