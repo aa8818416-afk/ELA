@@ -29,7 +29,7 @@ export default function FarmerLayout({
   const isWidePage = pathname?.startsWith("/farmer/scanner") || pathname?.startsWith("/farmer/chat");
 
   return (
-    <div className={`min-h-screen bg-[#f8faf9] text-slate-900 flex flex-col font-sans ${isWidePage ? "h-[100dvh] max-h-[100dvh] overflow-hidden" : ""}`}>
+    <div className={`bg-[#f8faf9] text-slate-900 flex flex-col font-sans ${isWidePage ? "fixed inset-0 h-full w-full overflow-hidden" : "min-h-screen"}`}>
       {/* Top Header */}
       <header className="bg-white/95 backdrop-blur-xl border-b border-slate-200/80 sticky top-0 z-50 shadow-sm shrink-0">
         <div className={`mx-auto px-4 flex items-center justify-between ${isWidePage ? "max-w-7xl" : "max-w-lg md:max-w-2xl"}`} style={{ height: '56px' }}>

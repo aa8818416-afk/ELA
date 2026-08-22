@@ -344,6 +344,45 @@ export default function FarmerChat() {
         autoResize();
     }, [inputText, autoResize]);
 
+    // ── iOS / Safari Virtual Keyboard Fix ────────────────────────────────────
+    // On iOS Safari, interactive-widget=resizes-content isn't fully supported.
+    // We use the visualViewport API to detect keyboard open/close and adjust
+    // the chat container height so only the input moves, not the whole page.
+    useEffect(() => {
+        const vv = window.visualViewport;
+        if (!vv) return;
+
+        const chatRoot = document.getElementById('farmer-chat-root');
+        if (!chatRoot) return;
+
+        const onResize = () => {
+            // When keyboard is open, vv.height < window.innerHeight
+            const keyboardOffset = window.innerHeight - vv.height;
+            if (keyboardOffset > 50) {
+                // Keyboard is open — shrink the container from the bottom
+                chatRoot.style.height = `${vv.height - chatRoot.getBoundingClientRect().top}px`;
+                chatRoot.style.transition = 'height 0.15s ease-out';
+            } else {
+                // Keyboard closed — restore full height
+                chatRoot.style.height = '';
+                chatRoot.style.transition = '';
+            }
+            // Prevent any page scroll that iOS might try
+            window.scrollTo(0, 0);
+        };
+
+        vv.addEventListener('resize', onResize);
+        vv.addEventListener('scroll', () => window.scrollTo(0, 0));
+
+        return () => {
+            vv.removeEventListener('resize', onResize);
+            if (chatRoot) {
+                chatRoot.style.height = '';
+                chatRoot.style.transition = '';
+            }
+        };
+    }, []);
+
     // ── Start New Chat Session ──────────────────────────────────────────────
     const startNewChat = () => {
         setCurrentSessionId(null);
@@ -645,7 +684,7 @@ export default function FarmerChat() {
     }, [currentSessionId, sessions]);
 
     return (
-        <div className="relative flex-1 min-h-0 flex flex-col w-full bg-slate-50/40 rounded-2xl overflow-hidden">
+        <div id="farmer-chat-root" className="relative flex-1 min-h-0 flex flex-col w-full bg-slate-50/40 rounded-2xl overflow-hidden">
             {/* ── Sliding Right Sidebar Drawer ────── */}
             {isSidebarOpen && (
                 <div
@@ -749,7 +788,7 @@ export default function FarmerChat() {
             </div>
 
             {/* ── Top Floating Controls (100% Transparent Row, Only Buttons are Floating Glass Pills) ─── */}
-            <div className="absolute top-2.5 right-3 left-3 z-20 flex items-center justify-between pointer-events-none transition-all">
+            <div className="absolute top-3.5 right-3.5 left-3.5 sm:top-4 sm:right-4 sm:left-4 z-20 flex items-center justify-between pointer-events-none transition-all">
                 {/* Right-aligned in RTL: Door / Sidebar + Plus (New Chat) + Title + Pencil */}
                 <div className="flex items-center gap-2 min-w-0 flex-1 pointer-events-auto">
                     {/* 1. Sidebar Toggle (Door / Drawer icon) */}
@@ -1043,6 +1082,19 @@ export default function FarmerChat() {
                             }
                             className="w-full bg-transparent text-slate-900 placeholder-slate-400 py-1.5 px-3 text-sm sm:text-base outline-none resize-none overflow-y-auto leading-relaxed"
                             style={{ minHeight: "44px", maxHeight: "160px" }}
+                            onFocus={() => {
+                                // Prevent mobile browsers from scrolling the document window
+                                window.scrollTo(0, 0);
+                                document.body.scrollTop = 0;
+                                setTimeout(() => {
+                                    window.scrollTo(0, 0);
+                                    document.body.scrollTop = 0;
+                                }, 50);
+                                setTimeout(() => {
+                                    window.scrollTo(0, 0);
+                                    document.body.scrollTop = 0;
+                                }, 150);
+                            }}
                             onKeyDown={(e) => {
                                 if (e.key === "Enter" && !e.shiftKey) {
                                     e.preventDefault();
