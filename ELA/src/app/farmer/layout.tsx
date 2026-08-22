@@ -29,9 +29,9 @@ export default function FarmerLayout({
   const isWidePage = pathname?.startsWith("/farmer/scanner") || pathname?.startsWith("/farmer/chat");
 
   return (
-    <div className="min-h-screen bg-[#f8faf9] text-slate-900 flex flex-col font-sans">
+    <div className={`min-h-screen bg-[#f8faf9] text-slate-900 flex flex-col font-sans ${isWidePage ? "h-[100dvh] max-h-[100dvh] overflow-hidden" : ""}`}>
       {/* Top Header */}
-      <header className="bg-white/95 backdrop-blur-xl border-b border-slate-200/80 sticky top-0 z-50 shadow-sm">
+      <header className="bg-white/95 backdrop-blur-xl border-b border-slate-200/80 sticky top-0 z-50 shadow-sm shrink-0">
         <div className={`mx-auto px-4 flex items-center justify-between ${isWidePage ? "max-w-7xl" : "max-w-lg md:max-w-2xl"}`} style={{ height: '56px' }}>
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-base shadow-sm shadow-emerald-900/20 text-white flex-shrink-0">
@@ -60,7 +60,7 @@ export default function FarmerLayout({
       </header>
 
       {/* Page Content — pb accounts for nav + iOS home indicator */}
-      <main className={`flex-1 mx-auto w-full px-2 sm:px-4 pt-2 sm:pt-4 pb-[88px] ${isWidePage ? "max-w-7xl" : "max-w-lg md:max-w-2xl lg:max-w-4xl"}`}>
+      <main className={`flex-1 min-h-0 mx-auto w-full ${isWidePage ? "max-w-7xl px-1 sm:px-3 pt-1 pb-16 flex flex-col overflow-hidden" : "px-2 sm:px-4 pt-2 sm:pt-4 pb-[88px] max-w-lg md:max-w-2xl lg:max-w-4xl"}`}>
         {children}
       </main>
 

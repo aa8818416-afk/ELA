@@ -10,9 +10,5 @@ export default async function FarmerScannerPage() {
 
   if (!user) redirect("/login");
 
-  return (
-    <div className="w-full">
-      <FarmerChat />
-    </div>
-  );
+  return <FarmerChat />;
 }

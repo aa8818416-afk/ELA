@@ -645,7 +645,7 @@ export default function FarmerChat() {
     }, [currentSessionId, sessions]);
 
     return (
-        <div className="relative flex flex-col h-[calc(100dvh-130px)] sm:h-[calc(100dvh-140px)] w-full bg-slate-50/40 rounded-2xl overflow-hidden">
+        <div className="relative flex-1 min-h-0 flex flex-col w-full bg-slate-50/40 rounded-2xl overflow-hidden">
             {/* ── Sliding Right Sidebar Drawer ────── */}
             {isSidebarOpen && (
                 <div
@@ -823,7 +823,7 @@ export default function FarmerChat() {
             <div
                 ref={messagesContainerRef}
                 onScroll={handleScroll}
-                className="flex-1 overflow-y-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-6 scrollbar-thin scrollbar-thumb-slate-300"
+                className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-4 scrollbar-thin scrollbar-thumb-slate-300 overscroll-contain"
             >
                 <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-6">
                     {isLoadingHistory ? (
@@ -972,7 +972,7 @@ export default function FarmerChat() {
             )}
 
             {/* ── Floating / Fixed Bottom Input Area ─── */}
-            <div className="w-full px-3 sm:px-6 pb-3 pt-1 shrink-0">
+            <div className="w-full px-2 sm:px-6 pb-2 pt-1 shrink-0 bg-transparent overscroll-contain">
                 <div className="max-w-4xl xl:max-w-5xl mx-auto space-y-2">
                     {/* Error Box */}
                     {(error || recorderError) && (
